@@ -42,6 +42,8 @@ if(XRT_HAVE_OPENCV)
 			t_helper_debug_sink.hpp
 			t_hsv_filter.c
 			t_kalman.cpp
+			t_conefitting.cpp
+			t_conefitting.hpp
 		)
 	if(XRT_BUILD_DRIVER_PSMV)
 		target_sources(aux_tracking PRIVATE t_tracker_psmv_fusion.hpp t_tracker_psmv.cpp)
