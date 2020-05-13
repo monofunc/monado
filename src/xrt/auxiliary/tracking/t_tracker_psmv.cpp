@@ -235,6 +235,11 @@ combineContours(std::vector<Contour> &contours)
 static inline std::vector<Contour>
 getContours(cv::Mat const &frame)
 {
+	// Clean up noise with an erode then dilate.
+	cv::Mat temp;
+	cv::erode(frame, temp, cv::Mat(), cv::Point(-1, -1), 1, cv::BORDER_REPLICATE);
+	cv::dilate(temp, frame, cv::Mat(), cv::Point(-1, -1), 1, cv::BORDER_REPLICATE);
+
 	std::vector<Contour> output;
 	//! @todo we can probably do better than this generic algorithm.
 	//! @todo we also need to return the associated "outside" pixel so we
