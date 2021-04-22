@@ -324,9 +324,16 @@ static void
 init_filter(cv::KalmanFilter &kf, float process_cov, float meas_cov, float dt)
 {
 	kf.init(6, 3);
-	kf.transitionMatrix =
-	    (cv::Mat_<float>(6, 6) << 1.0, 0.0, 0.0, dt, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, dt, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
-	     dt, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+	// clang-format off
+	kf.transitionMatrix = (
+	    cv::Mat_<float>(6, 6) <<
+	    1.0, 0.0, 0.0, dt, 0.0, 0.0,
+	    0.0, 1.0, 0.0, 0.0, dt, 0.0,
+	    0.0, 0.0, 1.0, 0.0, 0.0, dt,
+	    0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+	    0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+	    0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+	// clang-format on
 
 	cv::setIdentity(kf.measurementMatrix, cv::Scalar::all(1.0f));
 	cv::setIdentity(kf.errorCovPost, cv::Scalar::all(0.0f));
@@ -374,10 +381,10 @@ filter_update(std::vector<match_data_t> *pose, cv::KalmanFilter *filters, float 
 
 		current_led->vertex_index = i;
 
-		cv::Mat measurement = cv::Mat(3, 1, CV_32F);
-		measurement.at<float>(0, 0) = current_led->position[0];
-		measurement.at<float>(1, 0) = current_led->position[1];
-		measurement.at<float>(2, 0) = current_led->position[2];
+		cv::Mat_<float> measurement = cv::Mat_<float>(3, 1);
+		measurement(0, 0) = current_led->position[0];
+		measurement(1, 0) = current_led->position[1];
+		measurement(2, 0) = current_led->position[2];
 		current_kf->correct(measurement);
 	}
 }
@@ -390,10 +397,10 @@ pose_filter_predict(Eigen::Vector4f *pose, cv::KalmanFilter *filter, float dt)
 	filter->transitionMatrix.at<float>(1, 4) = dt;
 	filter->transitionMatrix.at<float>(2, 5) = dt;
 
-	cv::Mat prediction = filter->predict();
-	(*pose)[0] = prediction.at<float>(0, 0);
-	(*pose)[1] = prediction.at<float>(1, 0);
-	(*pose)[2] = prediction.at<float>(2, 0);
+	cv::Mat_<float> prediction = filter->predict();
+	(*pose)[0] = prediction(0, 0);
+	(*pose)[1] = prediction(1, 0);
+	(*pose)[2] = prediction(2, 0);
 }
 
 static void
@@ -403,10 +410,10 @@ pose_filter_update(Eigen::Vector4f *position, cv::KalmanFilter *filter, float dt
 	filter->transitionMatrix.at<float>(1, 4) = dt;
 	filter->transitionMatrix.at<float>(2, 5) = dt;
 
-	cv::Mat measurement = cv::Mat(3, 1, CV_32F);
-	measurement.at<float>(0, 0) = position->x();
-	measurement.at<float>(1, 0) = position->y();
-	measurement.at<float>(2, 0) = position->z();
+	cv::Mat_<float> measurement = cv::Mat_<float>(3, 1);
+	measurement(0, 0) = position->x();
+	measurement(1, 0) = position->y();
+	measurement(2, 0) = position->z();
 	filter->correct(measurement);
 }
 
