@@ -631,8 +631,8 @@ match_triangles(Eigen::Matrix4f *t1_mat,
 	// in 'world space', compute the transformation matrix to map one
 	// to the other
 
-	*t1_mat = Eigen::Matrix4f().Identity();
-	Eigen::Matrix4f t2_mat = Eigen::Matrix4f().Identity();
+	*t1_mat = Eigen::Matrix4f::Identity();
+	Eigen::Matrix4f t2_mat = Eigen::Matrix4f::Identity();
 
 	Eigen::Vector3f t1_x_vec = (t1_b - t1_a).head<3>().normalized();
 	Eigen::Vector3f t1_z_vec = (t1_c - t1_a).head<3>().cross((t1_b - t1_a).head<3>()).normalized();
@@ -744,7 +744,7 @@ solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, st
 	Eigen::Quaternionf r_rot_part = Eigen::Quaternionf(r);
 	Eigen::Vector4f r_trans_part = model_center_transform_r.col(3);
 
-	Eigen::Matrix4f pose = Eigen::Matrix4f().Identity();
+	Eigen::Matrix4f pose = Eigen::Matrix4f::Identity();
 	pose.block(0, 0, 3, 3) = f_rot_part.slerp(0.5, r_rot_part).toRotationMatrix();
 	pose.col(3) = (f_trans_part + r_trans_part) / 2.0f;
 
@@ -862,7 +862,7 @@ solve_with_imu(TrackerPSVR &t,
 
 		for (uint32_t i = 0; i < PSVR_NUM_LEDS; i++) {
 			match_data_t avg_data;
-			avg_data.position = Eigen::Vector4f(0.0f, 0.0f, 0.0f, 1.0f);
+			avg_data.position = Eigen::Vector4f::UnitW();
 			for (uint32_t j = 0; j < temp_measurement_list.size(); j++) {
 				avg_data.position += temp_measurement_list[j].measurements[i].position;
 			}
@@ -1071,7 +1071,7 @@ disambiguate(TrackerPSVR &t,
 	// U_LOG_D("lowest_error %f", lowest_error);
 	if (best_model == -1) {
 		PSVR_INFO("COULD NOT MATCH MODEL!");
-		return Eigen::Matrix4f().Identity();
+		return Eigen::Matrix4f::Identity();
 	}
 
 	t.last_optical_model = best_model;
@@ -2092,17 +2092,17 @@ t_psvr_create(struct xrt_frame_context *xfctx,
 
 	t.sbd = cv::SimpleBlobDetector::create(blob_params);
 
-	t.target_optical_rotation_correction = Eigen::Quaternionf(1.0f, 0.0f, 0.0f, 0.0f);
-	t.optical_rotation_correction = Eigen::Quaternionf(1.0f, 0.0f, 0.0f, 0.0f);
-	t.axis_align_rot = Eigen::Quaternionf(1.0f, 0.0f, 0.0f, 0.0f);
-	t.corrected_imu_rotation = Eigen::Matrix4f().Identity();
+	t.target_optical_rotation_correction = Eigen::Quaternionf::Identity();
+	t.optical_rotation_correction = Eigen::Quaternionf::Identity();
+	t.axis_align_rot = Eigen::Quaternionf::Identity();
+	t.corrected_imu_rotation = Eigen::Matrix4f::Identity();
 	t.avg_optical_correction = 10.0f; // initialise to a high value, so we
 	                                  // can converge to a low one.
 	t.max_correction = PSVR_FAST_CORRECTION;
 	t.bad_correction_count = 0;
 
-	Eigen::Quaternionf align(Eigen::AngleAxis<float>(-M_PI / 2, Eigen::Vector3f(0.0f, 0.0f, 1.0f)));
-	Eigen::Quaternionf align2(Eigen::AngleAxis<float>(M_PI, Eigen::Vector3f(0.0f, 1.0f, 0.0f)));
+	Eigen::Quaternionf align(Eigen::AngleAxisf(-M_PI / 2, Eigen::Vector3f::UnitZ()));
+	Eigen::Quaternionf align2(Eigen::AngleAxisf(M_PI, Eigen::Vector3f::UnitY()));
 
 	t.axis_align_rot = align2; // * align;
 
