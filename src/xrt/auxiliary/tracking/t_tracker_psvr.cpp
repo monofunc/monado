@@ -577,7 +577,7 @@ merge_close_points(std::vector<blob_point_t> *orig_points, std::vector<blob_poin
 	// if a pair of points in the supplied lists are closer than the
 	// threshold, discard one of them.
 
-	//@todo - merge the 2d blob extents when we merge a pair of points
+	//! @todo - merge the 2d blob extents when we merge a pair of points
 
 	std::vector<struct close_pair> pairs;
 	for (uint32_t i = 0; i < orig_points->size(); i++) {
@@ -790,12 +790,12 @@ solve_with_imu(TrackerPSVR &t,
 	std::vector<int> assignment;
 
 	// lets fill in our cost matrix with distances
-	// @todo: could use squared distance to save a handful of sqrts.
+	//! @todo: could use squared distance to save a handful of sqrts.
 
-	// @todo: artificially boost cost where distance from last exceeds
-	// search threshold
-	// @todo: artificially boost cost where blob type differs from match
-	// measurement
+	//! @todo: artificially boost cost where distance from last exceeds
+	//! search threshold
+	//! @todo: artificially boost cost where blob type differs from match
+	//! measurement
 
 	for (uint32_t i = 0; i < measurements->size(); i++) {
 		for (uint32_t j = 0; j < match_measurements->size(); j++) {
@@ -952,7 +952,7 @@ disambiguate(TrackerPSVR &t,
 		// use the information we gathered on blob shapes to
 		// reject matches that would not fit
 
-		//@todo: use tags instead  of numeric vertex indices
+		//! @todo: use tags instead of numeric vertex indices
 
 		for (uint32_t j = 0; j < measured_points->size(); j++) {
 
@@ -1514,7 +1514,7 @@ process(TrackerPSVR &t, struct xrt_frame *xf)
 	t.debug.refresh(xf);
 
 	// compute a dt for our filter(s)
-	//@todo - use a more precise measurement here
+	//! @todo - use a more precise measurement here
 	float dt = xf->source_sequence - t.last_frame;
 	if (dt > 10.0f) {
 		dt = 1.0f;
