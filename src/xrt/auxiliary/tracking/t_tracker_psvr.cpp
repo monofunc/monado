@@ -37,6 +37,7 @@
 #include <opencv2/opencv.hpp>
 #include <inttypes.h>
 
+#include <algorithm>
 
 DEBUG_GET_ONCE_LOG_OPTION(psvr_log, "PSVR_TRACKING_LOG", U_LOGGING_WARN)
 
@@ -433,9 +434,9 @@ verts_to_measurement(std::vector<blob_point_t> *meas_data, std::vector<match_dat
 		for (uint32_t i = 0; i < meas_data->size(); i++) {
 			match_data_t md;
 			md.vertex_index = -1;
-			md.position =
-			    Eigen::Vector4f(meas_data->at(i).p.x, meas_data->at(i).p.y, meas_data->at(i).p.z, 1.0f);
 			md.src_blob = meas_data->at(i);
+			auto pt = md.src_blob.p;
+			md.position = Eigen::Vector4f(pt.x, pt.y, pt.z, 1.0f);
 			match_vertices->push_back(md);
 		}
 
@@ -517,28 +518,25 @@ remove_outliers(std::vector<blob_point_t> *orig_points, std::vector<blob_point_t
 	// immediately prune anything that is measured as
 	// 'behind' the camera - often reflections or lights in the room etc.
 
-	for (uint32_t i = 0; i < orig_points->size(); i++) {
-		cv::Point3f p = orig_points->at(i).p;
-		if (p.z < 0) {
-			temp_points.push_back(orig_points->at(i));
-		}
-	}
+	std::copy_if(orig_points->begin(), orig_points->end(), std::back_inserter(temp_points),
+	             [](blob_point_t const &blob) { return blob.p.z < 0; });
 	if (temp_points.empty()) {
 		return;
 	}
 
-	// compute the 3d median of the points, and reject anything further away
-	// than a
-	// threshold distance
+	// compute the 3d median of the points, and reject anything further away than a threshold distance
 
 
 	std::vector<float> x_values;
+	x_values.reserve(temp_points.size());
 	std::vector<float> y_values;
+	y_values.reserve(temp_points.size());
 	std::vector<float> z_values;
-	for (uint32_t i = 0; i < temp_points.size(); i++) {
-		x_values.push_back(temp_points[i].p.x);
-		y_values.push_back(temp_points[i].p.y);
-		z_values.push_back(temp_points[i].p.z);
+	z_values.reserve(temp_points.size());
+	for (const auto &blob : temp_points) {
+		x_values.push_back(blob.p.x);
+		y_values.push_back(blob.p.y);
+		z_values.push_back(blob.p.z);
 	}
 
 	std::nth_element(x_values.begin(), x_values.begin() + x_values.size() / 2, x_values.end());
@@ -548,20 +546,15 @@ remove_outliers(std::vector<blob_point_t> *orig_points, std::vector<blob_point_t
 	std::nth_element(z_values.begin(), z_values.begin() + z_values.size() / 2, z_values.end());
 	float median_z = z_values[z_values.size() / 2];
 
-	for (uint32_t i = 0; i < temp_points.size(); i++) {
-		float error_x = temp_points[i].p.x - median_x;
-		float error_y = temp_points[i].p.y - median_y;
-		float error_z = temp_points[i].p.z - median_z;
+	std::copy_if(temp_points.begin(), temp_points.end(), std::back_inserter(*pruned_points),
+	             [median_x, median_y, median_z, outlier_thresh](blob_point_t const &blob) {
+		             float error_x = blob.p.x - median_x;
+		             float error_y = blob.p.y - median_y;
+		             float error_z = blob.p.z - median_z;
 
-		float rms_error = sqrt((error_x * error_x) + (error_y * error_y) + (error_z * error_z));
-
-		// U_LOG_D("%f %f %f  %f %f %f", temp_points[i].p.x,
-		//       temp_points[i].p.y, temp_points[i].p.z, error_x,
-		//       error_y, error_z);
-		if (rms_error < outlier_thresh) {
-			pruned_points->push_back(temp_points[i]);
-		}
-	}
+		             float rms_error = sqrt((error_x * error_x) + (error_y * error_y) + (error_z * error_z));
+		             return rms_error < outlier_thresh;
+	             });
 }
 
 struct close_pair
@@ -781,13 +774,13 @@ solve_with_imu(TrackerPSVR &t,
 	// measurements we will initialise to zero because we will not have
 	// distances for points we don't have
 
-	std::vector<vector<double> > costMatrix = {
+	std::vector<std::vector<double> > costMatrix = {
 	    {0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0},
 	    {0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0},
 	};
 
 	HungarianAlgorithm HungAlgo;
-	vector<int> assignment;
+	std::vector<int> assignment;
 
 	// lets fill in our cost matrix with distances
 	// @todo: could use squared distance to save a handful of sqrts.
@@ -819,20 +812,15 @@ solve_with_imu(TrackerPSVR &t,
 	}
 
 	std::vector<proximity_data_t> proximity_data;
-	for (uint32_t i = 0; i < measurements->size(); i++) {
-		float lowest_distance = 65535.0;
-		int closest_index = 0;
-		(void)lowest_distance;
-		(void)closest_index;
-
-		proximity_data_t p;
-		match_data_t measurement = measurements->at(i);
-
-		p.position = measurement.position;
-		p.vertex_index = measurement.vertex_index;
-		p.lowest_distance = 0.0f;
-		proximity_data.push_back(p);
-	}
+	proximity_data.reserve(measurements->size());
+	std::transform(measurements->begin(), measurements->end(), std::back_inserter(proximity_data),
+	               [](match_data_t const &measurement) {
+		               proximity_data_t p;
+		               p.position = measurement.position;
+		               p.vertex_index = measurement.vertex_index;
+		               p.lowest_distance = 0.0f;
+		               return p;
+	               });
 
 	if (!proximity_data.empty()) {
 
@@ -842,8 +830,8 @@ solve_with_imu(TrackerPSVR &t,
 		// positions
 
 		std::vector<match_model_t> temp_measurement_list;
-		for (uint32_t i = 0; i < proximity_data.size(); i++) {
-			proximity_data_t p = proximity_data[i];
+		temp_measurement_list.reserve(proximity_data.size());
+		for (const auto &p : proximity_data) {
 			Eigen::Vector4f model_vertex = t.model_vertices[p.vertex_index].position;
 			Eigen::Vector4f measurement_vertex = p.position;
 			Eigen::Vector4f measurement_offset = t.corrected_imu_rotation * model_vertex;
@@ -851,6 +839,7 @@ solve_with_imu(TrackerPSVR &t,
 			    Eigen::Translation3f((measurement_vertex - measurement_offset).head<3>()));
 			Eigen::Matrix4f model_to_measurement = translation.matrix() * t.corrected_imu_rotation;
 			match_model_t temp_measurement;
+			temp_measurement.measurements.reserve(PSVR_NUM_LEDS);
 			for (uint32_t j = 0; j < PSVR_NUM_LEDS; j++) {
 				match_data_t md;
 				md.position = model_to_measurement * t.model_vertices[j].position;
