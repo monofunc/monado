@@ -170,6 +170,7 @@ typedef enum led_tag
 
 typedef struct model_vertex
 {
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	int32_t vertex_index;
 	Eigen::Vector4f position;
 
