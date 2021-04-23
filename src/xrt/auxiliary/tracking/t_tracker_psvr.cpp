@@ -772,6 +772,20 @@ typedef struct proximity_data
 	int vertex_index;
 } proximity_data_t;
 
+static std::vector<match_data_t>
+transform_model_vertices(TrackerPSVR const &t, Eigen::Matrix4f const &model_to_measurement)
+{
+	std::vector<match_data_t> measurements;
+	measurements.reserve(PSVR_NUM_LEDS);
+	for (uint32_t j = 0; j < PSVR_NUM_LEDS; j++) {
+		match_data_t md;
+		md.position = model_to_measurement * t.model_vertices[j].position;
+		md.vertex_index = j;
+		measurements.push_back(md);
+	}
+	return measurements;
+}
+
 static Eigen::Matrix4f
 solve_with_imu(TrackerPSVR &t,
                std::vector<match_data_t> *measurements,
@@ -844,23 +858,20 @@ solve_with_imu(TrackerPSVR &t,
 
 		std::vector<match_model_t> temp_measurement_list;
 		temp_measurement_list.reserve(proximity_data.size());
-		for (const auto &p : proximity_data) {
-			Eigen::Vector4f model_vertex = t.model_vertices[p.vertex_index].position;
-			Eigen::Vector4f measurement_vertex = p.position;
-			Eigen::Vector4f measurement_offset = t.corrected_imu_rotation * model_vertex;
-			Eigen::Affine3f translation(
-			    Eigen::Translation3f((measurement_vertex - measurement_offset).head<3>()));
-			Eigen::Matrix4f model_to_measurement = translation.matrix() * t.corrected_imu_rotation;
-			match_model_t temp_measurement;
-			temp_measurement.measurements.reserve(PSVR_NUM_LEDS);
-			for (uint32_t j = 0; j < PSVR_NUM_LEDS; j++) {
-				match_data_t md;
-				md.position = model_to_measurement * t.model_vertices[j].position;
-				md.vertex_index = j;
-				temp_measurement.measurements.push_back(md);
-			}
-			temp_measurement_list.push_back(temp_measurement);
-		}
+		std::transform(proximity_data.begin(), proximity_data.end(), std::back_inserter(temp_measurement_list),
+		               [&t](proximity_data_t const &p) {
+			               Eigen::Vector4f model_vertex = t.model_vertices[p.vertex_index].position;
+			               Eigen::Vector4f measurement_vertex = p.position;
+			               Eigen::Vector4f measurement_offset = t.corrected_imu_rotation * model_vertex;
+			               Eigen::Affine3f translation(
+			                   Eigen::Translation3f((measurement_vertex - measurement_offset).head<3>()));
+			               Eigen::Matrix4f model_to_measurement =
+			                   translation.matrix() * t.corrected_imu_rotation;
+			               match_model_t temp_measurement;
+			               temp_measurement.measurements =
+			                   transform_model_vertices(t, model_to_measurement);
+			               return temp_measurement;
+		               });
 
 		for (uint32_t i = 0; i < PSVR_NUM_LEDS; i++) {
 			match_data_t avg_data;
