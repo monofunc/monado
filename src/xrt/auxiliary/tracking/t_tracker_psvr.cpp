@@ -1278,35 +1278,38 @@ public:
 	}
 };
 
+/*!
+ * @brief create our permutation list for matching, populating @p t.matches
+ *
+ * Compute the distance and angles between a reference vector, constructed from the first two vertices in the
+ * permutation.
+ */
 static void
-create_match_list(TrackerPSVR &t)
+create_match_list(TrackerPSVR &t /*!< [in,out] tracker object: TrackerPSVR::matches is populated */)
 {
-	// create our permutation list for matching
-	// compute the distance and angles between a reference
-	// vector, constructed from the first two vertices in
-	// the permutation.
-
 	Helper mp = {};
 	while (mp.step(t)) {
-		match_model_t m;
 
+		// mp.vec has a permutation of all valid model_vertex_t values.
 		model_vertex_t ref_pt_a = mp.vec[0];
 		model_vertex_t ref_pt_b = mp.vec[1];
 		Eigen::Vector3f ref_vec3 = (ref_pt_b.position - ref_pt_a.position).head<3>();
 
 		float normScale = (ref_pt_a.position - ref_pt_b.position).norm();
 
-		match_data_t md;
-		for (auto &&i : mp.vec) {
-			Eigen::Vector3f point_vec3 = (i.position - ref_pt_a.position).head<3>();
-			md.vertex_index = i.tag;
-			md.distance = (i.position - ref_pt_a.position).norm() / normScale;
-			if (i.position.z() < 0) {
+		// transform each model_vertex_t into a match_data_t in m.measurements, in order
+		match_model_t m;
+		for (auto &&vertex : mp.vec) {
+			match_data_t md;
+			Eigen::Vector3f point_vec3 = (vertex.position - ref_pt_a.position).head<3>();
+			md.vertex_index = vertex.tag;
+			md.distance = (vertex.position - ref_pt_a.position).norm() / normScale;
+			if (vertex.position.z() < 0) {
 				md.distance *= -1;
 			}
 
 			Eigen::Vector3f plane_norm = ref_vec3.cross(point_vec3).normalized();
-			if (ref_pt_a.position != i.position) {
+			if (ref_pt_a.position != vertex.position) {
 
 				if (plane_norm.normalized().z() > 0) {
 					md.angle = -1 * acos((point_vec3).normalized().dot(ref_vec3.normalized()));
