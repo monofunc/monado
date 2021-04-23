@@ -1205,7 +1205,7 @@ create_match_list(TrackerPSVR &t)
 			Eigen::Vector3f point_vec3 = (i.position - ref_pt_a.position).head<3>();
 			md.vertex_index = i.vertex_index;
 			md.distance = (i.position - ref_pt_a.position).norm() / normScale;
-			if (i.position.head<3>().dot(Eigen::Vector3f(0.0, 0.0, 1.0f)) < 0) {
+			if (i.position.z() < 0) {
 				md.distance *= -1;
 			}
 
