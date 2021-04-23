@@ -38,6 +38,7 @@
 #include <opencv2/opencv.hpp>
 #include <inttypes.h>
 
+#include <numeric>
 #include <algorithm>
 
 DEBUG_GET_ONCE_LOG_OPTION(psvr_log, "PSVR_TRACKING_LOG", U_LOGGING_WARN)
@@ -864,9 +865,13 @@ solve_with_imu(TrackerPSVR &t,
 		for (uint32_t i = 0; i < PSVR_NUM_LEDS; i++) {
 			match_data_t avg_data;
 			avg_data.position = Eigen::Vector4f::UnitW();
-			for (uint32_t j = 0; j < temp_measurement_list.size(); j++) {
-				avg_data.position += temp_measurement_list[j].measurements[i].position;
-			}
+			// Average the position of this LED across all of temp_measurement_list
+			avg_data.position =
+			    std::accumulate(temp_measurement_list.begin(), temp_measurement_list.end(),
+			                    Eigen::Vector4f(Eigen::Vector4f::Zero()),
+			                    [i](Eigen::Vector4f const &result, match_model_t const &temp) {
+				                    return result + temp.measurements[i].position;
+			                    });
 			avg_data.position /= float(temp_measurement_list.size());
 			avg_data.vertex_index = i;
 			solved->push_back(avg_data);
