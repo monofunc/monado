@@ -163,24 +163,50 @@ struct View
 };
 
 //! Unique ID for each LED, also used as indices.
-typedef enum led_tag
+enum class led_tag_t : int32_t
 {
-	TAG_TL, //!< top-left
-	TAG_TR, //!< top-right
-	TAG_C,  //!< center
-	TAG_BL, //!< bottom-left
-	TAG_BR, //!< bottom-right
-	TAG_SL, //!< side-left
-	TAG_SR, //!< side-right
-} led_tag_t;
+	TAG_TL = 0,       //!< top-left
+	TAG_TR = 1,       //!< top-right
+	TAG_C = 2,        //!< center
+	TAG_BL = 3,       //!< bottom-left
+	TAG_BR = 4,       //!< bottom-right
+	TAG_SL = 5,       //!< side-left
+	TAG_SR = 6,       //!< side-right
+	TAG_INVALID = -1, //!< Sentinel invalid tag
+};
+
+static const std::initializer_list<led_tag_t> ALL_LEDS = {
+    led_tag_t::TAG_TL, led_tag_t::TAG_TR, led_tag_t::TAG_C,  led_tag_t::TAG_BL,
+    led_tag_t::TAG_BR, led_tag_t::TAG_SL, led_tag_t::TAG_SR,
+
+};
+static inline bool
+is_led_tag_side(led_tag_t tag)
+{
+	return tag != led_tag_t::TAG_INVALID && (int32_t)tag >= (int32_t)led_tag_t::TAG_SL;
+}
+
+static inline bool
+is_led_tag_front(led_tag_t tag)
+{
+	return tag != led_tag_t::TAG_INVALID && (int32_t)tag < (int32_t)led_tag_t::TAG_SL;
+}
+static inline bool
+is_led_tag_valid(led_tag_t tag)
+{
+
+	return tag >= led_tag_t::TAG_TL && tag <= led_tag_t::TAG_SR;
+}
 
 typedef struct model_vertex
 {
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-	int32_t vertex_index;
+	//! Should match model_vertex_t::tag in value
+	int32_t vertex_index = (int32_t)led_tag_t::TAG_INVALID;
 	Eigen::Vector4f position;
 
-	led_tag_t tag;
+	//! Should match model_vertex_t::vertex_index in value
+	led_tag_t tag = led_tag_t::TAG_INVALID;
 	bool active;
 
 	// NOTE: these operator overloads are required for
@@ -203,7 +229,7 @@ typedef struct match_data
 {
 	float angle = {};                                   //!< angle from reference vector
 	float distance = {};                                //!< distance from base of reference vector
-	int32_t vertex_index = {};                          //!< index, also known as tag
+	led_tag_t vertex_index = led_tag_t::TAG_INVALID;    //!< index, also known as tag
 	Eigen::Vector4f position = Eigen::Vector4f::Zero(); //!< 3d position of vertex
 	blob_point_t src_blob = {};                         //!< blob this vertex was derived from
 } match_data_t;
@@ -263,6 +289,25 @@ public:
 
 	cv::KalmanFilter track_filters[PSVR_NUM_LEDS];
 
+	model_vertex_t &
+	get_model_vertex(led_tag_t tag)
+	{
+		if (tag == led_tag_t::TAG_INVALID) {
+			throw std::logic_error("cannot provide the model vertex for an invalid tag");
+		}
+		assert(is_led_tag_valid(tag));
+		return model_vertices[(int32_t)tag];
+	}
+
+	model_vertex_t const &
+	get_model_vertex(led_tag_t tag) const
+	{
+		if (tag == led_tag_t::TAG_INVALID) {
+			throw std::logic_error("cannot provide the model vertex for an invalid tag");
+		}
+		assert(is_led_tag_valid(tag));
+		return model_vertices[(int32_t)tag];
+	}
 
 	cv::KalmanFilter pose_filter; //!< we filter the final pose position of the HMD to smooth motion
 
@@ -376,7 +421,8 @@ filter_predict(std::vector<match_data_t> *pose /*!< [out] a predicted pose for e
                cv::KalmanFilter filters[PSVR_NUM_LEDS] /*!< [in,out] */,
                float dt /*!< time/duration (in seconds) */)
 {
-	for (uint32_t i = 0; i < PSVR_NUM_LEDS; i++) {
+	for (led_tag_t tag : ALL_LEDS) {
+		auto i = (int32_t)tag;
 		match_data_t current_led;
 		cv::KalmanFilter *current_kf = &(filters[i]);
 
@@ -385,8 +431,8 @@ filter_predict(std::vector<match_data_t> *pose /*!< [out] a predicted pose for e
 		current_kf->transitionMatrix.at<float>(1, 4) = dt;
 		current_kf->transitionMatrix.at<float>(2, 5) = dt;
 
-		current_led.vertex_index = i;
-		// current_led->tag = (led_tag_t)(i);
+		current_led.vertex_index = tag;
+
 		cv::Mat prediction = current_kf->predict();
 		current_led.position[0] = prediction.at<float>(0, 0);
 		current_led.position[1] = prediction.at<float>(1, 0);
@@ -403,9 +449,10 @@ filter_update(std::vector<match_data_t> const *pose,   /*!< [in] data for each L
               cv::KalmanFilter filters[PSVR_NUM_LEDS], /*!< [in,out] per-led filters */
               float dt /*!< time/duration (in seconds) */)
 {
-	for (uint32_t i = 0; i < PSVR_NUM_LEDS; i++) {
+	for (led_tag_t tag : ALL_LEDS) {
+		auto i = (int32_t)tag;
 		match_data_t const *current_led = &pose->at(i);
-		assert(current_led->vertex_index == (int32_t)i);
+		assert(current_led->vertex_index == tag);
 		cv::KalmanFilter *current_kf = &(filters[i]);
 
 		// set our dt components in the transition matrix
@@ -483,7 +530,7 @@ verts_to_measurement(std::vector<blob_point_t> const *meas_data /*!< [in] */,
 	if (meas_data->size() < PSVR_OPTICAL_SOLVE_THRESH) {
 		for (uint32_t i = 0; i < meas_data->size(); i++) {
 			match_data_t md;
-			md.vertex_index = -1;
+			md.vertex_index = led_tag_t::TAG_INVALID;
 			md.src_blob = meas_data->at(i);
 			auto pt = md.src_blob.p;
 			md.position = make_homogeneous(map(pt));
@@ -504,7 +551,7 @@ verts_to_measurement(std::vector<blob_point_t> const *meas_data /*!< [in] */,
 		blob_point_t vp = meas_data->at(i);
 		cv::Point3f point_vec = vp.p - ref_a.p;
 		match_data_t md;
-		md.vertex_index = -1;
+		md.vertex_index = led_tag_t::TAG_INVALID;
 		md.position = make_homogeneous(map(vp.p));
 		Eigen::Vector3f point_vec3 = map(point_vec);
 
@@ -546,14 +593,15 @@ last_diff(TrackerPSVR const &t /*!< tracker object */,
 	const auto last_begin = last_pose->begin();
 	const auto last_end = last_pose->end();
 	for (uint32_t i = 0; i < meas_pose->size(); i++) {
-		uint32_t meas_index = meas_pose->at(i).vertex_index;
+		led_tag_t meas_index = meas_pose->at(i).vertex_index;
+		assert(meas_index > led_tag_t::TAG_INVALID);
 		// Find our counterpart
 		auto it = std::find_if(last_begin, last_end, [meas_index](match_data_t const &last_match) {
 			return last_match.vertex_index == meas_index;
 		});
 		if (it != last_end) {
 			// OK, we found it.
-			float d = (meas_pose->at(meas_index).position - it->position).norm();
+			float d = (meas_pose->at((size_t)meas_index).position - it->position).norm();
 			diff += d;
 		}
 	}
@@ -703,8 +751,28 @@ match_triangles(Eigen::Matrix4f *t1_mat,
 	*t1_to_t2_mat = t1_mat->inverse() * t2_mat;
 }
 
+/*!
+ * Create a vector containing each LED in order, with its canonical position transformed by the provided isometry.
+ */
+static std::vector<match_data_t>
+transform_model_vertices(TrackerPSVR const &t, Eigen::Isometry3f const &model_to_measurement)
+{
+	std::vector<match_data_t> measurements;
+	measurements.reserve(PSVR_NUM_LEDS);
+	for (led_tag_t tag : ALL_LEDS) {
+		match_data_t md;
+		md.position = model_to_measurement * t.get_model_vertex(tag).position;
+		md.vertex_index = tag;
+		measurements.push_back(md);
+		// measurements[(int)tag] = md;
+	}
+	return measurements;
+}
+
 static Eigen::Isometry3f
-solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, std::vector<match_data_t> *solved)
+solve_for_measurement(TrackerPSVR const *t /*!< [in] tracker object */,
+                      std::vector<match_data_t> const *measurement /*!< [in] */,
+                      std::vector<match_data_t> *solved /*!< [out] */)
 {
 	// use the vertex positions (at least 3) in the measurement to
 	// construct a pair of triangles which are used to calculate the
@@ -718,19 +786,23 @@ solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, st
 
 	Eigen::Vector4f meas_ref_a = measurement->at(0).position;
 	Eigen::Vector4f meas_ref_b = measurement->at(1).position;
-	int meas_index_a = measurement->at(0).vertex_index;
-	int meas_index_b = measurement->at(1).vertex_index;
+	led_tag_t meas_index_a = measurement->at(0).vertex_index;
+	led_tag_t meas_index_b = measurement->at(1).vertex_index;
+	assert(meas_index_a != led_tag_t::TAG_INVALID);
+	assert(meas_index_b != led_tag_t::TAG_INVALID);
 
-	Eigen::Vector4f model_ref_a = t->model_vertices[meas_index_a].position;
-	Eigen::Vector4f model_ref_b = t->model_vertices[meas_index_b].position;
+	Eigen::Vector4f model_ref_a = t->get_model_vertex(meas_index_a).position;
+	Eigen::Vector4f model_ref_b = t->get_model_vertex(meas_index_b).position;
 
 	float highest_length = 0.0f;
 	int best_model_index = 0;
 	int most_distant_index = 0;
 
 	for (uint32_t i = 0; i < measurement->size(); i++) {
-		int model_tag_index = measurement->at(i).vertex_index;
-		Eigen::Vector4f model_vert = t->model_vertices[model_tag_index].position;
+		//! @todo I think we can get rid of one of these variables
+		assert(i == (int)most_distant_index);
+		led_tag_t model_tag_index = measurement->at(i).vertex_index;
+		Eigen::Vector4f model_vert = t->get_model_vertex(model_tag_index).position;
 		if (most_distant_index > 1 && (model_vert - model_ref_a).norm() > highest_length) {
 			best_model_index = most_distant_index;
 		}
@@ -738,9 +810,9 @@ solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, st
 	}
 
 	Eigen::Vector4f meas_ref_c = measurement->at(best_model_index).position;
-	int meas_index_c = measurement->at(best_model_index).vertex_index;
+	led_tag_t meas_index_c = measurement->at(best_model_index).vertex_index;
 
-	Eigen::Vector4f model_ref_c = t->model_vertices[meas_index_c].position;
+	Eigen::Vector4f model_ref_c = t->get_model_vertex(meas_index_c).position;
 
 	match_triangles(&tri_basis, &model_to_measurement, model_ref_a, model_ref_b, model_ref_c, meas_ref_a,
 	                meas_ref_b, meas_ref_c);
@@ -754,16 +826,16 @@ solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, st
 	meas_index_a = measurement->at(measurement->size() - 1).vertex_index;
 	meas_index_b = measurement->at(measurement->size() - 2).vertex_index;
 
-	model_ref_a = t->model_vertices[meas_index_a].position;
-	model_ref_b = t->model_vertices[meas_index_b].position;
+	model_ref_a = t->get_model_vertex(meas_index_a).position;
+	model_ref_b = t->get_model_vertex(meas_index_b).position;
 
 	highest_length = 0.0f;
 	best_model_index = 0;
 	most_distant_index = 0;
 
 	for (uint32_t i = 0; i < measurement->size(); i++) {
-		int model_tag_index = measurement->at(i).vertex_index;
-		Eigen::Vector4f model_vert = t->model_vertices[model_tag_index].position;
+		led_tag_t model_tag_index = measurement->at(i).vertex_index;
+		Eigen::Vector4f model_vert = t->get_model_vertex(model_tag_index).position;
 		if (most_distant_index < (int)measurement->size() - 2 &&
 		    (model_vert - model_ref_a).norm() > highest_length) {
 			best_model_index = most_distant_index;
@@ -774,7 +846,7 @@ solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, st
 	meas_ref_c = measurement->at(best_model_index).position;
 	meas_index_c = measurement->at(best_model_index).vertex_index;
 
-	model_ref_c = t->model_vertices[meas_index_c].position;
+	model_ref_c = t->get_model_vertex(meas_index_c).position;
 
 	match_triangles(&tri_basis, &model_to_measurement, model_ref_a, model_ref_b, model_ref_c, meas_ref_a,
 	                meas_ref_b, meas_ref_c);
@@ -796,13 +868,7 @@ solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, st
 	pose.fromPositionOrientationScale((f_trans_part + r_trans_part) / 2.0f, f_rot_part.slerp(0.5, r_rot_part),
 	                                  Eigen::Vector3f::Ones());
 
-	solved->clear();
-	for (uint32_t i = 0; i < PSVR_NUM_LEDS; i++) {
-		match_data_t md;
-		md.vertex_index = i;
-		md.position = pose * t->model_vertices[i].position;
-		solved->push_back(md);
-	}
+	*solved = transform_model_vertices(*t, pose);
 
 	return pose;
 }
@@ -811,22 +877,9 @@ typedef struct proximity_data
 {
 	Eigen::Vector4f position;
 	float lowest_distance;
-	int vertex_index;
+	led_tag_t vertex_index;
 } proximity_data_t;
 
-static std::vector<match_data_t>
-transform_model_vertices(TrackerPSVR const &t, Eigen::Isometry3f const &model_to_measurement)
-{
-	std::vector<match_data_t> measurements;
-	measurements.reserve(PSVR_NUM_LEDS);
-	for (uint32_t j = 0; j < PSVR_NUM_LEDS; j++) {
-		match_data_t md;
-		md.position = model_to_measurement * t.model_vertices[j].position;
-		md.vertex_index = j;
-		measurements.push_back(md);
-	}
-	return measurements;
-}
 
 static Eigen::Isometry3f
 solve_with_imu(TrackerPSVR &t,
@@ -877,7 +930,10 @@ solve_with_imu(TrackerPSVR &t,
 	(void)cost;
 
 	for (uint32_t i = 0; i < measurements->size(); i++) {
-		measurements->at(i).vertex_index = assignment[i];
+		auto tag = (led_tag_t)assignment[i];
+
+		assert(is_led_tag_valid(tag));
+		measurements->at(i).vertex_index = tag;
 	}
 
 	std::vector<proximity_data_t> proximity_data;
@@ -902,7 +958,7 @@ solve_with_imu(TrackerPSVR &t,
 		temp_measurement_list.reserve(proximity_data.size());
 		std::transform(proximity_data.begin(), proximity_data.end(), std::back_inserter(temp_measurement_list),
 		               [&t](proximity_data_t const &p) {
-			               Eigen::Vector4f model_vertex = t.model_vertices[p.vertex_index].position;
+			               Eigen::Vector4f model_vertex = t.get_model_vertex(p.vertex_index).position;
 			               Eigen::Vector4f measurement_vertex = p.position;
 			               Eigen::Vector4f measurement_offset = t.corrected_imu_rotation * model_vertex;
 			               Eigen::Isometry3f translation(
@@ -914,9 +970,9 @@ solve_with_imu(TrackerPSVR &t,
 			               return temp_measurement;
 		               });
 
-		for (uint32_t i = 0; i < PSVR_NUM_LEDS; i++) {
+		for (led_tag_t tag : ALL_LEDS) {
+			auto i = (int32_t)tag;
 			match_data_t avg_data;
-			avg_data.position = Eigen::Vector4f::UnitW();
 			// Average the position of this LED across all of temp_measurement_list
 			avg_data.position =
 			    std::accumulate(temp_measurement_list.begin(), temp_measurement_list.end(),
@@ -925,7 +981,7 @@ solve_with_imu(TrackerPSVR &t,
 				                    return result + temp.measurements[i].position;
 			                    });
 			avg_data.position /= float(temp_measurement_list.size());
-			avg_data.vertex_index = i;
+			avg_data.vertex_index = tag;
 			solved->push_back(avg_data);
 		}
 
@@ -970,7 +1026,7 @@ disambiguate(TrackerPSVR &t,
 
 	float lowest_error = 65535.0f;
 	int32_t best_model = -1;
-	uint32_t matched_vertex_indices[PSVR_NUM_LEDS];
+	led_tag_t matched_vertex_indices[PSVR_NUM_LEDS];
 
 	// we can early-out if we are 'close enough' to our last match model.
 	// if we hold the previous led configuration, this increases
@@ -1019,12 +1075,12 @@ disambiguate(TrackerPSVR &t,
 		for (uint32_t j = 0; j < measured_points->size(); j++) {
 
 			if (measured_points->at(j).src_blob.btype == BLOB_TYPE_FRONT &&
-			    measured_points->at(j).vertex_index > 4) {
+			    is_led_tag_side(measured_points->at(j).vertex_index)) {
 				error_sum += 50.0f;
 			}
 
 			if (measured_points->at(j).src_blob.btype == BLOB_TYPE_SIDE &&
-			    measured_points->at(j).vertex_index < 5) {
+			    is_led_tag_front(measured_points->at(j).vertex_index)) {
 				error_sum += 50.0f;
 			}
 
@@ -1067,19 +1123,19 @@ disambiguate(TrackerPSVR &t,
 
 			for (uint32_t j = 0; j < meas_solved.size(); j++) {
 				match_data_t *md = &meas_solved.at(j);
-				if (md->vertex_index == TAG_BL) {
+				if (md->vertex_index == led_tag_t::TAG_BL) {
 					bl_pos = md->position;
 					has_bl = true;
 				}
-				if (md->vertex_index == TAG_BR) {
+				if (md->vertex_index == led_tag_t::TAG_BR) {
 					br_pos = md->position;
 					has_br = true;
 				}
-				if (md->vertex_index == TAG_TL) {
+				if (md->vertex_index == led_tag_t::TAG_TL) {
 					tl_pos = md->position;
 					has_tl = true;
 				}
-				if (md->vertex_index == TAG_TR) {
+				if (md->vertex_index == led_tag_t::TAG_TR) {
 					tr_pos = md->position;
 					has_tr = true;
 				}
@@ -1135,10 +1191,11 @@ disambiguate(TrackerPSVR &t,
 	t.last_optical_model = best_model;
 	for (uint32_t i = 0; i < measured_points->size(); i++) {
 		measured_points->at(i).vertex_index = matched_vertex_indices[i];
-		cv::putText(
-		    t.debug.rgb[0],
-		    cv::format("%d %d", measured_points->at(i).vertex_index, measured_points->at(i).src_blob.btype),
-		    measured_points->at(i).src_blob.lkp.pt, cv::FONT_HERSHEY_SIMPLEX, 1.0f, cv::Scalar(0, 255, 0));
+		cv::putText(t.debug.rgb[0],
+		            cv::format("%d %d", (int)measured_points->at(i).vertex_index,
+		                       measured_points->at(i).src_blob.btype),
+		            measured_points->at(i).src_blob.lkp.pt, cv::FONT_HERSHEY_SIMPLEX, 1.0f,
+		            cv::Scalar(0, 255, 0));
 	}
 
 	t.last_pose = solve_for_measurement(&t, measured_points, solved);
@@ -1157,45 +1214,45 @@ create_model(TrackerPSVR &t)
 	// to minimize the incidence of incorrect led matches.
 
 	t.model_vertices[0] = {
-	    0,
+	    (int32_t)led_tag_t::TAG_BL,
 	    Eigen::Vector4f(-0.06502f, 0.04335f, 0.01861f, 1.0f),
-	    TAG_BL,
+	    led_tag_t::TAG_BL,
 	    true,
 	};
 	t.model_vertices[1] = {
-	    1,
+	    (int32_t)led_tag_t::TAG_BR,
 	    Eigen::Vector4f(0.06502f, 0.04335f, 0.01861f, 1.0f),
-	    TAG_BR,
+	    led_tag_t::TAG_BR,
 	    true,
 	};
 	t.model_vertices[2] = {
-	    2,
+	    (int32_t)led_tag_t::TAG_C,
 	    Eigen::Vector4f(0.0f, 0.0f, 0.04533f, 1.0f),
-	    TAG_C,
+	    led_tag_t::TAG_C,
 	    true,
 	};
 	t.model_vertices[3] = {
-	    3,
+	    (int32_t)led_tag_t::TAG_TL,
 	    Eigen::Vector4f(-0.06502f, -0.04335f, 0.01861f, 1.0f),
-	    TAG_TL,
+	    led_tag_t::TAG_TL,
 	    true,
 	};
 	t.model_vertices[4] = {
-	    4,
+	    (int32_t)led_tag_t::TAG_TR,
 	    Eigen::Vector4f(0.06502f, -0.04335f, 0.01861f, 1.0f),
-	    TAG_TR,
+	    led_tag_t::TAG_TR,
 	    true,
 	};
 	t.model_vertices[5] = {
-	    5,
+	    (int32_t)led_tag_t::TAG_SL,
 	    Eigen::Vector4f(-0.07802f, 0.0f, -0.02671f, 1.0f),
-	    TAG_SL,
+	    led_tag_t::TAG_SL,
 	    true,
 	};
 	t.model_vertices[6] = {
-	    6,
+	    (int32_t)led_tag_t::TAG_SR,
 	    Eigen::Vector4f(0.07802f, 0.0f, -0.02671f, 1.0f),
-	    TAG_SR,
+	    led_tag_t::TAG_SR,
 	    true,
 	};
 }
@@ -1250,7 +1307,7 @@ create_match_list(TrackerPSVR &t)
 		match_data_t md;
 		for (auto &&i : mp.vec) {
 			Eigen::Vector3f point_vec3 = (i.position - ref_pt_a.position).head<3>();
-			md.vertex_index = i.vertex_index;
+			md.vertex_index = i.tag;
 			md.distance = (i.position - ref_pt_a.position).norm() / normScale;
 			if (i.position.z() < 0) {
 				md.distance *= -1;
