@@ -252,7 +252,7 @@ public:
 	                                                       // correct the imu
 	Eigen::Quaternionf optical_rotation_correction;        // currently applied (interpolated
 	                                                       // towards target) correction
-	Eigen::Matrix4f corrected_imu_rotation;                // imu rotation with correction applied
+	Eigen::Isometry3f corrected_imu_rotation;              // imu rotation with correction applied
 	Eigen::Quaternionf axis_align_rot;                     // used to rotate imu/tracking coordinates to world
 
 	model_vertex_t model_vertices[PSVR_NUM_LEDS]; // the model we match our
@@ -299,7 +299,7 @@ public:
 	// be converging, but have not - we should reset
 	uint32_t bad_correction_count;
 
-	Eigen::Matrix4f last_pose;
+	Eigen::Isometry3f last_pose;
 
 	uint64_t last_frame;
 
@@ -661,7 +661,7 @@ match_triangles(Eigen::Matrix4f *t1_mat,
 	*t1_to_t2_mat = t1_mat->inverse() * t2_mat;
 }
 
-static Eigen::Matrix4f
+static Eigen::Isometry3f
 solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, std::vector<match_data_t> *solved)
 {
 	// use the vertex positions (at least 3) in the measurement to
@@ -744,15 +744,15 @@ solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, st
 
 	Eigen::Matrix3f r = model_center_transform_f.block(0, 0, 3, 3);
 	Eigen::Quaternionf f_rot_part = Eigen::Quaternionf(r);
-	Eigen::Vector4f f_trans_part = model_center_transform_f.col(3);
+	Eigen::Vector3f f_trans_part = model_center_transform_f.col(3).head<3>();
 
 	r = model_center_transform_r.block(0, 0, 3, 3);
 	Eigen::Quaternionf r_rot_part = Eigen::Quaternionf(r);
-	Eigen::Vector4f r_trans_part = model_center_transform_r.col(3);
+	Eigen::Vector3f r_trans_part = model_center_transform_r.col(3).head<3>();
 
-	Eigen::Matrix4f pose = Eigen::Matrix4f::Identity();
-	pose.block(0, 0, 3, 3) = f_rot_part.slerp(0.5, r_rot_part).toRotationMatrix();
-	pose.col(3) = (f_trans_part + r_trans_part) / 2.0f;
+	Eigen::Isometry3f pose;
+	pose.fromPositionOrientationScale((f_trans_part + r_trans_part) / 2.0f, f_rot_part.slerp(0.5, r_rot_part),
+	                                  Eigen::Vector3f::Ones());
 
 	solved->clear();
 	for (uint32_t i = 0; i < PSVR_NUM_LEDS; i++) {
@@ -773,7 +773,7 @@ typedef struct proximity_data
 } proximity_data_t;
 
 static std::vector<match_data_t>
-transform_model_vertices(TrackerPSVR const &t, Eigen::Matrix4f const &model_to_measurement)
+transform_model_vertices(TrackerPSVR const &t, Eigen::Isometry3f const &model_to_measurement)
 {
 	std::vector<match_data_t> measurements;
 	measurements.reserve(PSVR_NUM_LEDS);
@@ -786,7 +786,7 @@ transform_model_vertices(TrackerPSVR const &t, Eigen::Matrix4f const &model_to_m
 	return measurements;
 }
 
-static Eigen::Matrix4f
+static Eigen::Isometry3f
 solve_with_imu(TrackerPSVR &t,
                std::vector<match_data_t> *measurements,
                std::vector<match_data_t> *match_measurements,
@@ -863,10 +863,9 @@ solve_with_imu(TrackerPSVR &t,
 			               Eigen::Vector4f model_vertex = t.model_vertices[p.vertex_index].position;
 			               Eigen::Vector4f measurement_vertex = p.position;
 			               Eigen::Vector4f measurement_offset = t.corrected_imu_rotation * model_vertex;
-			               Eigen::Affine3f translation(
+			               Eigen::Isometry3f translation(
 			                   Eigen::Translation3f((measurement_vertex - measurement_offset).head<3>()));
-			               Eigen::Matrix4f model_to_measurement =
-			                   translation.matrix() * t.corrected_imu_rotation;
+			               Eigen::Isometry3f model_to_measurement = translation * t.corrected_imu_rotation;
 			               match_model_t temp_measurement;
 			               temp_measurement.measurements =
 			                   transform_model_vertices(t, model_to_measurement);
@@ -889,7 +888,7 @@ solve_with_imu(TrackerPSVR &t,
 		}
 
 		std::vector<match_data_t> _solved;
-		Eigen::Matrix4f pose = solve_for_measurement(&t, solved, &_solved) * t.corrected_imu_rotation;
+		Eigen::Isometry3f pose = solve_for_measurement(&t, solved, &_solved) * t.corrected_imu_rotation;
 		t.last_pose = pose;
 		return pose;
 	}
@@ -899,7 +898,7 @@ solve_with_imu(TrackerPSVR &t,
 }
 
 
-static Eigen::Matrix4f
+static Eigen::Isometry3f
 disambiguate(TrackerPSVR &t,
              std::vector<match_data_t> *measured_points,
              std::vector<match_data_t> *last_measurement,
@@ -913,7 +912,7 @@ disambiguate(TrackerPSVR &t,
 	// do our imu-based solve up front - we can  use this to compute a more
 	// likely match (currently disabled)
 
-	Eigen::Matrix4f imu_solved_pose =
+	Eigen::Isometry3f imu_solved_pose =
 	    solve_with_imu(t, measured_points, last_measurement, solved, PSVR_SEARCH_RADIUS);
 
 	if (measured_points->size() < PSVR_OPTICAL_SOLVE_THRESH && !last_measurement->empty()) {
@@ -940,7 +939,7 @@ disambiguate(TrackerPSVR &t,
 		for (uint32_t i = 0; i < measured_points->size(); i++) {
 			measured_points->at(i).vertex_index = m.measurements.at(i).vertex_index;
 		}
-		Eigen::Matrix4f res = solve_for_measurement(&t, measured_points, solved);
+		Eigen::Isometry3f res = solve_for_measurement(&t, measured_points, solved);
 		float diff = last_diff(t, solved, &t.last_vertices);
 		if (diff < PSVR_HOLD_THRESH) {
 			// U_LOG_D("diff from last: %f", diff);
@@ -1088,7 +1087,7 @@ disambiguate(TrackerPSVR &t,
 	// U_LOG_D("lowest_error %f", lowest_error);
 	if (best_model == -1) {
 		PSVR_INFO("COULD NOT MATCH MODEL!");
-		return Eigen::Matrix4f::Identity();
+		return Eigen::Isometry3f::Identity();
 	}
 
 	t.last_optical_model = best_model;
@@ -1687,14 +1686,13 @@ process(TrackerPSVR &t, struct xrt_frame *xf)
 	// in world space, and model_center_transform will
 	// contain the pose matrix
 	std::vector<match_data_t> solved;
-	Eigen::Matrix4f model_center_transform = disambiguate(t, &t.match_vertices, &predicted_pose, &solved, 0);
+	Eigen::Isometry3f model_center_transform = disambiguate(t, &t.match_vertices, &predicted_pose, &solved, 0);
 
 
 	// derive our optical rotation correction from the
 	// pose transform
 
-	Eigen::Matrix3f r = model_center_transform.block(0, 0, 3, 3);
-	Eigen::Quaternionf rot(r);
+	Eigen::Quaternionf rot(model_center_transform.rotation());
 
 	// we only do this if we are pretty confident we
 	// will have a 'good' optical pose i.e. front-5
@@ -1808,7 +1806,7 @@ process(TrackerPSVR &t, struct xrt_frame *xf)
 	}
 
 
-	Eigen::Vector4f position = model_center_transform.col(3);
+	Eigen::Vector4f position = model_center_transform.matrix().col(3);
 	pose_filter_update(&position, &t.pose_filter, dt);
 
 
@@ -1919,10 +1917,8 @@ imu_data(TrackerPSVR &t, timepoint_ns timestamp_ns, struct xrt_tracking_sample *
 	    t.optical_rotation_correction * Eigen::Quaternionf(t.fusion.imu_3dof.rot.w, t.fusion.imu_3dof.rot.x,
 	                                                       t.fusion.imu_3dof.rot.y, t.fusion.imu_3dof.rot.z);
 
-	Eigen::Matrix4f corrected_rot = Eigen::Matrix4f::Identity();
-	corrected_rot.block(0, 0, 3, 3) = corrected_rot_q.toRotationMatrix();
 
-	t.corrected_imu_rotation = corrected_rot;
+	t.corrected_imu_rotation = Eigen::Isometry3f{corrected_rot_q};
 
 	if (t.done_correction) {
 		corrected_rot_q = t.axis_align_rot * corrected_rot_q;
