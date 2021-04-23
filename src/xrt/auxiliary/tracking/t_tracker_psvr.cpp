@@ -829,10 +829,10 @@ compute_model_center_transform(
  * calculate the pose of the tracked HMD, based on the corresponding model vertices
  */
 static Eigen::Isometry3f
-solve_for_measurement(
-    TrackerPSVR const *t /*!< [in] tracker object */,
-    std::vector<match_data_t> const *measurement /*!< [in] The measured vertex positions */,
-    std::vector<match_data_t> *solved /*!< [out] The model vertices transformed by the solved pose. */)
+solve_for_measurement(TrackerPSVR const *t /*!< [in] tracker object */,
+                      std::vector<match_data_t> const *measurement /*!< [in] The measured vertex positions */,
+                      std::vector<match_data_t> *solved =
+                          nullptr /*!< [out] The model vertices transformed by the solved pose, optional */)
 {
 
 	assert(measurement->size() > 2);
@@ -863,7 +863,9 @@ solve_for_measurement(
 	pose.fromPositionOrientationScale((f_trans_part + r_trans_part) / 2.0f, f_rot_part.slerp(0.5, r_rot_part),
 	                                  Eigen::Vector3f::Ones());
 
-	*solved = transform_model_vertices(*t, pose);
+	if (nullptr != solved) {
+		*solved = transform_model_vertices(*t, pose);
+	}
 
 	return pose;
 }
@@ -980,8 +982,7 @@ solve_with_imu(TrackerPSVR &t,
 			solved->push_back(avg_data);
 		}
 
-		std::vector<match_data_t> _solved;
-		Eigen::Isometry3f pose = solve_for_measurement(&t, solved, &_solved) * t.corrected_imu_rotation;
+		Eigen::Isometry3f pose = solve_for_measurement(&t, solved, nullptr) * t.corrected_imu_rotation;
 		t.last_pose = pose;
 		return pose;
 	}
