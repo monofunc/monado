@@ -910,14 +910,19 @@ solve_with_imu(TrackerPSVR &t,
 	//! measurement
 
 	for (uint32_t i = 0; i < measurements->size(); i++) {
+		match_data_t const &measurement = measurements->at(i);
 		for (uint32_t j = 0; j < match_measurements->size(); j++) {
-			costMatrix[i][j] = (measurements->at(i).position - match_measurements->at(j).position).norm();
-			if (measurements->at(i).src_blob.btype == BLOB_TYPE_SIDE &&
-			    match_measurements->at(j).src_blob.btype == BLOB_TYPE_FRONT) {
+			match_data_t const &match_measurement = match_measurements->at(j);
+
+			costMatrix[i][j] = (measurement.position - match_measurement.position).norm();
+
+			// Penalize mis-matched blob types
+			if (measurement.src_blob.btype == BLOB_TYPE_SIDE &&
+			    match_measurement.src_blob.btype == BLOB_TYPE_FRONT) {
 				costMatrix[i][j] += 10.0f;
 			}
-			if (measurements->at(i).src_blob.btype == BLOB_TYPE_FRONT &&
-			    match_measurements->at(j).src_blob.btype == BLOB_TYPE_SIDE) {
+			if (measurement.src_blob.btype == BLOB_TYPE_FRONT &&
+			    match_measurement.src_blob.btype == BLOB_TYPE_SIDE) {
 				costMatrix[i][j] += 10.0f;
 			}
 		}
