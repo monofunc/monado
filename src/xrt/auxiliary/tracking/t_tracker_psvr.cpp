@@ -563,13 +563,14 @@ remove_outliers(std::vector<blob_point_t> *orig_points, std::vector<blob_point_t
 		y_values.push_back(blob.p.y);
 		z_values.push_back(blob.p.z);
 	}
+	size_t median_index = temp_points.size() / 2;
 
-	std::nth_element(x_values.begin(), x_values.begin() + x_values.size() / 2, x_values.end());
-	float median_x = x_values[x_values.size() / 2];
-	std::nth_element(y_values.begin(), y_values.begin() + y_values.size() / 2, y_values.end());
-	float median_y = y_values[y_values.size() / 2];
-	std::nth_element(z_values.begin(), z_values.begin() + z_values.size() / 2, z_values.end());
-	float median_z = z_values[z_values.size() / 2];
+	std::nth_element(x_values.begin(), x_values.begin() + median_index, x_values.end());
+	float median_x = x_values[median_index];
+	std::nth_element(y_values.begin(), y_values.begin() + median_index, y_values.end());
+	float median_y = y_values[median_index];
+	std::nth_element(z_values.begin(), z_values.begin() + median_index, z_values.end());
+	float median_z = z_values[median_index];
 
 	const Eigen::Vector3f componentwise_median(median_x, median_y, median_z);
 	std::copy_if(temp_points.begin(), temp_points.end(), std::back_inserter(*pruned_points),
