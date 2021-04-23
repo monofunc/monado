@@ -878,16 +878,17 @@ typedef struct proximity_data
 } proximity_data_t;
 
 
+/*!
+ * @brief Use the hungarian algorithm to find the closest set of points to the match measurement
+ */
 static Eigen::Isometry3f
-solve_with_imu(TrackerPSVR &t,
-               std::vector<match_data_t> *measurements,
-               std::vector<match_data_t> *match_measurements,
-               std::vector<match_data_t> *solved,
-               float search_radius)
+solve_with_imu(
+    TrackerPSVR &t /*!< [in,out] tracker object */,
+    std::vector<match_data_t> *measurements /*!< [in,out] Measurements this frame. vertex index will be changed */,
+    std::vector<match_data_t> const *match_measurements /*!< [in] points measured last frame */,
+    std::vector<match_data_t> *solved /*!< [out] estimated world-space locations of all LEDs, in order, based on previous measurements and IMU */)
 {
 
-	// use the hungarian algorithm to find the closest set of points to the
-	// match measurement
 
 	// a 7x7 matrix of costs e.g distances between our points and the match
 	// measurements we will initialise to zero because we will not have
@@ -998,9 +999,9 @@ solve_with_imu(TrackerPSVR &t,
 
 
 static Eigen::Isometry3f
-disambiguate(TrackerPSVR &t,
-             std::vector<match_data_t> *measured_points,
-             std::vector<match_data_t> *last_measurement,
+disambiguate(TrackerPSVR &t /*!< tracker object */,
+             std::vector<match_data_t> *measured_points /*!< [in, out] points measured this frame */,
+             std::vector<match_data_t> const *last_measurement /*!< [in] points measured last frame */,
              std::vector<match_data_t> *solved,
              uint32_t frame_no)
 {
@@ -1011,8 +1012,7 @@ disambiguate(TrackerPSVR &t,
 	// do our imu-based solve up front - we can  use this to compute a more
 	// likely match (currently disabled)
 
-	Eigen::Isometry3f imu_solved_pose =
-	    solve_with_imu(t, measured_points, last_measurement, solved, PSVR_SEARCH_RADIUS);
+	Eigen::Isometry3f imu_solved_pose = solve_with_imu(t, measured_points, last_measurement, solved);
 
 	if (measured_points->size() < PSVR_OPTICAL_SOLVE_THRESH && !last_measurement->empty()) {
 		return imu_solved_pose;
@@ -1862,7 +1862,7 @@ process(TrackerPSVR &t, struct xrt_frame *xf)
 			resolved.push_back(solved[i]);
 		}
 		solved.clear();
-		model_center_transform = solve_with_imu(t, &resolved, &predicted_pose, &solved, PSVR_SEARCH_RADIUS);
+		model_center_transform = solve_with_imu(t, &resolved, &predicted_pose, &solved);
 	}
 
 	// move our applied correction towards the
@@ -1882,7 +1882,7 @@ process(TrackerPSVR &t, struct xrt_frame *xf)
 
 	/*std::vector<match_data_t> alt_solved;
 	Eigen::Matrix4f f_pose = solve_with_imu(
-	    t, &t.match_vertices, &t.last_vertices, &alt_solved, 10.0f);
+	    t, &t.match_vertices, &t.last_vertices, &alt_solved);
 
 	for (uint32_t i = 0; i < alt_solved.size(); i++) {
 	        fprintf(t.dump_file, "A,%" PRIu64 ",%f,%f,%f\n",
