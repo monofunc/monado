@@ -118,6 +118,7 @@ using namespace xrt::auxiliary::tracking;
 //! Namespace for PSVR tracking implementation
 namespace xrt::auxiliary::tracking::psvr {
 
+//! General category of blob by face
 typedef enum blob_type
 {
 	BLOB_TYPE_UNKNOWN,
@@ -126,6 +127,7 @@ typedef enum blob_type
 	BLOB_TYPE_REAR, // currently unused
 } blob_type_t;
 
+//! 3D and stereo data about a blob
 typedef struct blob_point
 {
 	cv::Point3f p;     // 3d coordinate
@@ -160,15 +162,16 @@ struct View
 	}
 };
 
+//! Unique ID for each LED, also used as indices.
 typedef enum led_tag
 {
-	TAG_TL,
-	TAG_TR,
-	TAG_C,
-	TAG_BL,
-	TAG_BR,
-	TAG_SL,
-	TAG_SR
+	TAG_TL, //!< top-left
+	TAG_TR, //!< top-right
+	TAG_C,  //!< center
+	TAG_BL, //!< bottom-left
+	TAG_BR, //!< bottom-right
+	TAG_SL, //!< side-left
+	TAG_SR, //!< side-right
 } led_tag_t;
 
 typedef struct model_vertex
@@ -198,16 +201,16 @@ typedef struct model_vertex
 
 typedef struct match_data
 {
-	float angle = {};                                   // angle from reference vector
-	float distance = {};                                // distance from base of reference vector
-	int32_t vertex_index = {};                          // index also known as tag
-	Eigen::Vector4f position = Eigen::Vector4f::Zero(); // 3d position of vertex
-	blob_point_t src_blob = {};                         // blob this vertex was derived from
+	float angle = {};                                   //!< angle from reference vector
+	float distance = {};                                //!< distance from base of reference vector
+	int32_t vertex_index = {};                          //!< index, also known as tag
+	Eigen::Vector4f position = Eigen::Vector4f::Zero(); //!< 3d position of vertex
+	blob_point_t src_blob = {};                         //!< blob this vertex was derived from
 } match_data_t;
 
+//! Collection of vertices and associated data.
 typedef struct match_model
 {
-	//! Collection of vertices and associated data.
 	std::vector<match_data_t> measurements;
 } match_model_t;
 
@@ -248,24 +251,20 @@ public:
 		struct xrt_quat rot = {};
 	} optical;
 
-	Eigen::Quaternionf target_optical_rotation_correction; // the calculated rotation to
-	                                                       // correct the imu
-	Eigen::Quaternionf optical_rotation_correction;        // currently applied (interpolated
-	                                                       // towards target) correction
-	Eigen::Isometry3f corrected_imu_rotation;              // imu rotation with correction applied
-	Eigen::Quaternionf axis_align_rot;                     // used to rotate imu/tracking coordinates to world
+	Eigen::Quaternionf target_optical_rotation_correction; //!< the calculated rotation to correct the imu
+	Eigen::Quaternionf optical_rotation_correction; //!< currently applied (interpolated towards target) correction
+	Eigen::Isometry3f corrected_imu_rotation;       //!< imu rotation with correction applied
+	Eigen::Quaternionf axis_align_rot;              //!< used to rotate imu/tracking coordinates to world
 
-	model_vertex_t model_vertices[PSVR_NUM_LEDS]; // the model we match our
-	                                              // measurements against
-	std::vector<match_data_t> last_vertices;      // the last solved position of the HMD
+	model_vertex_t model_vertices[PSVR_NUM_LEDS]; //!< the model we match our measurements against
+	std::vector<match_data_t> last_vertices;      //!< the last solved position of the HMD
 
 	uint32_t last_optical_model;
 
 	cv::KalmanFilter track_filters[PSVR_NUM_LEDS];
 
 
-	cv::KalmanFilter pose_filter; // we filter the final pose position of
-	                              // the HMD to smooth motion
+	cv::KalmanFilter pose_filter; //!< we filter the final pose position of the HMD to smooth motion
 
 	View view[2];
 	bool calibrated;
@@ -280,30 +279,32 @@ public:
 	std::vector<cv::KeyPoint> l_blobs, r_blobs;
 	std::vector<match_model_t> matches;
 
-	// we refine our measurement by rejecting outliers and merging 'too
-	// close' points
+	/*!
+	 * @name blob point collections
+	 * @brief we refine our measurement by rejecting outliers and merging 'too close' points
+	 * @{
+	 */
 	std::vector<blob_point_t> world_points;
 	std::vector<blob_point_t> pruned_points;
 	std::vector<blob_point_t> merged_points;
+	/*! @} */
 
 	std::vector<match_data_t> match_vertices;
 
-	float avg_optical_correction; // used to converge to a 'lock' correction
-	                              // rotation
+	float avg_optical_correction; //!< used to converge to a 'lock' correction rotation
 
-	bool done_correction; // set after a 'lock' is acquired
+	bool done_correction; //!< set after a 'lock' is acquired
 
 	float max_correction;
 
-	// if we have made a lot of optical measurements that *should*
-	// be converging, but have not - we should reset
+	//! if we have made a lot of optical measurements that *should* be converging, but have not - we should reset
 	uint32_t bad_correction_count;
 
 	Eigen::Isometry3f last_pose;
 
 	uint64_t last_frame;
 
-	Eigen::Vector4f model_center; // center of rotation
+	Eigen::Vector4f model_center; //!< center of rotation
 
 #ifdef PSVR_DUMP_FOR_OFFLINE_ANALYSIS
 	FILE *dump_file;
@@ -339,7 +340,9 @@ make_homogeneous(Eigen::MatrixBase<Derived> const &vec3)
 	return (Eigen::Vector4f() << vec3, 1.0f).finished();
 }
 
-
+/*!
+ * @brief Initialize a Kalman filter with 6d state and 3d measurement: position and velocity.
+ */
 static void
 init_filter(cv::KalmanFilter &kf, float process_cov, float meas_cov, float dt)
 {
@@ -365,12 +368,17 @@ init_filter(cv::KalmanFilter &kf, float process_cov, float meas_cov, float dt)
 	cv::setIdentity(kf.measurementNoiseCov, cv::Scalar::all(meas_cov));
 }
 
+/*!
+ * @brief Predict each of the per-LED kalman filters
+ */
 static void
-filter_predict(std::vector<match_data_t> *pose, cv::KalmanFilter *filters, float dt)
+filter_predict(std::vector<match_data_t> *pose /*!< [out] a predicted pose for each LED is pushed onto this */,
+               cv::KalmanFilter filters[PSVR_NUM_LEDS] /*!< [in,out] */,
+               float dt /*!< time/duration (in seconds) */)
 {
 	for (uint32_t i = 0; i < PSVR_NUM_LEDS; i++) {
 		match_data_t current_led;
-		cv::KalmanFilter *current_kf = filters + i;
+		cv::KalmanFilter *current_kf = &(filters[i]);
 
 		// set our dt components in the transition matrix
 		current_kf->transitionMatrix.at<float>(0, 3) = dt;
@@ -387,19 +395,23 @@ filter_predict(std::vector<match_data_t> *pose, cv::KalmanFilter *filters, float
 	}
 }
 
+/*!
+ * @brief Update each of the per-LED kalman filters
+ */
 static void
-filter_update(std::vector<match_data_t> *pose, cv::KalmanFilter *filters, float dt)
+filter_update(std::vector<match_data_t> const *pose,   /*!< [in] data for each LED, in order */
+              cv::KalmanFilter filters[PSVR_NUM_LEDS], /*!< [in,out] per-led filters */
+              float dt /*!< time/duration (in seconds) */)
 {
 	for (uint32_t i = 0; i < PSVR_NUM_LEDS; i++) {
-		match_data_t *current_led = &pose->at(i);
-		cv::KalmanFilter *current_kf = filters + i;
+		match_data_t const *current_led = &pose->at(i);
+		assert(current_led->vertex_index == (int32_t)i);
+		cv::KalmanFilter *current_kf = &(filters[i]);
 
 		// set our dt components in the transition matrix
 		current_kf->transitionMatrix.at<float>(0, 3) = dt;
 		current_kf->transitionMatrix.at<float>(1, 4) = dt;
 		current_kf->transitionMatrix.at<float>(2, 5) = dt;
-
-		current_led->vertex_index = i;
 
 		cv::Mat_<float> measurement = cv::Mat_<float>(3, 1);
 		measurement(0, 0) = current_led->position[0];
@@ -409,8 +421,13 @@ filter_update(std::vector<match_data_t> *pose, cv::KalmanFilter *filters, float 
 	}
 }
 
+/*!
+ * Predict the HMD position filter.
+ */
 static void
-pose_filter_predict(Eigen::Vector4f *pose, cv::KalmanFilter *filter, float dt)
+pose_filter_predict(Eigen::Vector4f *position /*!< [out] */,
+                    cv::KalmanFilter *filter /*!< [in,out] the single HMD position filter */,
+                    float dt /*!< time/duration (in seconds) */)
 {
 	// set our dt components in the transition matrix
 	filter->transitionMatrix.at<float>(0, 3) = dt;
@@ -418,13 +435,18 @@ pose_filter_predict(Eigen::Vector4f *pose, cv::KalmanFilter *filter, float dt)
 	filter->transitionMatrix.at<float>(2, 5) = dt;
 
 	cv::Mat_<float> prediction = filter->predict();
-	(*pose)[0] = prediction(0, 0);
-	(*pose)[1] = prediction(1, 0);
-	(*pose)[2] = prediction(2, 0);
+	(*position)[0] = prediction(0, 0);
+	(*position)[1] = prediction(1, 0);
+	(*position)[2] = prediction(2, 0);
 }
 
+/*!
+ * Update the HMD position filter.
+ */
 static void
-pose_filter_update(Eigen::Vector4f *position, cv::KalmanFilter *filter, float dt)
+pose_filter_update(Eigen::Vector4f const *position /*!< [in] HMD position */,
+                   cv::KalmanFilter *filter /*!< [in,out] the single HMD position filter */,
+                   float dt /*!< time/duration (in seconds) */)
 {
 	filter->transitionMatrix.at<float>(0, 3) = dt;
 	filter->transitionMatrix.at<float>(1, 4) = dt;
@@ -437,21 +459,22 @@ pose_filter_update(Eigen::Vector4f *position, cv::KalmanFilter *filter, float dt
 	filter->correct(measurement);
 }
 
+/*!
+ * @brief check if this match makes sense - we can remove unobservable combinations without checking them.
+ *
+ * @todo - this is currently unimplemented
+ */
 static bool
-match_possible(match_model_t *match)
+match_possible(match_model_t const *match)
 {
-	//@todo - this is currently unimplemented
-	// check if this match makes sense - we can remove
-	// unobservable combinations without checking them.
-
-
 	// we cannot see SR,SL at the same time so remove any matches that
 	// contain them both in the first 5 slots
 	return true;
 }
 
 static void
-verts_to_measurement(std::vector<blob_point_t> *meas_data, std::vector<match_data_t> *match_vertices)
+verts_to_measurement(std::vector<blob_point_t> const *meas_data /*!< [in] */,
+                     std::vector<match_data_t> *match_vertices /*!< [out] */)
 {
 	// create a data structure that holds the inter-point distances
 	// and angles we will use to match the pose
@@ -510,11 +533,14 @@ verts_to_measurement(std::vector<blob_point_t> *meas_data, std::vector<match_dat
 	}
 }
 
+/*!
+ * @brief Compute the aggregate difference (sum of distances between matching indices) between two poses
+ */
 static float
-last_diff(TrackerPSVR &t, std::vector<match_data_t> *meas_pose, std::vector<match_data_t> *last_pose)
+last_diff(TrackerPSVR const &t /*!< tracker object */,
+          std::vector<match_data_t> const *meas_pose /*!< [in] */,
+          std::vector<match_data_t> const *last_pose /*!< [in] */)
 {
-	// compute the aggregate difference (sum of distances between matching
-	// indices)between two poses
 
 	float diff = 0.0f;
 	for (uint32_t i = 0; i < meas_pose->size(); i++) {
@@ -532,8 +558,13 @@ last_diff(TrackerPSVR &t, std::vector<match_data_t> *meas_pose, std::vector<matc
 }
 
 
+/*!
+ * @brief Remove points that have unreasonable positions.
+ */
 static void
-remove_outliers(std::vector<blob_point_t> *orig_points, std::vector<blob_point_t> *pruned_points, float outlier_thresh)
+remove_outliers(std::vector<blob_point_t> const *orig_points /*!< [in] original collection of points */,
+                std::vector<blob_point_t> *pruned_points /*!< [out] pruned points get push_back'ed onto this. */,
+                float outlier_thresh /*!< [in] */)
 {
 
 	if (orig_points->empty()) {
@@ -582,9 +613,15 @@ remove_outliers(std::vector<blob_point_t> *orig_points, std::vector<blob_point_t
 	             });
 }
 
-
+/*!
+ * @brief "Merge" points physically close to one another.
+ *
+ * Actually just keeps only one of each duplicate, with later-appearing duplicates overriding earlier ones
+ */
 static void
-merge_close_points(std::vector<blob_point_t> *orig_points, std::vector<blob_point_t> *merged_points, float merge_thresh)
+merge_close_points(std::vector<blob_point_t> const *orig_points /*!< [in] original collection of points */,
+                   std::vector<blob_point_t> *merged_points /*!< [out] pruned points get push_back'ed onto this */,
+                   float merge_thresh /*!< distance threshold */)
 {
 	// if a pair of points in the supplied lists are closer than the
 	// threshold, discard one of them.
@@ -623,6 +660,11 @@ merge_close_points(std::vector<blob_point_t> *orig_points, std::vector<blob_poin
 	                       indices_to_remove.begin(), indices_to_remove.end());
 }
 
+/*!
+ * @brief given 3 vertices in 'model space', and a corresponding 3 vertices in 'world space', compute the transformation
+ * matrix to map one to the other.
+ */
+
 static void
 match_triangles(Eigen::Matrix4f *t1_mat,
                 Eigen::Matrix4f *t1_to_t2_mat,
@@ -633,9 +675,6 @@ match_triangles(Eigen::Matrix4f *t1_mat,
                 const Eigen::Vector4f &t2_b,
                 const Eigen::Vector4f &t2_c)
 {
-	// given 3 vertices in 'model space', and a corresponding 3 vertices
-	// in 'world space', compute the transformation matrix to map one
-	// to the other
 
 	*t1_mat = Eigen::Matrix4f::Identity();
 	Eigen::Matrix4f t2_mat = Eigen::Matrix4f::Identity();
