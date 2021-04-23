@@ -543,15 +543,18 @@ last_diff(TrackerPSVR const &t /*!< tracker object */,
 {
 
 	float diff = 0.0f;
+	const auto last_begin = last_pose->begin();
+	const auto last_end = last_pose->end();
 	for (uint32_t i = 0; i < meas_pose->size(); i++) {
 		uint32_t meas_index = meas_pose->at(i).vertex_index;
-		for (uint32_t j = 0; j < last_pose->size(); j++) {
-			uint32_t last_index = last_pose->at(j).vertex_index;
-			if (last_index == meas_index) {
-				float d =
-				    (meas_pose->at(meas_index).position - last_pose->at(last_index).position).norm();
-				diff += d;
-			}
+		// Find our counterpart
+		auto it = std::find_if(last_begin, last_end, [meas_index](match_data_t const &last_match) {
+			return last_match.vertex_index == meas_index;
+		});
+		if (it != last_end) {
+			// OK, we found it.
+			float d = (meas_pose->at(meas_index).position - it->position).norm();
+			diff += d;
 		}
 	}
 	return diff / meas_pose->size();
