@@ -889,6 +889,11 @@ solve_with_imu(
     std::vector<match_data_t> *solved /*!< [out] estimated world-space locations of all LEDs, in order, based on previous measurements and IMU */)
 {
 
+	if (measurements->empty()) {
+		PSVR_INFO("LOST TRACKING - RETURNING LAST POSE");
+		t.max_correction = PSVR_SLOW_CORRECTION;
+		return t.last_pose;
+	}
 
 	// a 7x7 matrix of costs e.g distances between our points and the match
 	// measurements we will initialise to zero because we will not have
@@ -950,51 +955,44 @@ solve_with_imu(
 		               return p;
 	               });
 
-	if (!proximity_data.empty()) {
 
-		// use the IMU rotation and the measured points in
-		// world space to compute a transform from model to world space.
-		// use each measured led individually and average the resulting
-		// positions
+	// use the IMU rotation and the measured points in
+	// world space to compute a transform from model to world space.
+	// use each measured led individually and average the resulting
+	// positions
 
-		std::vector<match_model_t> temp_measurement_list;
-		temp_measurement_list.reserve(proximity_data.size());
-		std::transform(proximity_data.begin(), proximity_data.end(), std::back_inserter(temp_measurement_list),
-		               [&t](proximity_data_t const &p) {
-			               Eigen::Vector4f model_vertex = t.get_model_vertex(p.vertex_index).position;
-			               Eigen::Vector4f measurement_vertex = p.position;
-			               Eigen::Vector4f measurement_offset = t.corrected_imu_rotation * model_vertex;
-			               Eigen::Isometry3f translation(
-			                   Eigen::Translation3f((measurement_vertex - measurement_offset).head<3>()));
-			               Eigen::Isometry3f model_to_measurement = translation * t.corrected_imu_rotation;
-			               match_model_t temp_measurement;
-			               temp_measurement.measurements =
-			                   transform_model_vertices(t, model_to_measurement);
-			               return temp_measurement;
-		               });
+	std::vector<match_model_t> temp_measurement_list;
+	temp_measurement_list.reserve(proximity_data.size());
+	std::transform(proximity_data.begin(), proximity_data.end(), std::back_inserter(temp_measurement_list),
+	               [&t](proximity_data_t const &p) {
+		               Eigen::Vector4f model_vertex = t.get_model_vertex(p.vertex_index).position;
+		               Eigen::Vector4f measurement_vertex = p.position;
+		               Eigen::Vector4f measurement_offset = t.corrected_imu_rotation * model_vertex;
+		               Eigen::Isometry3f translation(
+		                   Eigen::Translation3f((measurement_vertex - measurement_offset).head<3>()));
+		               Eigen::Isometry3f model_to_measurement = translation * t.corrected_imu_rotation;
+		               match_model_t temp_measurement;
+		               temp_measurement.measurements = transform_model_vertices(t, model_to_measurement);
+		               return temp_measurement;
+	               });
 
-		for (led_tag_t tag : ALL_LEDS) {
-			auto i = (int32_t)tag;
-			match_data_t avg_data;
-			// Average the position of this LED across all of temp_measurement_list
-			avg_data.position =
-			    std::accumulate(temp_measurement_list.begin(), temp_measurement_list.end(),
-			                    Eigen::Vector4f(Eigen::Vector4f::Zero()),
-			                    [i](Eigen::Vector4f const &result, match_model_t const &temp) {
-				                    return result + temp.measurements[i].position;
-			                    });
-			avg_data.position /= float(temp_measurement_list.size());
-			avg_data.vertex_index = tag;
-			solved->push_back(avg_data);
-		}
-
-		Eigen::Isometry3f pose = solve_for_measurement(&t, solved, nullptr) * t.corrected_imu_rotation;
-		t.last_pose = pose;
-		return pose;
+	for (led_tag_t tag : ALL_LEDS) {
+		auto i = (int32_t)tag;
+		match_data_t avg_data;
+		// Average the position of this LED across all of temp_measurement_list
+		avg_data.position = std::accumulate(temp_measurement_list.begin(), temp_measurement_list.end(),
+		                                    Eigen::Vector4f(Eigen::Vector4f::Zero()),
+		                                    [i](Eigen::Vector4f const &result, match_model_t const &temp) {
+			                                    return result + temp.measurements[i].position;
+		                                    });
+		avg_data.position /= float(temp_measurement_list.size());
+		avg_data.vertex_index = tag;
+		solved->push_back(avg_data);
 	}
-	PSVR_INFO("LOST TRACKING - RETURNING LAST POSE");
-	t.max_correction = PSVR_SLOW_CORRECTION;
-	return t.last_pose;
+
+	Eigen::Isometry3f pose = solve_for_measurement(&t, solved, nullptr) * t.corrected_imu_rotation;
+	t.last_pose = pose;
+	return pose;
 }
 
 
