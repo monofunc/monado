@@ -1,4 +1,4 @@
-// Copyright 2019, Collabora, Ltd.
+// Copyright 2019-2024, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -308,17 +308,35 @@ public:
 #endif
 };
 
-static float
-dist_3d(Eigen::Vector4f a, Eigen::Vector4f b)
+/*!
+ * @brief Treat a cv::Point3f like a Eigen::Vector3f (const overload)
+ */
+static inline Eigen::Vector3f::MapType
+map(cv::Point3f &pt)
 {
-	return sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]) + (a[2] - b[2]) * (a[2] - b[2]));
+	return Eigen::Vector3f::Map(&pt.x);
+}
+/*!
+ * @brief Treat a cv::Point3f like a Eigen::Vector3f (const overload)
+ */
+static inline Eigen::Vector3f::ConstMapType
+map(cv::Point3f const &pt)
+{
+	return Eigen::Vector3f::Map(&pt.x);
 }
 
-static float
-dist_3d_cv(const cv::Point3f &a, const cv::Point3f &b)
+/*!
+ * @brief Turn a Vector3f (or map equivalent) into a Vector4f by sticking 1 on the end.
+ */
+template <typename Derived>
+static inline Eigen::Vector4f
+make_homogeneous(Eigen::MatrixBase<Derived> const &vec3)
 {
-	return sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (a.z - b.z) * (a.z - b.z));
+	EIGEN_STATIC_ASSERT_VECTOR_SPECIFIC_SIZE(Derived, 3);
+	static_assert(std::is_same<typename Derived::Scalar, float>::value, "Must be a float vector");
+	return (Eigen::Vector4f() << vec3, 1.0f).finished();
 }
+
 
 static void
 init_filter(cv::KalmanFilter &kf, float process_cov, float meas_cov, float dt)
@@ -443,7 +461,7 @@ verts_to_measurement(std::vector<blob_point_t> *meas_data, std::vector<match_dat
 			md.vertex_index = -1;
 			md.src_blob = meas_data->at(i);
 			auto pt = md.src_blob.p;
-			md.position = Eigen::Vector4f(pt.x, pt.y, pt.z, 1.0f);
+			md.position = make_homogeneous(map(pt));
 			match_vertices->push_back(md);
 		}
 
@@ -453,27 +471,27 @@ verts_to_measurement(std::vector<blob_point_t> *meas_data, std::vector<match_dat
 	blob_point_t ref_a = meas_data->at(0);
 	blob_point_t ref_b = meas_data->at(1);
 	cv::Point3f ref_vec = ref_b.p - ref_a.p;
-	float ref_len = dist_3d_cv(ref_a.p, ref_b.p);
+	Eigen::Vector3f ref_vec3 = map(ref_vec);
+	float ref_len = ref_vec3.norm();
+	Eigen::Vector3f ref_vec3_normalized = ref_vec3.normalized();
 
 	for (uint32_t i = 0; i < meas_data->size(); i++) {
 		blob_point_t vp = meas_data->at(i);
 		cv::Point3f point_vec = vp.p - ref_a.p;
 		match_data_t md;
 		md.vertex_index = -1;
-		md.position = Eigen::Vector4f(vp.p.x, vp.p.y, vp.p.z, 1.0f);
-		Eigen::Vector3f ref_vec3(ref_vec.x, ref_vec.y, ref_vec.z);
-		Eigen::Vector3f point_vec3(point_vec.x, point_vec.y, point_vec.z);
-		Eigen::Vector3f vp_pos3(vp.p.x, vp.p.y, vp.p.z);
+		md.position = make_homogeneous(map(vp.p));
+		Eigen::Vector3f point_vec3 = map(point_vec);
 
 		if (i != 0) {
 			Eigen::Vector3f plane_norm = ref_vec3.cross(point_vec3).normalized();
 			if (plane_norm.z() > 0) {
-				md.angle = -1 * acos(point_vec3.normalized().dot(ref_vec3.normalized()));
+				md.angle = -1 * acos(point_vec3.normalized().dot(ref_vec3_normalized));
 			} else {
-				md.angle = acos(point_vec3.normalized().dot(ref_vec3.normalized()));
+				md.angle = acos(point_vec3.normalized().dot(ref_vec3_normalized));
 			}
 
-			md.distance = dist_3d_cv(vp.p, ref_a.p) / ref_len;
+			md.distance = (map(vp.p) - map(ref_a.p)).norm() / ref_len;
 		} else {
 			md.angle = 0.0f;
 			md.distance = 0.0f;
@@ -502,8 +520,8 @@ last_diff(TrackerPSVR &t, std::vector<match_data_t> *meas_pose, std::vector<matc
 		for (uint32_t j = 0; j < last_pose->size(); j++) {
 			uint32_t last_index = last_pose->at(j).vertex_index;
 			if (last_index == meas_index) {
-				float d = fabs(
-				    dist_3d(meas_pose->at(meas_index).position, last_pose->at(last_index).position));
+				float d =
+				    (meas_pose->at(meas_index).position - last_pose->at(last_index).position).norm();
 				diff += d;
 			}
 		}
@@ -553,13 +571,10 @@ remove_outliers(std::vector<blob_point_t> *orig_points, std::vector<blob_point_t
 	std::nth_element(z_values.begin(), z_values.begin() + z_values.size() / 2, z_values.end());
 	float median_z = z_values[z_values.size() / 2];
 
+	const Eigen::Vector3f componentwise_median(median_x, median_y, median_z);
 	std::copy_if(temp_points.begin(), temp_points.end(), std::back_inserter(*pruned_points),
-	             [median_x, median_y, median_z, outlier_thresh](blob_point_t const &blob) {
-		             float error_x = blob.p.x - median_x;
-		             float error_y = blob.p.y - median_y;
-		             float error_z = blob.p.z - median_z;
-
-		             float rms_error = sqrt((error_x * error_x) + (error_y * error_y) + (error_z * error_z));
+	             [outlier_thresh, &componentwise_median](blob_point_t const &blob) {
+		             float rms_error = (map(blob.p) - componentwise_median).norm();
 		             return rms_error < outlier_thresh;
 	             });
 }
@@ -583,7 +598,7 @@ merge_close_points(std::vector<blob_point_t> *orig_points, std::vector<blob_poin
 	for (uint32_t i = 0; i < orig_points->size(); i++) {
 		for (uint32_t j = 0; j < orig_points->size(); j++) {
 			if (i != j) {
-				float d = dist_3d_cv(orig_points->at(i).p, orig_points->at(j).p);
+				float d = (map(orig_points->at(i).p) - map(orig_points->at(j).p)).norm();
 				if (d < merge_thresh) {
 					struct close_pair p;
 					p.index_a = i;
@@ -642,15 +657,15 @@ match_triangles(Eigen::Matrix4f *t1_mat,
 	Eigen::Vector3f t2_z_vec = (t2_c - t2_a).head<3>().cross((t2_b - t2_a).head<3>()).normalized();
 	Eigen::Vector3f t2_y_vec = t2_x_vec.cross(t2_z_vec).normalized();
 
-	t1_mat->col(0) << t1_x_vec[0], t1_x_vec[1], t1_x_vec[2], 0.0f;
-	t1_mat->col(1) << t1_y_vec[0], t1_y_vec[1], t1_y_vec[2], 0.0f;
-	t1_mat->col(2) << t1_z_vec[0], t1_z_vec[1], t1_z_vec[2], 0.0f;
-	t1_mat->col(3) << t1_a[0], t1_a[1], t1_a[2], 1.0f;
+	t1_mat->col(0) << t1_x_vec, 0.0f;
+	t1_mat->col(1) << t1_y_vec, 0.0f;
+	t1_mat->col(2) << t1_z_vec, 0.0f;
+	t1_mat->col(3) = t1_a;
 
-	t2_mat.col(0) << t2_x_vec[0], t2_x_vec[1], t2_x_vec[2], 0.0f;
-	t2_mat.col(1) << t2_y_vec[0], t2_y_vec[1], t2_y_vec[2], 0.0f;
-	t2_mat.col(2) << t2_z_vec[0], t2_z_vec[1], t2_z_vec[2], 0.0f;
-	t2_mat.col(3) << t2_a[0], t2_a[1], t2_a[2], 1.0f;
+	t2_mat.col(0) << t2_x_vec, 0.0f;
+	t2_mat.col(1) << t2_y_vec, 0.0f;
+	t2_mat.col(2) << t2_z_vec, 0.0f;
+	t2_mat.col(3) = t2_a;
 
 	*t1_to_t2_mat = t1_mat->inverse() * t2_mat;
 }
@@ -683,7 +698,7 @@ solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, st
 	for (uint32_t i = 0; i < measurement->size(); i++) {
 		int model_tag_index = measurement->at(i).vertex_index;
 		Eigen::Vector4f model_vert = t->model_vertices[model_tag_index].position;
-		if (most_distant_index > 1 && dist_3d(model_vert, model_ref_a) > highest_length) {
+		if (most_distant_index > 1 && (model_vert - model_ref_a).norm() > highest_length) {
 			best_model_index = most_distant_index;
 		}
 		most_distant_index++;
@@ -717,7 +732,7 @@ solve_for_measurement(TrackerPSVR *t, std::vector<match_data_t> *measurement, st
 		int model_tag_index = measurement->at(i).vertex_index;
 		Eigen::Vector4f model_vert = t->model_vertices[model_tag_index].position;
 		if (most_distant_index < (int)measurement->size() - 2 &&
-		    dist_3d(model_vert, model_ref_a) > highest_length) {
+		    (model_vert - model_ref_a).norm() > highest_length) {
 			best_model_index = most_distant_index;
 		}
 		most_distant_index++;
@@ -799,7 +814,7 @@ solve_with_imu(TrackerPSVR &t,
 
 	for (uint32_t i = 0; i < measurements->size(); i++) {
 		for (uint32_t j = 0; j < match_measurements->size(); j++) {
-			costMatrix[i][j] = dist_3d(measurements->at(i).position, match_measurements->at(j).position);
+			costMatrix[i][j] = (measurements->at(i).position - match_measurements->at(j).position).norm();
 			if (measurements->at(i).src_blob.btype == BLOB_TYPE_SIDE &&
 			    match_measurements->at(j).src_blob.btype == BLOB_TYPE_FRONT) {
 				costMatrix[i][j] += 10.0f;
@@ -1183,13 +1198,13 @@ create_match_list(TrackerPSVR &t)
 		model_vertex_t ref_pt_b = mp.vec[1];
 		Eigen::Vector3f ref_vec3 = (ref_pt_b.position - ref_pt_a.position).head<3>();
 
-		float normScale = dist_3d(ref_pt_a.position, ref_pt_b.position);
+		float normScale = (ref_pt_a.position - ref_pt_b.position).norm();
 
 		match_data_t md;
 		for (auto &&i : mp.vec) {
 			Eigen::Vector3f point_vec3 = (i.position - ref_pt_a.position).head<3>();
 			md.vertex_index = i.vertex_index;
-			md.distance = dist_3d(i.position, ref_pt_a.position) / normScale;
+			md.distance = (i.position - ref_pt_a.position).norm() / normScale;
 			if (i.position.head<3>().dot(Eigen::Vector3f(0.0, 0.0, 1.0f)) < 0) {
 				md.distance *= -1;
 			}
