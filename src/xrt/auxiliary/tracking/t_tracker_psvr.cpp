@@ -769,88 +769,83 @@ transform_model_vertices(TrackerPSVR const &t, Eigen::Isometry3f const &model_to
 	return measurements;
 }
 
-static Eigen::Isometry3f
-solve_for_measurement(TrackerPSVR const *t /*!< [in] tracker object */,
-                      std::vector<match_data_t> const *measurement /*!< [in] */,
-                      std::vector<match_data_t> *solved /*!< [out] */)
-{
-	// use the vertex positions (at least 3) in the measurement to
-	// construct a pair of triangles which are used to calculate the
-	// pose of the tracked HMD,
-	// based on the corresponding model vertices
 
-	// @todo: compute all possible unique triangles, and average the result
+/*!
+ * @brief Find a triangle made up of @p a @p b and a third match (chosen to maximize model vertex distance from @p a),
+ * and use it to compute some transform.
+ *
+ * There should be at least one element in @p [first,last) that is not @p a or @p b. If @p a or @p b are in the range,
+ * they will just be skipped automatically.
+ */
+static Eigen::Matrix4f
+compute_model_center_transform(
+    TrackerPSVR const &t /*!< [in] tracker object */,
+    match_data_t const &a /*!< [in] vertex a */,
+    match_data_t const &b /*!< [in] vertex b */,
+    std::vector<match_data_t>::const_iterator first /*!< [in] start of sequence of other vertices. */,
+    std::vector<match_data_t>::const_iterator last /*!< [in] past-the-end iterator for sequence of other vertices */)
+{
+	const Eigen::Vector4f meas_ref_a = a.position;
+	const Eigen::Vector4f meas_ref_b = b.position;
+	const led_tag_t meas_index_a = a.vertex_index;
+	const led_tag_t meas_index_b = b.vertex_index;
+	assert(meas_index_a != led_tag_t::TAG_INVALID);
+	assert(meas_index_b != led_tag_t::TAG_INVALID);
+
+	const Eigen::Vector4f model_ref_a = t.get_model_vertex(meas_index_a).position;
+	const Eigen::Vector4f model_ref_b = t.get_model_vertex(meas_index_b).position;
+
+	// find the one from the remaining matches whose model vertex position is furthest from the model vertex
+	// position of element a.
+	auto it_c = max_result_element<float>(
+	    first, last, [&model_ref_a, &t, meas_index_a, meas_index_b](match_data_t const &elt) {
+		    led_tag_t model_tag_index = elt.vertex_index;
+		    if (model_tag_index == meas_index_a || model_tag_index == meas_index_b) {
+			    // save us time, early out if we find ourselves. Other distance will always be greater than
+			    // 0.
+			    return 0.f;
+		    }
+		    Eigen::Vector4f model_vert = t.get_model_vertex(model_tag_index).position;
+		    //! @todo precompute these into a 7x7 table? We're only looking at model locations in this loop.
+		    return (model_vert - model_ref_a).norm();
+	    });
+
 
 	Eigen::Matrix4f tri_basis;
 	Eigen::Matrix4f model_to_measurement;
 
-	Eigen::Vector4f meas_ref_a = measurement->at(0).position;
-	Eigen::Vector4f meas_ref_b = measurement->at(1).position;
-	led_tag_t meas_index_a = measurement->at(0).vertex_index;
-	led_tag_t meas_index_b = measurement->at(1).vertex_index;
-	assert(meas_index_a != led_tag_t::TAG_INVALID);
-	assert(meas_index_b != led_tag_t::TAG_INVALID);
+	Eigen::Vector4f meas_ref_c = it_c->position;
+	led_tag_t meas_index_c = it_c->vertex_index;
 
-	Eigen::Vector4f model_ref_a = t->get_model_vertex(meas_index_a).position;
-	Eigen::Vector4f model_ref_b = t->get_model_vertex(meas_index_b).position;
-
-	float highest_length = 0.0f;
-	int best_model_index = 0;
-	int most_distant_index = 0;
-
-	for (uint32_t i = 0; i < measurement->size(); i++) {
-		//! @todo I think we can get rid of one of these variables
-		assert(i == (int)most_distant_index);
-		led_tag_t model_tag_index = measurement->at(i).vertex_index;
-		Eigen::Vector4f model_vert = t->get_model_vertex(model_tag_index).position;
-		if (most_distant_index > 1 && (model_vert - model_ref_a).norm() > highest_length) {
-			best_model_index = most_distant_index;
-		}
-		most_distant_index++;
-	}
-
-	Eigen::Vector4f meas_ref_c = measurement->at(best_model_index).position;
-	led_tag_t meas_index_c = measurement->at(best_model_index).vertex_index;
-
-	Eigen::Vector4f model_ref_c = t->get_model_vertex(meas_index_c).position;
+	Eigen::Vector4f model_ref_c = t.get_model_vertex(meas_index_c).position;
 
 	match_triangles(&tri_basis, &model_to_measurement, model_ref_a, model_ref_b, model_ref_c, meas_ref_a,
 	                meas_ref_b, meas_ref_c);
-	Eigen::Matrix4f model_center_transform_f = tri_basis * model_to_measurement * tri_basis.inverse();
+	return tri_basis * model_to_measurement * tri_basis.inverse();
+}
+
+/*!
+ * @brief use the vertex positions (at least 3) in the measurement to construct a pair of triangles which are used to
+ * calculate the pose of the tracked HMD, based on the corresponding model vertices
+ */
+static Eigen::Isometry3f
+solve_for_measurement(
+    TrackerPSVR const *t /*!< [in] tracker object */,
+    std::vector<match_data_t> const *measurement /*!< [in] The measured vertex positions */,
+    std::vector<match_data_t> *solved /*!< [out] The model vertices transformed by the solved pose. */)
+{
+
+	assert(measurement->size() > 2);
+	const auto n = measurement->size();
+	// @todo: compute all possible unique triangles, and average the result
+	Eigen::Matrix4f model_center_transform_f = compute_model_center_transform(
+	    *t, measurement->at(0), measurement->at(1), measurement->begin() + 2, measurement->end());
 
 	// now reverse the order of our verts to contribute to a more accurate
 	// estimate.
 
-	meas_ref_a = measurement->at(measurement->size() - 1).position;
-	meas_ref_b = measurement->at(measurement->size() - 2).position;
-	meas_index_a = measurement->at(measurement->size() - 1).vertex_index;
-	meas_index_b = measurement->at(measurement->size() - 2).vertex_index;
-
-	model_ref_a = t->get_model_vertex(meas_index_a).position;
-	model_ref_b = t->get_model_vertex(meas_index_b).position;
-
-	highest_length = 0.0f;
-	best_model_index = 0;
-	most_distant_index = 0;
-
-	for (uint32_t i = 0; i < measurement->size(); i++) {
-		led_tag_t model_tag_index = measurement->at(i).vertex_index;
-		Eigen::Vector4f model_vert = t->get_model_vertex(model_tag_index).position;
-		if (most_distant_index < (int)measurement->size() - 2 &&
-		    (model_vert - model_ref_a).norm() > highest_length) {
-			best_model_index = most_distant_index;
-		}
-		most_distant_index++;
-	}
-
-	meas_ref_c = measurement->at(best_model_index).position;
-	meas_index_c = measurement->at(best_model_index).vertex_index;
-
-	model_ref_c = t->get_model_vertex(meas_index_c).position;
-
-	match_triangles(&tri_basis, &model_to_measurement, model_ref_a, model_ref_b, model_ref_c, meas_ref_a,
-	                meas_ref_b, meas_ref_c);
-	Eigen::Matrix4f model_center_transform_r = tri_basis * model_to_measurement * tri_basis.inverse();
+	Eigen::Matrix4f model_center_transform_r = compute_model_center_transform(
+	    *t, measurement->at(n - 1), measurement->at(n - 2), measurement->begin(), measurement->end() - 2);
 
 	// decompose our transforms and slerp between them to get the avg of the
 	// rotation determined from the first 2 + most distant , and last 2 +
