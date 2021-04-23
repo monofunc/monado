@@ -879,12 +879,13 @@ typedef struct proximity_data
 
 
 /*!
- * @brief Use the hungarian algorithm to find the closest set of points to the match measurement
+ * @brief Use the hungarian algorithm to find the closest set of points to the match measurement, then solve for the
+ * pose and best estimates of LED locations.
  */
 static Eigen::Isometry3f
 solve_with_imu(
-    TrackerPSVR &t /*!< [in,out] tracker object */,
-    std::vector<match_data_t> *measurements /*!< [in,out] Measurements this frame. vertex index will be changed */,
+    TrackerPSVR &t, /*!< [in,out] tracker object - updates t.last_pose if solve succeeds */
+    std::vector<match_data_t> *measurements /*!< [in,out] Measurements this frame. vertex_index will be set */,
     std::vector<match_data_t> const *match_measurements /*!< [in] points measured last frame */,
     std::vector<match_data_t> *solved /*!< [out] estimated world-space locations of all LEDs, in order, based on previous measurements and IMU */)
 {
@@ -944,17 +945,6 @@ solve_with_imu(
 		measurements->at(i).vertex_index = tag;
 	}
 
-	std::vector<proximity_data_t> proximity_data;
-	proximity_data.reserve(measurements->size());
-	std::transform(measurements->begin(), measurements->end(), std::back_inserter(proximity_data),
-	               [](match_data_t const &measurement) {
-		               proximity_data_t p;
-		               p.position = measurement.position;
-		               p.vertex_index = measurement.vertex_index;
-		               p.lowest_distance = 0.0f;
-		               return p;
-	               });
-
 
 	// use the IMU rotation and the measured points in
 	// world space to compute a transform from model to world space.
@@ -962,18 +952,16 @@ solve_with_imu(
 	// positions
 
 	std::vector<match_model_t> temp_measurement_list;
-	temp_measurement_list.reserve(proximity_data.size());
-	std::transform(proximity_data.begin(), proximity_data.end(), std::back_inserter(temp_measurement_list),
-	               [&t](proximity_data_t const &p) {
-		               Eigen::Vector4f model_vertex = t.get_model_vertex(p.vertex_index).position;
-		               Eigen::Vector4f measurement_vertex = p.position;
+	temp_measurement_list.reserve(measurements->size());
+	std::transform(measurements->begin(), measurements->end(), std::back_inserter(temp_measurement_list),
+	               [&t](match_data_t const &measurement) {
+		               Eigen::Vector4f model_vertex = t.get_model_vertex(measurement.vertex_index).position;
+		               Eigen::Vector4f measurement_vertex = measurement.position;
 		               Eigen::Vector4f measurement_offset = t.corrected_imu_rotation * model_vertex;
 		               Eigen::Isometry3f translation(
 		                   Eigen::Translation3f((measurement_vertex - measurement_offset).head<3>()));
 		               Eigen::Isometry3f model_to_measurement = translation * t.corrected_imu_rotation;
-		               match_model_t temp_measurement;
-		               temp_measurement.measurements = transform_model_vertices(t, model_to_measurement);
-		               return temp_measurement;
+		               return match_model_t{transform_model_vertices(t, model_to_measurement)};
 	               });
 
 	for (led_tag_t tag : ALL_LEDS) {
