@@ -20,6 +20,7 @@
 #include "util/u_format.h"
 #include "util/u_var.h"
 #include "util/u_logging.h"
+#include "util/u_algorithms.hpp"
 
 #include "math/m_mathinclude.h"
 #include "math/m_api.h"
@@ -580,12 +581,6 @@ remove_outliers(std::vector<blob_point_t> *orig_points, std::vector<blob_point_t
 	             });
 }
 
-struct close_pair
-{
-	int index_a;
-	int index_b;
-	float dist;
-};
 
 static void
 merge_close_points(std::vector<blob_point_t> *orig_points, std::vector<blob_point_t> *merged_points, float merge_thresh)
@@ -594,43 +589,37 @@ merge_close_points(std::vector<blob_point_t> *orig_points, std::vector<blob_poin
 	// threshold, discard one of them.
 
 	//! @todo - merge the 2d blob extents when we merge a pair of points
-
+#if 0
+	struct close_pair
+	{
+		int index_a;
+		int index_b;
+		float dist;
+	};
 	std::vector<struct close_pair> pairs;
+#endif
+	std::vector<size_t> indices_to_remove;
 	for (uint32_t i = 0; i < orig_points->size(); i++) {
-		for (uint32_t j = 0; j < orig_points->size(); j++) {
-			if (i != j) {
-				float d = (map(orig_points->at(i).p) - map(orig_points->at(j).p)).norm();
-				if (d < merge_thresh) {
-					struct close_pair p;
-					p.index_a = i;
-					p.index_b = j;
-					p.dist = d;
+		for (uint32_t j = i + 1; j < orig_points->size(); j++) {
+			// order doesn't matter, so we're doing the "upper triangle"
+			float d = (map(orig_points->at(i).p) - map(orig_points->at(j).p)).norm();
+			if (d < merge_thresh) {
+#if 0
+				struct close_pair p;
+				p.index_a = i;
+				p.index_b = j;
+				p.dist = d;
 
-					pairs.push_back(p);
-				}
+				pairs.push_back(p);
+#endif
+				// by the formulation of our loop, i < j, so we can just mark this as OK to remove.
+				indices_to_remove.push_back(i);
 			}
 		}
 	}
-	std::vector<int> indices_to_remove;
-	for (uint32_t i = 0; i < pairs.size(); i++) {
-		if (pairs[i].index_a < pairs[i].index_b) {
-			indices_to_remove.push_back(pairs[i].index_a);
-		} else {
-			indices_to_remove.push_back(pairs[i].index_b);
-		}
-	}
 
-	for (int i = 0; i < (int)orig_points->size(); i++) {
-		bool remove_index = false;
-		for (int j = 0; j < (int)indices_to_remove.size(); j++) {
-			if (i == indices_to_remove[j]) {
-				remove_index = true;
-			}
-		}
-		if (!remove_index) {
-			merged_points->push_back(orig_points->at(i));
-		}
-	}
+	copy_excluding_indices(orig_points->begin(), orig_points->end(), std::back_inserter(*merged_points),
+	                       indices_to_remove.begin(), indices_to_remove.end());
 }
 
 static void
