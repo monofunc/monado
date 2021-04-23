@@ -983,14 +983,20 @@ solve_with_imu(
 	return pose;
 }
 
-
+/*!
+ * @brief main disambiguation routine.
+ *
+ * If we have enough points, use optical matching, otherwise solve with imu.
+ */
 static Eigen::Isometry3f
-disambiguate(TrackerPSVR &t /*!< tracker object */,
-             std::vector<match_data_t> *measured_points /*!< [in, out] points measured this frame */,
-             std::vector<match_data_t> const *last_measurement /*!< [in] points measured last frame */,
-             std::vector<match_data_t> *solved,
-             uint32_t frame_no)
+disambiguate(
+    TrackerPSVR &t /*!< tracker object */,
+    std::vector<match_data_t> *measured_points /*!< [in, out] points measured this frame. vertex_index will be set */,
+    std::vector<match_data_t> const *last_measurement /*!< [in] points measured last frame. */,
+    std::vector<match_data_t> *solved /*!< [out] estimated world-space locations of all LEDs, in order */,
+    uint32_t frame_no /*!< [in] frame number */)
 {
+	(void)frame_no;
 
 	// main disambiguation routine - if we have enough points, use
 	// optical matching, otherwise solve with imu.
@@ -1001,10 +1007,12 @@ disambiguate(TrackerPSVR &t /*!< tracker object */,
 	Eigen::Isometry3f imu_solved_pose = solve_with_imu(t, measured_points, last_measurement, solved);
 
 	if (measured_points->size() < PSVR_OPTICAL_SOLVE_THRESH && !last_measurement->empty()) {
+		// If we don't have enough to solve optically, and our last measurement wasn't empty, just trust the IMU
 		return imu_solved_pose;
 	}
 
 	if (measured_points->size() < 3) {
+		// If we have not even a full triangle of points, trust the IMU
 		return imu_solved_pose;
 	}
 
@@ -1038,8 +1046,6 @@ disambiguate(TrackerPSVR &t /*!< tracker object */,
 	for (uint32_t i = 0; i < t.matches.size(); i++) {
 		match_model_t m = t.matches[i];
 		float error_sum = 0.0f;
-		float sign_diff = 0.0f;
-		(void)sign_diff;
 
 		// we have 2 measurements per vertex (distance and
 		// angle) and we are comparing only the 'non-basis
@@ -1060,35 +1066,35 @@ disambiguate(TrackerPSVR &t /*!< tracker object */,
 		//! @todo: use tags instead of numeric vertex indices
 
 		for (uint32_t j = 0; j < measured_points->size(); j++) {
-
-			if (measured_points->at(j).src_blob.btype == BLOB_TYPE_FRONT &&
-			    is_led_tag_side(measured_points->at(j).vertex_index)) {
+			const match_data_t &measurement = measured_points->at(j);
+			if (measurement.src_blob.btype == BLOB_TYPE_FRONT &&
+			    is_led_tag_side(measurement.vertex_index)) {
 				error_sum += 50.0f;
 			}
 
-			if (measured_points->at(j).src_blob.btype == BLOB_TYPE_SIDE &&
-			    is_led_tag_front(measured_points->at(j).vertex_index)) {
+			if (measurement.src_blob.btype == BLOB_TYPE_SIDE &&
+			    is_led_tag_front(measurement.vertex_index)) {
 				error_sum += 50.0f;
 			}
 
 			// if the distance is between a measured point
 			// and its last-known position is significantly
 			// different, discard this
-			float dist = fabs(measured_points->at(j).distance - m.measurements.at(j).distance);
+			float dist = std::abs(measurement.distance - m.measurements.at(j).distance);
 			if (dist > PSVR_DISAMBIG_REJECT_DIST) {
 				error_sum += 50.0f;
 			} else {
-				error_sum += fabs(measured_points->at(j).distance - m.measurements.at(j).distance);
+				error_sum += dist;
 			}
 
 			// if the angle is significantly different,
 			// discard this
-			float angdiff = fabs(measured_points->at(j).angle - m.measurements.at(j).angle);
+			float angdiff = std::abs(measurement.angle - m.measurements.at(j).angle);
 			if (angdiff > PSVR_DISAMBIG_REJECT_ANG) {
 				error_sum += 50.0f;
 			} else {
 
-				error_sum += fabs(measured_points->at(j).angle - m.measurements.at(j).angle);
+				error_sum += angdiff;
 			}
 		}
 
@@ -1177,12 +1183,11 @@ disambiguate(TrackerPSVR &t /*!< tracker object */,
 
 	t.last_optical_model = best_model;
 	for (uint32_t i = 0; i < measured_points->size(); i++) {
-		measured_points->at(i).vertex_index = matched_vertex_indices[i];
+		match_data_t &measurement = measured_points->at(i);
+		measurement.vertex_index = matched_vertex_indices[i];
 		cv::putText(t.debug.rgb[0],
-		            cv::format("%d %d", (int)measured_points->at(i).vertex_index,
-		                       measured_points->at(i).src_blob.btype),
-		            measured_points->at(i).src_blob.lkp.pt, cv::FONT_HERSHEY_SIMPLEX, 1.0f,
-		            cv::Scalar(0, 255, 0));
+		            cv::format("%d %d", (int)measurement.vertex_index, measurement.src_blob.btype),
+		            measurement.src_blob.lkp.pt, cv::FONT_HERSHEY_SIMPLEX, 1.0f, cv::Scalar(0, 255, 0));
 	}
 
 	t.last_pose = solve_for_measurement(&t, measured_points, solved);
