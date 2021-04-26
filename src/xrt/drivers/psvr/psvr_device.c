@@ -44,6 +44,7 @@
  */
 
 DEBUG_GET_ONCE_BOOL_OPTION(psvr_disco, "PSVR_DISCO", false)
+#define PSVR_INFO(p, ...) U_LOG_XDEV_IFL_I(&p->base, p->log_level, __VA_ARGS__)
 #define PSVR_DEBUG(p, ...) U_LOG_XDEV_IFL_D(&p->base, p->log_level, __VA_ARGS__)
 #define PSVR_ERROR(p, ...) U_LOG_XDEV_IFL_E(&p->base, p->log_level, __VA_ARGS__)
 
@@ -1109,6 +1110,7 @@ psvr_device_create_auto_prober(struct hid_device_info *sensor_hid_info,
 		goto cleanup;
 	}
 
+	PSVR_INFO(psvr, "Found and configured PSVR headset.");
 
 	/*
 	 * Device setup.
