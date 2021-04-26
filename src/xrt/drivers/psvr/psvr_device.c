@@ -405,6 +405,7 @@ handle_tracker_sensor_msg(struct psvr_device *psvr, unsigned char *buffer, int s
 	timepoint_ns timestamp_ns = (uint64_t)now_ns - (uint64_t)inter_sample_duration_ns;
 
 	// Make sure timestamps are always after a previous timestamp.
+	//! @todo this isn't always working: Rylie gets new timestamps almost 500000ns in the past after maybe a minute or two.
 	timestamp_ns = ensure_forward_progress_timestamps(psvr, timestamp_ns);
 
 	// Update the fusion with first sample.
