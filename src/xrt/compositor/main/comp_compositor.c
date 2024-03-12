@@ -8,6 +8,7 @@
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
  * @author Moshi Turner <moshiturner@protonmail.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
  * @ingroup comp_main
  *
  *
@@ -347,7 +348,7 @@ static xrt_result_t
 compositor_request_display_refresh_rate(struct xrt_compositor *xc, float display_refresh_rate_hz)
 {
 #ifdef XRT_OS_ANDROID
-	typedef int32_t (*PF_SETFRAMERATE)(ANativeWindow * window, float frameRate, int8_t compatibility);
+	typedef int32_t (*PF_SETFRAMERATE)(ANativeWindow *window, float frameRate, int8_t compatibility);
 
 	// Note that this will just increment the reference count, rather than actually load it again,
 	// since we are linked for other symbols too.
@@ -508,6 +509,9 @@ static const char *optional_instance_extensions[] = {
 #endif
 #if defined VK_EXT_debug_utils && !defined NDEBUG
     VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+#endif
+#ifdef VK_KHR_device_group_creation
+    VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME,
 #endif
 };
 

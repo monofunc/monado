@@ -1,4 +1,4 @@
-// Copyright 2019-2023, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -14,6 +14,8 @@
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Moshi Turner <moshiturner@protonmail.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup aux_vk
  */
 
@@ -67,6 +69,10 @@ vk_get_instance_functions(struct vk_bundle *vk)
 	vk->vkDestroyDebugReportCallbackEXT                   = GET_INS_PROC(vk, vkDestroyDebugReportCallbackEXT);
 
 	vk->vkEnumeratePhysicalDevices                        = GET_INS_PROC(vk, vkEnumeratePhysicalDevices);
+#if defined(VK_KHR_device_group_creation)
+	vk->vkEnumeratePhysicalDeviceGroups                   = GET_INS_PROC(vk, vkEnumeratePhysicalDeviceGroupsKHR);
+#endif // defined(VK_KHR_device_group_creation)
+
 	vk->vkGetPhysicalDeviceProperties                     = GET_INS_PROC(vk, vkGetPhysicalDeviceProperties);
 	vk->vkGetPhysicalDeviceProperties2                    = GET_INS_PROC(vk, vkGetPhysicalDeviceProperties2KHR);
 	vk->vkGetPhysicalDeviceFeatures2                      = GET_INS_PROC(vk, vkGetPhysicalDeviceFeatures2KHR);

@@ -16,6 +16,7 @@
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Moshi Turner <moshiturner@protonmail.com>
  * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup aux_vk
  */
 
@@ -180,6 +181,7 @@ vk_fill_in_has_instance_extensions(struct vk_bundle *vk, struct u_string_list *e
 {
 	// beginning of GENERATED instance extension code - do not modify - used by scripts
 	// Reset before filling out.
+	vk->has_KHR_device_group_creation = false;
 	vk->has_KHR_external_memory_capabilities = false;
 	vk->has_EXT_display_surface_counter = false;
 	vk->has_EXT_swapchain_colorspace = false;
@@ -190,6 +192,13 @@ vk_fill_in_has_instance_extensions(struct vk_bundle *vk, struct u_string_list *e
 
 	for (uint32_t i = 0; i < ext_count; i++) {
 		const char *ext = exts[i];
+
+#if defined(VK_KHR_device_group_creation)
+		if (strcmp(ext, VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME) == 0) {
+			vk->has_KHR_device_group_creation = true;
+			continue;
+		}
+#endif // defined(VK_KHR_device_group_creation)
 
 #if defined(VK_KHR_external_memory_capabilities)
 		if (strcmp(ext, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME) == 0) {

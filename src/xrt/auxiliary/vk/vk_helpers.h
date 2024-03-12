@@ -16,6 +16,7 @@
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Moshi Turner <moshiturner@protonmail.com>
  * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup aux_vk
  */
 
@@ -133,6 +134,7 @@ struct vk_bundle
 	} external;
 
 	// beginning of GENERATED instance extension code - do not modify - used by scripts
+	bool has_KHR_device_group_creation;
 	bool has_KHR_external_memory_capabilities;
 	bool has_EXT_display_surface_counter;
 	bool has_EXT_swapchain_colorspace;
@@ -219,6 +221,10 @@ struct vk_bundle
 	PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT;
 
 	PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
+#if defined(VK_KHR_device_group_creation)
+	PFN_vkEnumeratePhysicalDeviceGroupsKHR vkEnumeratePhysicalDeviceGroups;
+#endif // defined(VK_KHR_device_group_creation)
+
 	PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
 	PFN_vkGetPhysicalDeviceProperties2KHR vkGetPhysicalDeviceProperties2;
 	PFN_vkGetPhysicalDeviceFeatures2KHR vkGetPhysicalDeviceFeatures2;

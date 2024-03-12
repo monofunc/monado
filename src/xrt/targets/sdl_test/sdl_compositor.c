@@ -1,4 +1,4 @@
-// Copyright 2019-2023, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -9,6 +9,7 @@
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
  * @ingroup sdl_test
  */
 
@@ -137,6 +138,10 @@ select_instances_extensions(struct sdl_compositor *c, struct u_string_list *requ
 {
 #ifdef VK_EXT_display_surface_counter
 	u_string_list_append(optional, VK_EXT_DISPLAY_SURFACE_COUNTER_EXTENSION_NAME);
+#endif
+
+#ifdef VK_KHR_device_group_creation
+	u_string_list_append(optional, VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME);
 #endif
 
 	return VK_SUCCESS;

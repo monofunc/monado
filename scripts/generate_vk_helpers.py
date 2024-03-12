@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2019-2023, Collabora, Ltd.
+# Copyright 2019-2025, Collabora, Ltd.
 # SPDX-License-Identifier: BSL-1.0
 """Simple script to update vk_helpers.{c,h}."""
 
@@ -201,6 +201,11 @@ def get_instance_cmds():
         Cmd("vkDestroyDebugReportCallbackEXT"),
         None,
         Cmd("vkEnumeratePhysicalDevices"),
+        Cmd(
+            "vkEnumeratePhysicalDeviceGroupsKHR",
+            member_name="vkEnumeratePhysicalDeviceGroups",
+            requires=("VK_KHR_device_group_creation",),
+        ),
         Cmd("vkGetPhysicalDeviceProperties"),
         Cmd(
             "vkGetPhysicalDeviceProperties2KHR",
@@ -286,6 +291,7 @@ def get_instance_cmds():
 
 # Sorted KHR, EXT, Vendor, interally alphabetically
 INSTANCE_EXTENSIONS_TO_CHECK = [
+    "VK_KHR_device_group_creation",
     "VK_KHR_external_memory_capabilities",
     "VK_EXT_display_surface_counter",
     "VK_EXT_swapchain_colorspace",
