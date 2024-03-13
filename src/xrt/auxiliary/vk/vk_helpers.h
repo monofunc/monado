@@ -143,6 +143,7 @@ struct vk_bundle
 
 	// beginning of GENERATED device extension code - do not modify - used by scripts
 	bool has_KHR_8bit_storage;
+	bool has_KHR_buffer_device_address;
 	bool has_KHR_external_fence_fd;
 	bool has_KHR_external_memory;
 	bool has_KHR_external_semaphore_fd;
@@ -199,6 +200,9 @@ struct vk_bundle
 
 		//! Were device groups requested, available and enabled? (at least one group found)
 		bool use_device_group;
+
+		//! Were buffer device address feature requested, available and enabled?
+		bool buffer_device_address;
 	} features;
 
 	//! Is the GPU a tegra device.
@@ -1090,6 +1094,7 @@ struct vk_device_features
 	bool storage_buffer_8bit_access;
 	bool present_wait;
 	bool video_maintenance_1;
+	bool buffer_device_address;
 };
 
 /*!

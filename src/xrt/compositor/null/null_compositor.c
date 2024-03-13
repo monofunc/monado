@@ -145,6 +145,9 @@ static const char *optional_device_extensions[] = {
 #ifdef VK_EXT_robustness2
     VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
 #endif
+#ifdef VK_KHR_buffer_device_address
+    VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+#endif
 };
 
 static VkResult
@@ -199,6 +202,7 @@ compositor_init_vulkan(struct null_compositor *c)
 	    .only_compute_queue = false,    // Regular GFX
 	    .timeline_semaphore = true,     // Flag is optional, not a hard requirement.
 	    .use_device_group = false,      // Not required
+	    .buffer_device_address = false, // Not required
 	    .selected_gpu_group_index = -1, // Not required
 	    .selected_gpu_index = -1,       // Auto
 	    .client_gpu_index = -1,         // Auto

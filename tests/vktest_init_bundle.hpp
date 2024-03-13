@@ -143,6 +143,7 @@ vktest_init_bundle(struct vk_bundle *vk)
 	    false /* only_compute_queue */,
 	    true /*timeline_semaphore*/,
 	    false /* use_device_group */,
+	    false /* buffer_device_address */,
 	    -1,
 	    -1,
 	    -1,

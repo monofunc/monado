@@ -611,6 +611,9 @@ static const char *optional_device_extensions[] = {
 #ifdef VK_KHR_synchronization2
     VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
 #endif
+#ifdef VK_KHR_buffer_device_address
+    VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+#endif
 };
 
 static bool
@@ -710,6 +713,7 @@ compositor_init_vulkan(struct comp_compositor *c)
 	    .only_compute_queue = c->settings.use_compute,
 	    .timeline_semaphore = true,     // Flag is optional, not a hard requirement.
 	    .use_device_group = false,      // Not required
+	    .buffer_device_address = false, // Not required
 	    .selected_gpu_group_index = -1, // Not required
 	    .selected_gpu_index = c->settings.selected_gpu_indices.device_index,
 	    .client_gpu_index = c->settings.client_gpu_index,

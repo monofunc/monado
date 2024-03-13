@@ -57,6 +57,10 @@ struct comp_vulkan_arguments
 	//! Should we use a device group (if available)
 	bool use_device_group;
 
+	//! Should we enable the buffer device address feature
+	//! (enables memory allocation on multiple physical devices of a device group)
+	bool buffer_device_address;
+
 	//! Vulkan physical device group to be selected, only used when @ref use_device_group is enabled, -1 for auto,
 	int selected_gpu_group_index;
 

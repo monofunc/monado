@@ -285,6 +285,7 @@ create_device(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_args)
 	    .synchronization_2 = true,
 	    .present_wait = true,
 	    .video_maintenance_1 = true,
+	    .buffer_device_address = vk_args->buffer_device_address,
 	};
 
 	ret = vk_init_mutex(vk);

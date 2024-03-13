@@ -129,6 +129,7 @@ TEST_CASE("client_compositor", "[.][needgpu]")
 	    false /* only_compute_queue */,
 	    true /*timeline_semaphore*/,
 	    false /* use_device_group */,
+	    false /* buffer_device_address */,
 	    -1,
 	    -1,
 	    -1,

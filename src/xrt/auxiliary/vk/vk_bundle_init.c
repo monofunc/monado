@@ -838,6 +838,7 @@ fill_in_has_device_extensions(struct vk_bundle *vk, struct u_string_list *ext_li
 	// beginning of GENERATED device extension code - do not modify - used by scripts
 	// Reset before filling out.
 	vk->has_KHR_8bit_storage = false;
+	vk->has_KHR_buffer_device_address = false;
 	vk->has_KHR_external_fence_fd = false;
 	vk->has_KHR_external_memory = false;
 	vk->has_KHR_external_semaphore_fd = false;
@@ -874,6 +875,13 @@ fill_in_has_device_extensions(struct vk_bundle *vk, struct u_string_list *ext_li
 			continue;
 		}
 #endif // defined(VK_KHR_8bit_storage)
+
+#if defined(VK_KHR_buffer_device_address)
+		if (strcmp(ext, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME) == 0) {
+			vk->has_KHR_buffer_device_address = true;
+			continue;
+		}
+#endif // defined(VK_KHR_buffer_device_address)
 
 #if defined(VK_KHR_external_fence_fd)
 		if (strcmp(ext, VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME) == 0) {
@@ -1169,6 +1177,13 @@ filter_device_features(struct vk_bundle *vk,
 	};
 #endif
 
+#ifdef VK_KHR_buffer_device_address
+	VkPhysicalDeviceBufferDeviceAddressFeaturesKHR buffer_device_address_info = {
+	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR,
+	    .pNext = NULL,
+	};
+#endif
+
 #ifdef VK_KHR_timeline_semaphore
 	VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timeline_semaphore_info = {
 	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR,
@@ -1225,6 +1240,13 @@ filter_device_features(struct vk_bundle *vk,
 	if (vk->has_KHR_8bit_storage) {
 		vk_append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
 		                         (VkBaseInStructure *)&storage_8bit);
+	}
+#endif
+
+#ifdef VK_KHR_buffer_device_address
+	if (vk->has_KHR_buffer_device_address) {
+		vk_append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
+		                         (VkBaseInStructure *)&buffer_device_address_info);
 	}
 #endif
 
@@ -1285,6 +1307,10 @@ filter_device_features(struct vk_bundle *vk,
 	CHECK(storage_buffer_8bit_access, storage_8bit.storageBuffer8BitAccess);
 #endif
 
+#ifdef VK_KHR_buffer_device_address
+	CHECK(buffer_device_address, buffer_device_address_info.bufferDeviceAddress);
+#endif
+
 #ifdef VK_KHR_timeline_semaphore
 	CHECK(timeline_semaphore, timeline_semaphore_info.timelineSemaphore);
 #endif
@@ -1316,6 +1342,7 @@ filter_device_features(struct vk_bundle *vk,
 
 	VK_DEBUG(vk,
 	         "Features:"
+	         "\n\tbuffer_device_address: %i"
 	         "\n\text_fmt_resolve: %i"
 	         "\n\tnull_descriptor: %i"
 	         "\n\tshader_image_gather_extended: %i"
@@ -1324,6 +1351,7 @@ filter_device_features(struct vk_bundle *vk,
 	         "\n\tsynchronization_2: %i"
 	         "\n\ttimeline_semaphore: %i"
 	         "\n\tvideo_maintenance_1: %i",                              //
+	         device_features->buffer_device_address,                     //
 	         device_features->ext_fmt_resolve,                           //
 	         device_features->null_descriptor,                           //
 	         device_features->shader_image_gather_extended,              //
@@ -1385,6 +1413,7 @@ vk_create_device(struct vk_bundle *vk,
 	vk->features.synchronization_2 = device_features.synchronization_2;
 	vk->features.present_wait = device_features.present_wait;
 	vk->features.video_maintenance_1 = device_features.video_maintenance_1;
+	vk->features.buffer_device_address = device_features.buffer_device_address;
 
 
 	/*
@@ -1494,6 +1523,16 @@ vk_create_device(struct vk_bundle *vk,
 	};
 #endif
 
+#ifdef VK_KHR_buffer_device_address
+	VkPhysicalDeviceBufferDeviceAddressFeaturesKHR buffer_device_address_info = {
+	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR,
+	    .pNext = NULL,
+	    .bufferDeviceAddress = device_features.buffer_device_address,
+	    .bufferDeviceAddressCaptureReplay = VK_FALSE,
+	    .bufferDeviceAddressMultiDevice = VK_TRUE,
+	};
+#endif
+
 #ifdef VK_KHR_timeline_semaphore
 	VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timeline_semaphore_info = {
 	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR,
@@ -1561,6 +1600,13 @@ vk_create_device(struct vk_bundle *vk,
 #ifdef VK_KHR_present_wait
 	if (vk->has_KHR_present_wait) {
 		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info, (VkBaseInStructure *)&present_wait);
+	}
+#endif
+
+#ifdef VK_KHR_buffer_device_address
+	if (vk->has_KHR_buffer_device_address) {
+		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info,
+		                         (VkBaseInStructure *)&buffer_device_address_info);
 	}
 #endif
 
