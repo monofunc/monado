@@ -1,9 +1,11 @@
-// Copyright 2020-2023, Collabora, Ltd.
+// Copyright 2020-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Vulkan image allocator helper.
  * @author Jakob Bornecrantz <jakob@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup aux_vk
  */
 
@@ -322,19 +324,40 @@ create_image(struct vk_bundle *vk, const struct xrt_swapchain_create_info *info,
 	 * Create and bind the memory.
 	 */
 
-	// In->pNext->pNext
+	// In->pNext
+	next_chain = NULL;
+
+	// Do we need to use a dedicated allocation?
 	VkMemoryDedicatedAllocateInfoKHR dedicated_memory_info = {
 	    .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
+	    .pNext = next_chain,
 	    .image = image,
 	    .buffer = VK_NULL_HANDLE,
 	};
+	if (use_dedicated_allocation) {
+		CHAIN(dedicated_memory_info);
+	}
+
+#if defined(VK_KHR_device_group)
+	// Specify flags for allocation on multiple physical devices
+	VkMemoryAllocateFlagsInfoKHR allocate_flags_info = {
+	    .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO_KHR,
+	    .pNext = NULL,
+	    .flags = VK_MEMORY_ALLOCATE_DEVICE_MASK_BIT_KHR,
+	    .deviceMask = 0x0001,
+	};
+	if (vk->has_KHR_device_group && vk->features.buffer_device_address) {
+		CHAIN(allocate_flags_info);
+	}
+#endif
 
 	// In->pNext
 	VkExportMemoryAllocateInfo export_alloc_info = {
 	    .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR,
-	    .pNext = use_dedicated_allocation ? &dedicated_memory_info : NULL,
+	    .pNext = NULL,
 	    .handleTypes = memory_handle_type,
 	};
+	CHAIN(export_alloc_info);
 
 	ret = vk_alloc_and_bind_image_memory(   //
 	    vk,                                 // vk_bundle
