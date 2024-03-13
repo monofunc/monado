@@ -196,6 +196,9 @@ struct vk_bundle
 
 		//! Was KHR_video_maintenance1 requested, available, and enabled?
 		bool video_maintenance_1;
+
+		//! Were device groups requested, available and enabled? (at least one group found)
+		bool use_device_group;
 	} features;
 
 	//! Is the GPU a tegra device.
@@ -205,6 +208,9 @@ struct vk_bundle
 	VkDebugReportCallbackEXT debug_report_cb;
 
 	VkPhysicalDeviceMemoryProperties device_memory_props;
+#ifdef VK_KHR_device_group_creation
+	VkPhysicalDeviceGroupPropertiesKHR device_group_properties;
+#endif
 
 	// Loader functions
 	PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
@@ -1041,7 +1047,7 @@ vk_fill_in_has_instance_extensions(struct vk_bundle *vk, struct u_string_list *e
  * @ingroup aux_vk
  */
 VkResult
-vk_select_physical_device(struct vk_bundle *vk, int forced_index);
+vk_select_physical_device(struct vk_bundle *vk, int forced_index, bool use_device_group);
 
 /*!
  * Used to enable device features as a argument @ref vk_create_device.
@@ -1070,6 +1076,7 @@ XRT_CHECK_RESULT VkResult
 vk_create_device(struct vk_bundle *vk,
                  int forced_index,
                  bool only_compute,
+                 bool use_device_group,
                  VkQueueGlobalPriorityEXT global_priority,
                  struct u_string_list *required_device_ext_list,
                  struct u_string_list *optional_device_ext_list,

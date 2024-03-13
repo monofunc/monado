@@ -10,6 +10,7 @@
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
  * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup comp_null
  */
 
@@ -196,9 +197,10 @@ compositor_init_vulkan(struct null_compositor *c)
 	    .optional_device_extensions = optional_device_extension_list,
 	    .log_level = c->settings.log_level,
 	    .only_compute_queue = false, // Regular GFX
+	    .timeline_semaphore = true,  // Flag is optional, not a hard requirement.
+	    .use_device_group = false,   // Not required
 	    .selected_gpu_index = -1,    // Auto
 	    .client_gpu_index = -1,      // Auto
-	    .timeline_semaphore = true,  // Flag is optional, not a hard requirement.
 	};
 
 	struct comp_vulkan_results vk_res = {0};

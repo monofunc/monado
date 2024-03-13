@@ -1,4 +1,4 @@
-// Copyright 2019-2022, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -7,6 +7,8 @@
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  */
 #pragma once
 
@@ -139,6 +141,7 @@ vktest_init_bundle(struct vk_bundle *vk)
 	                           U_LOGGING_TRACE,
 	                           false /* only_compute_queue */,
 	                           true /*timeline_semaphore*/,
+	                           false /* use_device_group */,
 	                           -1,
 	                           -1};
 	comp_vulkan_results results{};

@@ -1,10 +1,11 @@
-// Copyright 2022-2024, Collabora, Ltd.
+// Copyright 2022-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief Basic Vulkan compositor tests.
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
  * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  */
 
 
@@ -126,6 +127,7 @@ TEST_CASE("client_compositor", "[.][needgpu]")
 	                           U_LOGGING_TRACE,
 	                           false /* only_compute_queue */,
 	                           true /*timeline_semaphore*/,
+	                           false /* use_device_group */,
 	                           -1,
 	                           -1};
 	vk_bundle vk_bundle_storage{};

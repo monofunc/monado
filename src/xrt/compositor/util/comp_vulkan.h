@@ -1,9 +1,11 @@
-// Copyright 2019-2021, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Vulkan code for compositors.
  * @author Jakob Bornecrantz <jakob@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup comp_util
  */
 
@@ -51,6 +53,9 @@ struct comp_vulkan_arguments
 
 	//! Should we try to enable timeline semaphores if available
 	bool timeline_semaphore;
+
+	//! Should we use a device group (if available)
+	bool use_device_group;
 
 	//! Vulkan physical device to be selected, -1 for auto.
 	int selected_gpu_index;

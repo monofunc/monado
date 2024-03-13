@@ -9,6 +9,7 @@
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
  * @author Moshi Turner <moshiturner@protonmail.com>
  * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup comp_main
  *
  *
@@ -348,7 +349,7 @@ static xrt_result_t
 compositor_request_display_refresh_rate(struct xrt_compositor *xc, float display_refresh_rate_hz)
 {
 #ifdef XRT_OS_ANDROID
-	typedef int32_t (*PF_SETFRAMERATE)(ANativeWindow *window, float frameRate, int8_t compatibility);
+	typedef int32_t (*PF_SETFRAMERATE)(ANativeWindow * window, float frameRate, int8_t compatibility);
 
 	// Note that this will just increment the reference count, rather than actually load it again,
 	// since we are linked for other symbols too.
@@ -707,9 +708,10 @@ compositor_init_vulkan(struct comp_compositor *c)
 	    .optional_device_extensions = optional_device_extension_list,
 	    .log_level = c->settings.log_level,
 	    .only_compute_queue = c->settings.use_compute,
+	    .timeline_semaphore = true, // Flag is optional, not a hard requirement.
+	    .use_device_group = false,  // Not required
 	    .selected_gpu_index = c->settings.selected_gpu_index,
 	    .client_gpu_index = c->settings.client_gpu_index,
-	    .timeline_semaphore = true, // Flag is optional, not a hard requirement.
 	};
 
 	struct comp_vulkan_results vk_res = {0};

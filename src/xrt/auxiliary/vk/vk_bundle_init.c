@@ -578,6 +578,8 @@ select_physical_device(struct vk_bundle *vk, int forced_index)
 	uint32_t gpu_count = 0;
 	VkResult ret;
 
+	vk->features.use_device_group = false;
+
 	ret = vk_enumerate_physical_devices( //
 	    vk,                              // vk_bundle
 	    &gpu_count,                      // out_physical_device_count
@@ -638,6 +640,84 @@ select_physical_device(struct vk_bundle *vk, int forced_index)
 	vk->vkGetPhysicalDeviceMemoryProperties(vk->physical_device, &vk->device_memory_props);
 
 	return VK_SUCCESS;
+}
+
+static VkResult
+select_physical_device_group(struct vk_bundle *vk, int forced_index)
+{
+#ifdef VK_KHR_device_group_creation
+	vk->features.use_device_group = false;
+
+	if (!vk->has_KHR_device_group_creation) {
+		VK_WARN(vk,
+		        "VK_KHR_device_group_creation is not enabled/supported, fallback to single physical device.");
+		return select_physical_device(vk, forced_index);
+	}
+
+	VK_DEBUG(vk, "Vulkan device groups requested, checking for available groups...");
+
+	// Check if a device group exists
+	uint32_t device_group_count = 0;
+	VkResult vk_ret = vk->vkEnumeratePhysicalDeviceGroups(vk->instance, &device_group_count, NULL);
+	if (vk_ret != VK_SUCCESS) {
+		VK_ERROR(vk,
+		         "vkEnumeratePhysicalDeviceGroups failed to obtain device group count: %s, fallback to single "
+		         "physical device.",
+		         vk_result_string(vk_ret));
+		return select_physical_device(vk, forced_index);
+	}
+
+	// Only continue this path if count >= 1 (fallback to single physical device otherwise)
+	if (device_group_count < 1) {
+		VK_WARN(vk, "Device group requested but no group was found, fallback to single physical device.");
+		return select_physical_device(vk, forced_index);
+	}
+
+	VkPhysicalDeviceGroupPropertiesKHR *physical_device_group_properties =
+	    U_TYPED_ARRAY_CALLOC(VkPhysicalDeviceGroupPropertiesKHR, device_group_count);
+	for (uint32_t i = 0; i < device_group_count; ++i) {
+		physical_device_group_properties[i].sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GROUP_PROPERTIES_KHR;
+		physical_device_group_properties[i].pNext = NULL;
+	}
+
+	vk_ret =
+	    vk->vkEnumeratePhysicalDeviceGroups(vk->instance, &device_group_count, physical_device_group_properties);
+	if (vk_ret != VK_SUCCESS) {
+		VK_ERROR(vk,
+		         "vkEnumeratePhysicalDeviceGroups failed to obtain device group properties %s, fallback to "
+		         "single physical device.",
+		         vk_result_string(vk_ret));
+		free(physical_device_group_properties);
+		return select_physical_device(vk, forced_index);
+	}
+
+	const VkPhysicalDeviceGroupPropertiesKHR selected_physical_group = physical_device_group_properties[0];
+	free(physical_device_group_properties);
+
+	VK_DEBUG(vk, "Device group found with a physical device count of %d.",
+	         selected_physical_group.physicalDeviceCount);
+	forced_index = 0;
+	vk->physical_device = selected_physical_group.physicalDevices[0];
+	vk->device_group_properties = selected_physical_group;
+
+	// Print info
+	for (uint32_t i = 0; i < selected_physical_group.physicalDeviceCount; ++i) {
+		VkPhysicalDeviceProperties pdp = {0};
+		vk->vkGetPhysicalDeviceProperties(selected_physical_group.physicalDevices[i], &pdp);
+
+		char title[256] = {0};
+		(void)snprintf(title, sizeof(title), "Device group physical device number %u:\n", i);
+		vk_print_device_info(vk, U_LOGGING_INFO, &pdp, i, title);
+	}
+
+	// Fill out the device memory props as well.
+	vk->vkGetPhysicalDeviceMemoryProperties(vk->physical_device, &vk->device_memory_props);
+	vk->features.use_device_group = true;
+	return VK_SUCCESS;
+#else
+	VK_WARN(vk, "VK_KHR_device_group_creation is not defined, fallback to single physical device.");
+	return select_physical_device(vk, forced_index);
+#endif
 }
 
 static VkResult
@@ -1254,15 +1334,17 @@ filter_device_features(struct vk_bundle *vk,
  */
 
 VkResult
-vk_select_physical_device(struct vk_bundle *vk, int forced_index)
+vk_select_physical_device(struct vk_bundle *vk, int forced_index, bool use_device_group)
 {
-	return select_physical_device(vk, forced_index);
+	return use_device_group ? select_physical_device_group(vk, forced_index)
+	                        : select_physical_device(vk, forced_index);
 }
 
 XRT_CHECK_RESULT VkResult
 vk_create_device(struct vk_bundle *vk,
                  int forced_index,
                  bool only_compute,
+                 bool use_device_group,
                  VkQueueGlobalPriorityEXT global_priority,
                  struct u_string_list *required_device_ext_list,
                  struct u_string_list *optional_device_ext_list,
@@ -1270,7 +1352,7 @@ vk_create_device(struct vk_bundle *vk,
 {
 	VkResult ret;
 
-	ret = select_physical_device(vk, forced_index);
+	ret = vk_select_physical_device(vk, forced_index, use_device_group);
 	if (ret != VK_SUCCESS) {
 		return ret;
 	}
@@ -1496,6 +1578,19 @@ vk_create_device(struct vk_bundle *vk,
 	if (vk->has_ANDROID_external_format_resolve) {
 		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info,
 		                         (VkBaseInStructure *)&ext_fmt_resolve_info);
+	}
+#endif
+
+#ifdef VK_KHR_device_group_creation
+	VkDeviceGroupDeviceCreateInfoKHR device_group_create_info = {
+	    .sType = VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO_KHR,
+	    .pNext = NULL,
+	    .physicalDeviceCount = vk->device_group_properties.physicalDeviceCount,
+	    .pPhysicalDevices = vk->device_group_properties.physicalDevices,
+	};
+	if (vk->features.use_device_group) {
+		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info,
+		                         (VkBaseInStructure *)&device_group_create_info);
 	}
 #endif
 
