@@ -71,5 +71,5 @@ typedef __eglMustCastToProperFunctionPointerType (*PFNEGLGETPROCADDRESSPROC)(con
 #include "openxr/XR_MNDX_oculus_remote.h"
 
 #if defined(XRT_USE_META_EXT_HEADERS)
-#include "meta_openxr_preview/meta_body_tracking_full_body.h"
+#include "meta_openxr_preview/meta_body_tracking_fidelity.h"
 #endif
