@@ -1,4 +1,5 @@
 # Copyright 2022-2023, Collabora, Ltd.
+# Copyright 2024-2026, NVIDIA CORPORATION.
 #
 # SPDX-License-Identifier: BSL-1.0
 #
@@ -127,6 +128,7 @@
 { symbol: ["VK_USE_PLATFORM_XLIB_XRANDR_EXT", "public", "\"xrt/xrt_config_vulkan.h\"", "public"] },
 { symbol: ["VK_USE_PLATFORM_WIN32_KHR", "public", "\"xrt/xrt_config_vulkan.h\"", "public"] },
 { symbol: ["VK_USE_PLATFORM_DISPLAY_KHR", "public", "\"xrt/xrt_config_vulkan.h\"", "public"] },
+{ symbol: ["VK_USE_PLATFORM_METAL_EXT", "public", "\"xrt/xrt_config_vulkan.h\"", "public"] },
 { ref: "eigen.imp" },
 { ref: "opencv.imp" },
 ]
