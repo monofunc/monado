@@ -1,5 +1,5 @@
 // Copyright 2019-2023, Collabora, Ltd.
-// Copyright 2025-2026, NVIDIA CORPORATION.
+// Copyright 2024-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -220,6 +220,13 @@ create_instance(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_arg
 	    .enabledExtensionCount = u_extension_list_get_size(instance_ext_list),
 	    .ppEnabledExtensionNames = u_extension_list_get_data(instance_ext_list),
 	};
+
+#ifdef VK_KHR_portability_enumeration
+	// Are we accepting portability devices, like MoltenVK.
+	if (u_extension_list_contains(instance_ext_list, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)) {
+		instance_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+	}
+#endif
 
 	ret = vk->vkCreateInstance(&instance_info, NULL, &vk->instance);
 	if (ret != VK_SUCCESS) {
