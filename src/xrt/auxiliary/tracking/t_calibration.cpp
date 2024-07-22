@@ -19,6 +19,7 @@
 #include "tracking/t_tracking.h"
 #include "tracking/t_calibration_opencv.hpp"
 
+#include <cstdio>
 #include <opencv2/opencv.hpp>
 #include <sys/stat.h>
 #include <utility>
@@ -667,10 +668,6 @@ process_view_samples(class Calibration &c, struct ViewState &view, int cols, int
 	const cv::Size image_size = {cols, rows};
 	double rp_error = 0.f;
 
-	cv::Mat intrinsics_mat = {};
-	cv::Mat new_intrinsics_mat = {};
-	cv::Mat distortion_mat = {};
-
 	if (c.dump_measurements) {
 		U_LOG_RAW("...measured = (ArrayOfMeasurements){");
 		for (MeasurementF32 &m : view.measured_f32) {
@@ -683,7 +680,17 @@ process_view_samples(class Calibration &c, struct ViewState &view, int cols, int
 		U_LOG_RAW("};");
 	}
 
-	if (c.use_fisheye) {
+	StereoCameraCalibrationWrapper wrapped(c.distortion_model, true);
+
+	cv::Mat intrinsics_mat = {};
+	cv::Mat new_intrinsics_mat = {};
+	cv::Mat distortion_mat(wrapped.view[0].distortion_mat.size(), CV_64F);
+
+	wrapped.view[0].image_size_pixels.w = image_size.width;
+	wrapped.view[0].image_size_pixels.h = image_size.height;
+	wrapped.view[1].image_size_pixels = wrapped.view[0].image_size_pixels;
+
+	if (t_camera_distortion_model_is_fisheye(c.distortion_model)) {
 		int crit_flag = 0;
 		crit_flag |= cv::TermCriteria::EPS;
 		crit_flag |= cv::TermCriteria::COUNT;
@@ -721,10 +728,16 @@ process_view_samples(class Calibration &c, struct ViewState &view, int cols, int
 	} else {
 		int flags = 0;
 
-		// Go all out.
-		flags |= cv::CALIB_THIN_PRISM_MODEL;
-		flags |= cv::CALIB_RATIONAL_MODEL;
-		flags |= cv::CALIB_TILTED_MODEL;
+		switch (c.distortion_model) {
+		case T_DISTORTION_OPENCV_RADTAN_5: break;
+		case T_DISTORTION_OPENCV_RADTAN_8: flags |= cv::CALIB_RATIONAL_MODEL; break;
+		case T_DISTORTION_OPENCV_RADTAN_14:
+			flags |= cv::CALIB_RATIONAL_MODEL;
+			flags |= cv::CALIB_THIN_PRISM_MODEL;
+			flags |= cv::CALIB_TILTED_MODEL;
+			break;
+		default: assert(false);
+		}
 
 		rp_error = cv::calibrateCamera( //
 		    c.state.board_models_f32,   // objectPoints
@@ -756,37 +769,30 @@ process_view_samples(class Calibration &c, struct ViewState &view, int cols, int
 	std::cout << "rp_error: " << rp_error << "\n";
 	std::cout << "intrinsics_mat:\n" << intrinsics_mat << "\n";
 	std::cout << "new_intrinsics_mat:\n" << new_intrinsics_mat << "\n";
-		std::cout << "distortion_mat:\n" << distortion_mat << "\n";
+	std::cout << "distortion_mat:\n" << distortion_mat << "\n";
+
 	// clang-format on
 
-	if (c.use_fisheye) {
-		cv::fisheye::initUndistortRectifyMap(intrinsics_mat,     // K
-		                                     distortion_mat,     // D
-		                                     cv::Matx33d::eye(), // R
-		                                     new_intrinsics_mat, // P
-		                                     image_size,         // size
-		                                     CV_32FC1,           // m1type
-		                                     view.map1,          // map1
-		                                     view.map2);         // map2
+	distortion_mat.copyTo(wrapped.view[0].distortion_mat);
+	new_intrinsics_mat.copyTo(wrapped.view[0].intrinsics_mat);
 
-		// Set the maps as valid.
-		view.maps_valid = true;
-	} else {
-		cv::initUndistortRectifyMap( //
-		    intrinsics_mat,          // K
-		    distortion_mat,          // D
-		    cv::noArray(),           // R
-		    new_intrinsics_mat,      // P
-		    image_size,              // size
-		    CV_32FC1,                // m1type
-		    view.map1,               // map1
-		    view.map2);              // map2
+	// Preview undistortion/rectification.
+	StereoRectificationMaps maps(wrapped.base);
+	view.map1 = maps.view[0].rectify.remap_x;
+	view.map2 = maps.view[0].rectify.remap_y;
+	view.maps_valid = true;
 
-		// Set the maps as valid.
-		view.maps_valid = true;
-	}
+	// Set the maps as valid.
+	view.maps_valid = true;
 
 	c.state.calibrated = true;
+
+	// Validate that nothing has been re-allocated.
+	assert(wrapped.isDataStorageValid());
+
+	if (c.status != NULL) {
+		t_stereo_camera_calibration_reference(&c.status->stereo_data, wrapped.base);
+	}
 }
 
 static void
