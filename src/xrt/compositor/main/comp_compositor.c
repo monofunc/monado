@@ -603,6 +603,9 @@ static const char *optional_device_extensions[] = {
 #ifdef VK_KHR_synchronization2
     VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
 #endif
+#ifdef VK_EXT_physical_device_drm
+    VK_EXT_PHYSICAL_DEVICE_DRM_EXTENSION_NAME,
+#endif
 };
 
 static bool
