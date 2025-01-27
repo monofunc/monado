@@ -148,6 +148,9 @@ static const char *optional_device_extensions[] = {
 #ifdef VK_KHR_buffer_device_address
     VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
 #endif
+#ifdef VK_KHR_device_group
+    VK_KHR_DEVICE_GROUP_EXTENSION_NAME,
+#endif
 };
 
 static VkResult

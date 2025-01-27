@@ -839,6 +839,7 @@ fill_in_has_device_extensions(struct vk_bundle *vk, struct u_string_list *ext_li
 	// Reset before filling out.
 	vk->has_KHR_8bit_storage = false;
 	vk->has_KHR_buffer_device_address = false;
+	vk->has_KHR_device_group = false;
 	vk->has_KHR_external_fence_fd = false;
 	vk->has_KHR_external_memory = false;
 	vk->has_KHR_external_semaphore_fd = false;
@@ -882,6 +883,13 @@ fill_in_has_device_extensions(struct vk_bundle *vk, struct u_string_list *ext_li
 			continue;
 		}
 #endif // defined(VK_KHR_buffer_device_address)
+
+#if defined(VK_KHR_device_group)
+		if (strcmp(ext, VK_KHR_DEVICE_GROUP_EXTENSION_NAME) == 0) {
+			vk->has_KHR_device_group = true;
+			continue;
+		}
+#endif // defined(VK_KHR_device_group)
 
 #if defined(VK_KHR_external_fence_fd)
 		if (strcmp(ext, VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME) == 0) {
