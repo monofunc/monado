@@ -1,15 +1,17 @@
-// Copyright 2019, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Settings struct for compositor header.
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Jakob Bornecrantz <jakob@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
  * @ingroup comp_main
  */
 
 #pragma once
 
+#include "vk/vk_helpers.h"
 #include "xrt/xrt_device.h"
 #include "xrt/xrt_compositor.h"
 #include "xrt/xrt_vulkan_includes.h"
@@ -86,9 +88,14 @@ struct comp_settings
 	//! Nominal frame interval
 	int64_t nominal_frame_interval_ns;
 
-	//! Vulkan physical device selected by comp_settings_check_vulkan_caps
-	//! may be forced by user
-	int selected_gpu_index;
+	/*
+	 * Vulkan physical device group and physical device selected by comp_settings_check_vulkan_caps
+	 * may be forced by user.
+	 *
+	 * device_group_index field is only relevant when @ref use_device_group is enabled and the extensions
+	 * VK_KHR_device_group(_creation) are supported.
+	 */
+	struct vk_physical_device_indices selected_gpu_indices;
 
 	//! Vulkan physical device index for clients to use, forced by user
 	int client_gpu_index;

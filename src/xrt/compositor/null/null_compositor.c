@@ -196,11 +196,12 @@ compositor_init_vulkan(struct null_compositor *c)
 	    .required_device_extensions = required_device_extension_list,
 	    .optional_device_extensions = optional_device_extension_list,
 	    .log_level = c->settings.log_level,
-	    .only_compute_queue = false, // Regular GFX
-	    .timeline_semaphore = true,  // Flag is optional, not a hard requirement.
-	    .use_device_group = false,   // Not required
-	    .selected_gpu_index = -1,    // Auto
-	    .client_gpu_index = -1,      // Auto
+	    .only_compute_queue = false,    // Regular GFX
+	    .timeline_semaphore = true,     // Flag is optional, not a hard requirement.
+	    .use_device_group = false,      // Not required
+	    .selected_gpu_group_index = -1, // Not required
+	    .selected_gpu_index = -1,       // Auto
+	    .client_gpu_index = -1,         // Auto
 	};
 
 	struct comp_vulkan_results vk_res = {0};

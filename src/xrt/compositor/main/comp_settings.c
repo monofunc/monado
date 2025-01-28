@@ -1,9 +1,10 @@
-// Copyright 2019, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Settings struct for compositor.
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
  * @ingroup comp_main
  */
 
@@ -30,6 +31,7 @@ DEBUG_GET_ONCE_BOOL_OPTION(xcb_fullscreen, "XRT_COMPOSITOR_XCB_FULLSCREEN", fals
 DEBUG_GET_ONCE_NUM_OPTION(xcb_display, "XRT_COMPOSITOR_XCB_DISPLAY", -1)
 DEBUG_GET_ONCE_NUM_OPTION(default_framerate, "XRT_COMPOSITOR_DEFAULT_FRAMERATE", 60)
 DEBUG_GET_ONCE_BOOL_OPTION(compute, "XRT_COMPOSITOR_COMPUTE", USE_COMPUTE_DEFAULT)
+DEBUG_GET_ONCE_NUM_OPTION(force_gpu_group_index, "XRT_COMPOSITOR_FORCE_GPU_GROUP_INDEX", -1)
 // clang-format on
 
 static inline void
@@ -125,7 +127,8 @@ comp_settings_init(struct comp_settings *s, struct xrt_device *xdev)
 	s->nominal_frame_interval_ns = interval_ns;
 	s->log_level = debug_get_log_option_log();
 	s->print_modes = debug_get_bool_option_print_modes();
-	s->selected_gpu_index = debug_get_num_option_force_gpu_index();
+	s->selected_gpu_indices.device_group_index = debug_get_num_option_force_gpu_group_index();
+	s->selected_gpu_indices.device_index = debug_get_num_option_force_gpu_index();
 	s->client_gpu_index = debug_get_num_option_force_client_gpu_index();
 	s->desired_mode = debug_get_num_option_desired_mode();
 	s->viewport_scale = debug_get_num_option_scale_percentage() / 100.0;

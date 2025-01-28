@@ -57,6 +57,9 @@ struct comp_vulkan_arguments
 	//! Should we use a device group (if available)
 	bool use_device_group;
 
+	//! Vulkan physical device group to be selected, only used when @ref use_device_group is enabled, -1 for auto,
+	int selected_gpu_group_index;
+
 	//! Vulkan physical device to be selected, -1 for auto.
 	int selected_gpu_index;
 

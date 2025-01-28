@@ -643,15 +643,18 @@ select_physical_device(struct vk_bundle *vk, int forced_index)
 }
 
 static VkResult
-select_physical_device_group(struct vk_bundle *vk, int forced_index)
+select_physical_device_group(struct vk_bundle *vk, const struct vk_physical_device_indices *forced_phys_device)
 {
+	const struct vk_physical_device_indices forced_indices =
+	    forced_phys_device ? *forced_phys_device : VK_PHYSICAL_DEVICE_INDICES_INIT;
+
 #ifdef VK_KHR_device_group_creation
 	vk->features.use_device_group = false;
 
 	if (!vk->has_KHR_device_group_creation) {
 		VK_WARN(vk,
 		        "VK_KHR_device_group_creation is not enabled/supported, fallback to single physical device.");
-		return select_physical_device(vk, forced_index);
+		return select_physical_device(vk, forced_indices.device_index);
 	}
 
 	VK_DEBUG(vk, "Vulkan device groups requested, checking for available groups...");
@@ -664,13 +667,13 @@ select_physical_device_group(struct vk_bundle *vk, int forced_index)
 		         "vkEnumeratePhysicalDeviceGroups failed to obtain device group count: %s, fallback to single "
 		         "physical device.",
 		         vk_result_string(vk_ret));
-		return select_physical_device(vk, forced_index);
+		return select_physical_device(vk, forced_indices.device_index);
 	}
 
 	// Only continue this path if count >= 1 (fallback to single physical device otherwise)
 	if (device_group_count < 1) {
 		VK_WARN(vk, "Device group requested but no group was found, fallback to single physical device.");
-		return select_physical_device(vk, forced_index);
+		return select_physical_device(vk, forced_indices.device_index);
 	}
 
 	VkPhysicalDeviceGroupPropertiesKHR *physical_device_group_properties =
@@ -688,16 +691,21 @@ select_physical_device_group(struct vk_bundle *vk, int forced_index)
 		         "single physical device.",
 		         vk_result_string(vk_ret));
 		free(physical_device_group_properties);
-		return select_physical_device(vk, forced_index);
+		return select_physical_device(vk, forced_indices.device_index);
 	}
 
-	const VkPhysicalDeviceGroupPropertiesKHR selected_physical_group = physical_device_group_properties[0];
+	const struct vk_physical_device_indices selected_indices = {
+	    .device_group_index = (forced_indices.device_group_index < 0) ? 0 : forced_indices.device_group_index,
+	    .device_index = (forced_indices.device_index < 0) ? 0 : forced_indices.device_index,
+	};
+
+	const VkPhysicalDeviceGroupPropertiesKHR selected_physical_group =
+	    physical_device_group_properties[selected_indices.device_group_index];
 	free(physical_device_group_properties);
 
 	VK_DEBUG(vk, "Device group found with a physical device count of %d.",
 	         selected_physical_group.physicalDeviceCount);
-	forced_index = 0;
-	vk->physical_device = selected_physical_group.physicalDevices[0];
+	vk->physical_device = selected_physical_group.physicalDevices[selected_indices.device_index];
 	vk->device_group_properties = selected_physical_group;
 
 	// Print info
@@ -716,7 +724,7 @@ select_physical_device_group(struct vk_bundle *vk, int forced_index)
 	return VK_SUCCESS;
 #else
 	VK_WARN(vk, "VK_KHR_device_group_creation is not defined, fallback to single physical device.");
-	return select_physical_device(vk, forced_index);
+	return select_physical_device(vk, forced_indices.device_index);
 #endif
 }
 
@@ -1334,25 +1342,28 @@ filter_device_features(struct vk_bundle *vk,
  */
 
 VkResult
-vk_select_physical_device(struct vk_bundle *vk, int forced_index, bool use_device_group)
+vk_select_physical_device(struct vk_bundle *vk,
+                          bool use_device_group,
+                          const struct vk_physical_device_indices *forced_phys_device)
 {
-	return use_device_group ? select_physical_device_group(vk, forced_index)
-	                        : select_physical_device(vk, forced_index);
+	return use_device_group
+	           ? select_physical_device_group(vk, forced_phys_device)
+	           : select_physical_device(vk, forced_phys_device ? forced_phys_device->device_index : -1);
 }
 
 XRT_CHECK_RESULT VkResult
 vk_create_device(struct vk_bundle *vk,
-                 int forced_index,
                  bool only_compute,
                  bool use_device_group,
                  VkQueueGlobalPriorityEXT global_priority,
                  struct u_string_list *required_device_ext_list,
                  struct u_string_list *optional_device_ext_list,
-                 const struct vk_device_features *optional_device_features)
+                 const struct vk_device_features *optional_device_features,
+                 const struct vk_physical_device_indices *force_phys_device)
 {
 	VkResult ret;
 
-	ret = vk_select_physical_device(vk, forced_index, use_device_group);
+	ret = vk_select_physical_device(vk, use_device_group, force_phys_device);
 	if (ret != VK_SUCCESS) {
 		return ret;
 	}

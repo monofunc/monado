@@ -1041,13 +1041,38 @@ void
 vk_fill_in_has_instance_extensions(struct vk_bundle *vk, struct u_string_list *ext_list);
 
 /*!
+ * Used to physical device (group) selection as arguments for:
+ *     @ref vk_select_physical_device
+ *     @ref vk_create_device
+ *
+ * @ingroup aux_vk
+ */
+struct vk_physical_device_indices
+{
+	//! Index of physical device groups, only relevant when VK_KHR_device_group(_creation) is enabled/supported, can
+	//! be -1
+	int32_t device_group_index;
+
+	//! Index of physical devices (or devices with-in @ref device_group_index), can be -1
+	int32_t device_index;
+};
+
+#ifndef VK_PHYSICAL_DEVICE_INDICES_INIT
+// clang-format off
+#define VK_PHYSICAL_DEVICE_INDICES_INIT (struct vk_physical_device_indices){-1, -1}
+// clang-format on
+#endif
+
+/*!
  * Setup the physical device, this is called by vk_create_device but has uses
  * for outside of that.
  *
  * @ingroup aux_vk
  */
 VkResult
-vk_select_physical_device(struct vk_bundle *vk, int forced_index, bool use_device_group);
+vk_select_physical_device(struct vk_bundle *vk,
+                          bool use_device_group,
+                          const struct vk_physical_device_indices *forced_phys_device);
 
 /*!
  * Used to enable device features as a argument @ref vk_create_device.
@@ -1074,13 +1099,13 @@ struct vk_device_features
  */
 XRT_CHECK_RESULT VkResult
 vk_create_device(struct vk_bundle *vk,
-                 int forced_index,
                  bool only_compute,
                  bool use_device_group,
                  VkQueueGlobalPriorityEXT global_priority,
                  struct u_string_list *required_device_ext_list,
                  struct u_string_list *optional_device_ext_list,
-                 const struct vk_device_features *optional_device_features);
+                 const struct vk_device_features *optional_device_features,
+                 const struct vk_physical_device_indices *force_phys_device);
 
 /*!
  * @brief Initialize mutexes in the @ref vk_bundle.

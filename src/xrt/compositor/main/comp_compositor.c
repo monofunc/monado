@@ -708,9 +708,10 @@ compositor_init_vulkan(struct comp_compositor *c)
 	    .optional_device_extensions = optional_device_extension_list,
 	    .log_level = c->settings.log_level,
 	    .only_compute_queue = c->settings.use_compute,
-	    .timeline_semaphore = true, // Flag is optional, not a hard requirement.
-	    .use_device_group = false,  // Not required
-	    .selected_gpu_index = c->settings.selected_gpu_index,
+	    .timeline_semaphore = true,     // Flag is optional, not a hard requirement.
+	    .use_device_group = false,      // Not required
+	    .selected_gpu_group_index = -1, // Not required
+	    .selected_gpu_index = c->settings.selected_gpu_indices.device_index,
 	    .client_gpu_index = c->settings.client_gpu_index,
 	};
 
@@ -738,7 +739,7 @@ compositor_init_vulkan(struct comp_compositor *c)
 	c->settings.client_gpu_deviceUUID = vk_res.client_gpu_deviceUUID;
 	c->settings.selected_gpu_deviceUUID = vk_res.selected_gpu_deviceUUID;
 	c->settings.client_gpu_index = vk_res.client_gpu_index;
-	c->settings.selected_gpu_index = vk_res.selected_gpu_index;
+	c->settings.selected_gpu_indices.device_index = vk_res.selected_gpu_index;
 	c->settings.client_gpu_deviceLUID = vk_res.client_gpu_deviceLUID;
 	c->settings.client_gpu_deviceLUID_valid = vk_res.client_gpu_deviceLUID_valid;
 
