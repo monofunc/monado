@@ -4,8 +4,7 @@
     "type": "object",
     "required": [
         "metadata",
-        "cameras",
-        "opencv_stereo_calibrate"
+        "cameras"
     ],
     "properties": {
         "$schema": {
@@ -27,12 +26,15 @@
         },
         "cameras": {
             "type": "array",
-            "minItems": 2,
+            "minItems": 1,
             "maxItems": 2,
-            "description": "Stereo calibrated cameras",
+            "description": "Calibrated cameras",
             "items": {
                 "$ref": "#/$defs/camera"
             }
+        },
+        "mono": {
+            "type": "boolean"
         },
         "opencv_stereo_calibrate": {
             "$ref": "#/$defs/opencv_stereo_calibrate"
@@ -83,7 +85,7 @@
                     }
                 },
                 "distortion": {
-                    "description": "Parameters for the specified distortion model. radtan5: k1,k2,p1,p2,k3. equidistant4: k1,k2,k3,k4.",
+                    "description": "Parameters for the specified distortion model. radtan5: k1,k2,p1,p2,k3. radtan8: same as radtan5, plus k4,k5,k6. radtan14: same as radtan 8, plus s1,s2,s3,s4,tx,ty. equidistant4: k1,k2,k3,k4.",
                     "$comment": "There is no easy way to enforce the fields parameters in the schema based on the `model` property, the if-then validation could help but still would be very cumbersome.",
                     "oneOf": [
                         {
@@ -91,6 +93,12 @@
                         },
                         {
                             "$ref": "#/$defs/radtan5"
+                        },
+                        {
+                            "$ref": "#/$defs/radtan8"
+                        },
+                        {
+                            "$ref": "#/$defs/radtan14"
                         }
                     ]
                 },
@@ -205,6 +213,110 @@
                     "type": "number"
                 },
                 "k3": {
+                    "type": "number"
+                }
+            }
+        },
+        "radtan8": {
+            "type": "object",
+            "required": [
+                "k1",
+                "k2",
+                "p1",
+                "p2",
+                "k3",
+                "k4",
+                "k5",
+                "k6"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "k1": {
+                    "type": "number"
+                },
+                "k2": {
+                    "type": "number"
+                },
+                "p1": {
+                    "type": "number"
+                },
+                "p2": {
+                    "type": "number"
+                },
+                "k3": {
+                    "type": "number"
+                },
+                "k4": {
+                    "type": "number"
+                },
+                "k5": {
+                    "type": "number"
+                },
+                "k6": {
+                    "type": "number"
+                }
+            }
+        },
+        "radtan14": {
+            "type": "object",
+            "required": [
+                "k1",
+                "k2",
+                "p1",
+                "p2",
+                "k3",
+                "k4",
+                "k5",
+                "k6",
+                "s1",
+                "s2",
+                "s3",
+                "s4",
+                "tx",
+                "ty"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "k1": {
+                    "type": "number"
+                },
+                "k2": {
+                    "type": "number"
+                },
+                "p1": {
+                    "type": "number"
+                },
+                "p2": {
+                    "type": "number"
+                },
+                "k3": {
+                    "type": "number"
+                },
+                "k4": {
+                    "type": "number"
+                },
+                "k5": {
+                    "type": "number"
+                },
+                "k6": {
+                    "type": "number"
+                },
+                "s1": {
+                    "type": "number"
+                },
+                "s2": {
+                    "type": "number"
+                },
+                "s3": {
+                    "type": "number"
+                },
+                "s4": {
+                    "type": "number"
+                },
+                "tx": {
+                    "type": "number"
+                },
+                "ty": {
                     "type": "number"
                 }
             }
