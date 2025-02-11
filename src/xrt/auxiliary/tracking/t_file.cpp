@@ -10,6 +10,7 @@
  */
 
 #include "tracking/t_calibration_opencv.hpp"
+#include "tracking/t_tracking.h"
 #include "util/u_misc.h"
 #include "util/u_logging.h"
 #include "util/u_json.hpp"
@@ -90,13 +91,11 @@ calibration_get_undistort_map(t_camera_calibration &calib,
 		new_camera_matrix_optional = wrap.intrinsics_mat;
 	}
 
-	bool fisheye = (wrap.distortion_model == T_DISTORTION_FISHEYE_KB4);
-
 	//! @todo Scale Our intrinsics if the frame size we request
 	//              calibration for does not match what was saved
 	cv::Size image_size(calib.image_size_pixels.w, calib.image_size_pixels.h);
 
-	if (fisheye) {
+	if (t_camera_distortion_model_is_fisheye(wrap.distortion_model)) {
 		cv::fisheye::initUndistortRectifyMap(wrap.intrinsics_mat,        // cameraMatrix
 		                                     wrap.distortion_mat,        // distCoeffs
 		                                     rectify_transform_optional, // R
@@ -143,8 +142,7 @@ StereoRectificationMaps::StereoRectificationMaps(t_stereo_camera_calibration *da
 	 *
 	 * Here cv::noArray() means zero distortion.
 	 */
-	switch (data->view[0].distortion_model) {
-	case T_DISTORTION_FISHEYE_KB4: {
+	if (t_camera_distortion_model_is_fisheye(data->view[0].distortion_model)) {
 #if 0
 		//! @todo for some reason this looks weird?
 		// Alpha of 1.0 kinda works, not really.
@@ -193,8 +191,7 @@ StereoRectificationMaps::StereoRectificationMaps(t_stereo_camera_calibration *da
 		                  NULL,                           // validPixROI1
 		                  NULL);                          // validPixROI2
 #endif
-	} break;
-	case T_DISTORTION_OPENCV_RADTAN_5: {
+	} else {
 		// Have the same principal point on both.
 		int flags = cv::CALIB_ZERO_DISPARITY;
 		// Get all of the pixels from the camera.
@@ -219,8 +216,6 @@ StereoRectificationMaps::StereoRectificationMaps(t_stereo_camera_calibration *da
 		                  cv::Size(),                     // newImageSize
 		                  NULL,                           // validPixROI1
 		                  NULL);                          // validPixROI2
-	} break;
-	default: assert(false);
 	}
 
 	view[0].rectify = calibration_get_undistort_map(data->view[0], view[0].rotation_mat, view[0].projection_mat);

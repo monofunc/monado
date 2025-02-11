@@ -148,8 +148,8 @@ public:
 	//! Number of frames to capture before restarting.
 	uint32_t num_collect_restart = 1;
 
-	//! Is the camera fisheye.
-	bool use_fisheye = false;
+	//! Distortion model to use.
+	enum t_camera_distortion_model distortion_model = T_DISTORTION_OPENCV_RADTAN_5;
 	//! From parameters.
 	bool stereo_sbs = false;
 
@@ -576,14 +576,14 @@ process_stereo_samples(class Calibration &c, int cols, int rows)
 	cv::Size image_size(cols, rows);
 	cv::Size new_image_size(cols, rows);
 
-	StereoCameraCalibrationWrapper wrapped(c.use_fisheye ? T_DISTORTION_FISHEYE_KB4 : T_DISTORTION_OPENCV_RADTAN_5);
+	StereoCameraCalibrationWrapper wrapped(c.distortion_model);
 	wrapped.view[0].image_size_pixels.w = image_size.width;
 	wrapped.view[0].image_size_pixels.h = image_size.height;
 	wrapped.view[1].image_size_pixels = wrapped.view[0].image_size_pixels;
 
 
 	float rp_error = 0.0f;
-	if (c.use_fisheye) {
+	if (t_camera_distortion_model_is_fisheye(c.distortion_model)) {
 		int flags = 0;
 		flags |= cv::fisheye::CALIB_FIX_SKEW;
 		flags |= cv::fisheye::CALIB_RECOMPUTE_EXTRINSIC;
@@ -637,7 +637,7 @@ process_stereo_samples(class Calibration &c, int cols, int rows)
 	std::cout << "calibration rp_error: " << rp_error << "\n";
 	to_stdout("camera_rotation", wrapped.camera_rotation_mat);
 	to_stdout("camera_translation", wrapped.camera_translation_mat);
-	if (!c.use_fisheye) {
+	if (t_camera_distortion_model_is_fisheye(c.distortion_model)) {
 		to_stdout("camera_essential", wrapped.camera_essential_mat);
 		to_stdout("camera_fundamental", wrapped.camera_fundamental_mat);
 	}
@@ -1282,7 +1282,6 @@ t_calibration_stereo_create(struct xrt_frame_context *xfctx,
 	*out_sink = &c.base;
 
 	// Copy the parameters.
-	c.use_fisheye = params->use_fisheye;
 	c.stereo_sbs = params->stereo_sbs;
 	c.board.pattern = params->pattern;
 	switch (params->pattern) {
@@ -1329,6 +1328,7 @@ t_calibration_stereo_create(struct xrt_frame_context *xfctx,
 	c.mirror_rgb_image = params->mirror_rgb_image;
 	c.save_images = params->save_images;
 	c.status = status;
+	c.distortion_model = params->use_fisheye ? T_DISTORTION_FISHEYE_KB4 : T_DISTORTION_OPENCV_RADTAN_5;
 
 
 	// Setup a initial message.
