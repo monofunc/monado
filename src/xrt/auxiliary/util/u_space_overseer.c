@@ -1117,26 +1117,10 @@ u_space_overseer_legacy_setup(struct u_space_overseer *uso,
                               bool root_is_unbounded,
                               bool per_app_local_spaces)
 {
-	struct xrt_space *root = uso->base.semantic.root; // Convenience
 	uso->per_app_local_spaces = per_app_local_spaces;
 
 	for (uint32_t i = 0; i < xdev_count; i++) {
-		struct xrt_device *xdev = xdevs[i];
-		struct xrt_tracking_origin *torig = xdev->tracking_origin;
-		uint64_t key = (uint64_t)(intptr_t)torig;
-		struct xrt_space *xs = NULL;
-
-		void *ptr = NULL;
-		u_hashmap_int_find(uso->xto_map, key, &ptr);
-
-		if (ptr != NULL) {
-			xs = (struct xrt_space *)ptr;
-		} else {
-			u_space_overseer_create_offset_space(uso, root, &torig->initial_offset, &xs);
-			u_hashmap_int_insert(uso->xto_map, key, xs);
-		}
-
-		u_space_overseer_link_space_to_device(uso, xs, xdev);
+		u_space_overseer_add_device(uso, xdevs[i]);
 	}
 
 	// If these are set something is probably wrong, but just in case unset them.
@@ -1182,6 +1166,26 @@ u_space_overseer_legacy_setup(struct u_space_overseer *uso,
 		// Set the head to the notify device, for reference space usage.
 		uso->notify = head;
 	}
+}
+
+void
+u_space_overseer_add_device(struct u_space_overseer *uso, struct xrt_device *xdev)
+{
+	struct xrt_tracking_origin *torig = xdev->tracking_origin;
+	uint64_t key = (uint64_t)(intptr_t)torig;
+	struct xrt_space *xs = NULL;
+
+	void *ptr = NULL;
+	u_hashmap_int_find(uso->xto_map, key, &ptr);
+
+	if (ptr != NULL) {
+		xs = (struct xrt_space *)ptr;
+	} else {
+		u_space_overseer_create_offset_space(uso, uso->base.semantic.root, &torig->initial_offset, &xs);
+		u_hashmap_int_insert(uso->xto_map, key, xs);
+	}
+
+	u_space_overseer_link_space_to_device(uso, xs, xdev);
 }
 
 void
