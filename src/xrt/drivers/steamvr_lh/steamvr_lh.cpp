@@ -30,6 +30,7 @@
 #include "util/u_device.h"
 
 #include "math/m_api.h"
+#include "xrt/xrt_session.h"
 
 namespace {
 
@@ -249,20 +250,14 @@ Context::setup_hmd(const char *serial, vr::ITrackedDeviceServerDriver *driver)
 bool
 Context::setup_controller(const char *serial, vr::ITrackedDeviceServerDriver *driver)
 {
-	// Find the first available slot for a new controller
-	size_t device_idx = 0;
-	for (; device_idx < MAX_CONTROLLERS; ++device_idx) {
-		if (!controller[device_idx])
-			break;
-	}
-
 	// Check if we've exceeded the maximum number of controllers
-	if (device_idx == MAX_CONTROLLERS) {
+	if (controller_index == MAX_CONTROLLERS) {
 		CTX_WARN("Attempted to activate more than %zu controllers - this is unsupported", MAX_CONTROLLERS);
 		return false;
 	}
 
 	// Create the new controller
+	const auto device_idx = controller_index++;
 	controller[device_idx] = new ControllerDevice(
 	    device_idx + 1, DeviceBuilder{this->shared_from_this(), driver, serial, STEAM_INSTALL_DIR});
 
@@ -691,7 +686,24 @@ Context::WritePropertyBatch(vr::PropertyContainerHandle_t ulContainerHandle,
 		return vr::TrackedProp_InvalidContainer;
 	if (!pBatch)
 		return vr::TrackedProp_InvalidOperation; // not verified vs steamvr
-	return device->handle_properties(pBatch, unBatchEntryCount);
+
+	const auto was_ready = device->ready();
+	const auto result = device->handle_properties(pBatch, unBatchEntryCount);
+
+	if (not was_ready and device->ready()) {
+		auto &xsysd = svrs->base;
+		const auto device_index = xsysd.xdev_count;
+		xsysd.xdevs[xsysd.xdev_count++] = static_cast<xrt_device *>(device);
+		const auto event = xrt_session_event{
+		    .devices_change{
+		        .type = XRT_SESSION_EVENT_DEVICE_ADDED,
+		        .new_device_index = device_index,
+		    },
+		};
+		broadcast->push_event(broadcast, &event);
+	}
+
+	return result;
 }
 
 const char *
@@ -748,6 +760,9 @@ get_roles(struct xrt_system_devices *xsysd, struct xrt_system_roles *out_roles)
 	int head, left, right, gamepad;
 
 	u_device_assign_xdev_roles(xsysd->xdevs, xsysd->xdev_count, &head, &left, &right, &gamepad);
+	if (out_roles->generation_id == 0) {
+		gamepad = XRT_DEVICE_ROLE_UNASSIGNED; // No gamepads in steamvr_lh set this unassigned first run
+	}
 
 	if (left != out_roles->left || right != out_roles->right || gamepad != out_roles->gamepad) {
 		update_gen = true;
@@ -877,10 +892,12 @@ steamvr_lh_create_devices(struct xrt_prober *xp, struct xrt_session_event_sink *
 	}
 
 	// Include the controllers
-	for (size_t i = 0; i < MAX_CONTROLLERS; i++) {
-		if (svrs->ctx->controller[i]) {
-			xsysd->xdevs[xsysd->xdev_count++] = svrs->ctx->controller[i];
+	for (size_t i = 0; i < svrs->ctx->controller_index; i++) {
+		if (!svrs->ctx->controller[i]->ready()) {
+			continue;
 		}
+
+		xsysd->xdevs[xsysd->xdev_count++] = svrs->ctx->controller[i];
 	}
 
 	*out_xsysd = xsysd;

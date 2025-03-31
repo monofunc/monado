@@ -1090,6 +1090,7 @@ ControllerDevice::handle_property_write(const vr::PropertyWrite_t &prop)
 		} else {
 			this->name = input_class->second.name;
 			set_input_class(&input_class->second);
+			set_property_flag(RequiredProperties::InputProfile);
 		}
 		break;
 	}
@@ -1107,6 +1108,7 @@ ControllerDevice::handle_property_write(const vr::PropertyWrite_t &prop)
 			                     (this->manufacturer.size() != name.size());
 			fixedProp.unBufferSize = name.end() - (char *)fixedProp.pvBuffer;
 		}
+		set_property_flag(RequiredProperties::ModelNumber);
 		return Device::handle_property_write(fixedProp);
 	}
 	case vr::Prop_ControllerRoleHint_Int32: {
@@ -1136,6 +1138,7 @@ ControllerDevice::handle_property_write(const vr::PropertyWrite_t &prop)
 			break;
 		}
 		}
+		set_property_flag(RequiredProperties::Role);
 		break;
 	}
 	case vr::Prop_DeviceProvidesBatteryStatus_Bool: {
@@ -1157,6 +1160,7 @@ ControllerDevice::handle_property_write(const vr::PropertyWrite_t &prop)
 		}
 		this->provides_battery_status = supported;
 		DEV_DEBUG("Has battery status: %s: %s", name, supported ? "true" : "false");
+		set_property_flag(RequiredProperties::ProvidesBatteryStatus);
 		break;
 	}
 	case vr::Prop_DeviceIsCharging_Bool: {

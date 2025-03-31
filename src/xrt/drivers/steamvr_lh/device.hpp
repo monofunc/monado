@@ -19,6 +19,7 @@
 
 #include "openvr_driver.h"
 
+#include <bitset>
 #include <string>
 #include <vector>
 #include <memory>
@@ -93,6 +94,10 @@ public:
 
 	xrt_result_t
 	get_battery_status(bool *out_present, bool *out_charging, float *out_charge);
+
+	virtual bool ready() {
+		return true;
+	}
 
 protected:
 	Device(const DeviceBuilder &builder);
@@ -218,6 +223,14 @@ private:
 
 class ControllerDevice : public Device
 {
+	enum class RequiredProperties {
+		InputProfile,
+		ModelNumber,
+		Role,
+		ProvidesBatteryStatus,
+		Count,
+	};
+
 public:
 	ControllerDevice(vr::PropertyContainerHandle_t container_handle, const DeviceBuilder &builder);
 
@@ -245,6 +258,10 @@ public:
 	void
 	update_hand_tracking(int64_t desired_timestamp_ns, struct xrt_hand_joint_set *out);
 
+	bool ready() override {
+		return properties_flags.all();
+	}
+
 protected:
 	void
 	set_input_class(const InputClass *input_class);
@@ -256,10 +273,15 @@ private:
 	std::vector<IndexFingerInput> finger_inputs_vec;
 	std::unordered_map<std::string_view, IndexFingerInput *> finger_inputs_map;
 	uint64_t hand_tracking_timestamp;
+	std::bitset<static_cast<size_t>(RequiredProperties::Count)> properties_flags;
 
 	void
 	set_hand_tracking_hand(xrt_input_name name);
 
 	vr::ETrackedPropertyError
 	handle_property_write(const vr::PropertyWrite_t &prop) override;
+
+	void set_property_flag(RequiredProperties property) {
+		properties_flags.set(static_cast<size_t>(property));
+	}
 };
