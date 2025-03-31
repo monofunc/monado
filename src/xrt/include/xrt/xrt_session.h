@@ -67,6 +67,9 @@ enum xrt_session_event_type
 
 	//! User presence has changed (hmd may have been put on or removed)
 	XRT_SESSION_EVENT_USER_PRESENCE_CHANGE = 10,
+
+	// ! A device has appeared or disappeared
+	XRT_SESSION_EVENT_DEVICE_ADDED = 11,
 };
 
 /*!
@@ -189,6 +192,14 @@ struct xrt_session_event_user_presence_change
 };
 
 /*!
+ *  A device has appeared or disappeared.
+ */
+struct xrt_session_event_devices_changed
+{
+	enum xrt_session_event_type type;
+};
+
+/*!
  * Union of all session events, used to return multiple events through one call.
  * Each event struct must start with a @ref xrt_session_event_type field.
  *
@@ -207,6 +218,7 @@ union xrt_session_event {
 	struct xrt_session_event_passthrough_state_change passthru;
 	struct xrt_session_event_visibility_mask_change mask_change;
 	struct xrt_session_event_user_presence_change presence_change;
+	struct xrt_session_event_devices_changed devices_change;
 };
 
 /*!
