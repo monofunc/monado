@@ -106,13 +106,14 @@ find_steamvr_install()
  * devices that exist when they are all destroyed.
  */
 std::shared_ptr<Context>
-Context::create(const std::string &steam_install,
+Context::create(xrt_session_event_sink *broadcast,
+                const std::string &steam_install,
                 const std::string &steamvr_install,
                 std::vector<vr::IServerTrackedDeviceProvider *> providers)
 {
 	// xrt_tracking_origin initialization
 	std::shared_ptr<Context> c =
-	    std::make_shared<Context>(steam_install, steamvr_install, debug_get_log_option_lh_log());
+	    std::make_shared<Context>(broadcast, steam_install, steamvr_install, debug_get_log_option_lh_log());
 	c->providers = std::move(providers);
 	std::strncpy(c->name, "SteamVR Lighthouse Tracking", XRT_TRACKING_NAME_LEN);
 	c->type = XRT_TRACKING_TYPE_LIGHTHOUSE;
@@ -127,8 +128,12 @@ Context::create(const std::string &steam_install,
 	return c;
 }
 
-Context::Context(const std::string &steam_install, const std::string &steamvr_install, u_logging_level level)
-    : settings(steam_install, steamvr_install, this), resources(level, steamvr_install), log_level(level)
+Context::Context(xrt_session_event_sink *broadcast,
+                 const std::string &steam_install,
+                 const std::string &steamvr_install,
+                 u_logging_level level)
+    : broadcast(broadcast), settings(steam_install, steamvr_install, this), resources(level, steamvr_install),
+      log_level(level)
 {}
 
 Context::~Context()
@@ -771,7 +776,7 @@ destroy(struct xrt_system_devices *xsysd)
 }
 
 extern "C" enum xrt_result
-steamvr_lh_create_devices(struct xrt_prober *xp, struct xrt_system_devices **out_xsysd)
+steamvr_lh_create_devices(struct xrt_prober *xp, struct xrt_session_event_sink *broadcast, struct xrt_system_devices **out_xsysd)
 {
 	u_logging_level level = debug_get_log_option_lh_log();
 	// The driver likes to create a bunch of transient folders -
@@ -831,7 +836,7 @@ steamvr_lh_create_devices(struct xrt_prober *xp, struct xrt_system_devices **out
 	if (debug_get_bool_option_lh_load_slimevr() &&
 	    !loadDriver("/drivers/slimevr/bin/linux64/driver_slimevr.so", false))
 		return xrt_result::XRT_ERROR_DEVICE_CREATION_FAILED;
-	svrs->ctx = Context::create(STEAM_INSTALL_DIR, steamvr, std::move(drivers));
+	svrs->ctx = Context::create(broadcast, STEAM_INSTALL_DIR, steamvr, std::move(drivers));
 	if (svrs->ctx == nullptr)
 		return xrt_result::XRT_ERROR_DEVICE_CREATION_FAILED;
 
