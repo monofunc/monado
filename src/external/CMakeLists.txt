@@ -234,3 +234,8 @@ target_link_libraries(xrt-external-dtrack ws2_32)
 
 # JoyShockLibrary
 add_subdirectory(joyshocklibrary)
+
+# VRPN
+set(VRPN_BUILD_CLIENT_LIBRARY ON)
+add_subdirectory(vrpn)
+target_include_directories(vrpn PUBLIC vrpn)
