@@ -755,6 +755,7 @@ struct xrt_relation_chain
 	_(XRT_DEVICE_RIFT_REMOTE) \
 	_(XRT_DEVICE_BLUBUR_S1) \
 	_(XRT_DEVICE_PSVR2) \
+	_(XRT_DEVICE_FLIPVR) \
 \
 	/* Other misc stuff. */\
 	_(XRT_DEVICE_HAND_TRACKER) \
@@ -1346,6 +1347,26 @@ enum xrt_input_type
 	_(XRT_INPUT_HAND_CTRL_EMU_GRIP_POSE                , XRT_INPUT_NAME(0x1202, POSE)) \
 	_(XRT_INPUT_HAND_CTRL_EMU_AIM_POSE                 , XRT_INPUT_NAME(0x1203, POSE)) \
 \
+	_(XRT_INPUT_FLIPVR_A_CLICK                         , XRT_INPUT_NAME(0x1300, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_A_TOUCH                         , XRT_INPUT_NAME(0x1301, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_B_CLICK                         , XRT_INPUT_NAME(0X1302, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_B_TOUCH                         , XRT_INPUT_NAME(0X1303, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_X_CLICK                         , XRT_INPUT_NAME(0X1304, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_X_TOUCH                         , XRT_INPUT_NAME(0X1305, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_Y_CLICK                         , XRT_INPUT_NAME(0X1306, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_Y_TOUCH                         , XRT_INPUT_NAME(0X1307, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_SYSTEM_CLICK                    , XRT_INPUT_NAME(0X1308, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_THUMBSTICK_CLICK                , XRT_INPUT_NAME(0X1309, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_THUMBSTICK_TOUCH                , XRT_INPUT_NAME(0X130A, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_THUMBSTICK                      , XRT_INPUT_NAME(0X130B, VEC2_MINUS_ONE_TO_ONE)) \
+	_(XRT_INPUT_FLIPVR_TRIGGER_CLICK                   , XRT_INPUT_NAME(0X130C, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_TRIGGER_TOUCH                   , XRT_INPUT_NAME(0X130D, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_TRIGGER_VALUE                   , XRT_INPUT_NAME(0X130E, VEC1_ZERO_TO_ONE)) \
+	_(XRT_INPUT_FLIPVR_SQUEEZE_CLICK                   , XRT_INPUT_NAME(0X130F, BOOLEAN)) \
+	_(XRT_INPUT_FLIPVR_SQUEEZE_VALUE                   , XRT_INPUT_NAME(0X1310, VEC1_ZERO_TO_ONE)) \
+	_(XRT_INPUT_FLIPVR_GRIP_POSE                       , XRT_INPUT_NAME(0X1311, POSE)) \
+	_(XRT_INPUT_FLIPVR_AIM_POSE                        , XRT_INPUT_NAME(0X1312, POSE)) \
+\
 	/* Please keep this comment and the trailing \ to reduce lines changed when adding entries. */
 // clang-format on
 
@@ -1584,6 +1605,8 @@ enum xrt_output_type
 	_(XRT_OUTPUT_NAME_TOUCH_PLUS_HAPTIC                , XRT_OUTPUT_NAME(0x0700, VIBRATION)) \
 \
 	_(XRT_OUTPUT_NAME_PSVR2_HAPTIC                     , XRT_OUTPUT_NAME(0x0800, VIBRATION)) \
+\
+	_(XRT_OUTPUT_NAME_FLIPVR_HAPTIC                    , XRT_OUTPUT_NAME(0x0900, VIBRATION)) \
 \
 	/* Please keep this comment and the trailing \ to reduce lines changed when adding entries. */
 // clang-format on
