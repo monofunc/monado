@@ -231,3 +231,6 @@ add_library(xrt-external-dtrack STATIC
 	dtrack/src/DTrackSDK.cpp)
 target_include_directories(xrt-external-dtrack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dtrack/include)
 target_link_libraries(xrt-external-dtrack ws2_32)
+
+# JoyShockLibrary
+add_subdirectory(joyshocklibrary)
