@@ -68,7 +68,8 @@
                 "knuckles",
                 "oculus_touch",
                 "vive_controller",
-                "vive_pro"
+                "vive_pro",
+                "flipvr_controller_vc1b"
             ]
         },
         "monadoDeviceName": {
