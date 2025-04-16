@@ -28,6 +28,8 @@ vive_poses_get_index_offset_euler(const enum xrt_input_name input_name,
                                   struct xrt_vec3 *out_transform_rotation)
 {
 	switch (input_name) {
+	// FlipVR shares extremely similar poses to Index
+	case XRT_INPUT_FLIPVR_GRIP_POSE:
 	case XRT_INPUT_INDEX_GRIP_POSE:
 		out_transform_position->x = 0.f;
 		out_transform_position->y = -0.015f;
@@ -38,6 +40,8 @@ vive_poses_get_index_offset_euler(const enum xrt_input_name input_name,
 		out_transform_rotation->z = DEG_TO_RAD(0.303);
 
 		break;
+	// FlipVR shares extremely similar poses to Index
+	case XRT_INPUT_FLIPVR_AIM_POSE:
 	case XRT_INPUT_INDEX_AIM_POSE:
 		out_transform_position->x = 0.006f;
 		out_transform_position->y = -0.015f;
@@ -161,6 +165,8 @@ vive_poses_get_pose_offset(enum xrt_device_name device_name,
 {
 
 	switch (device_name) {
+	// FlipVR shares extremely similar poses to Index
+	case XRT_DEVICE_FLIPVR:
 	case XRT_DEVICE_INDEX_CONTROLLER:
 		vive_poses_get_index_offset_pose(input_name, device_type, out_offset_pose);
 		break;

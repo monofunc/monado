@@ -614,6 +614,12 @@ vive_config_parse_controller(struct vive_controller_config *d, char *json_string
 	           strcmp(d->firmware.model_number, "Knuckles EV3.0 Left") == 0) {
 		d->variant = CONTROLLER_INDEX_LEFT;
 		VIVE_DEBUG(d, "Found Knuckles Left controller");
+	} else if (strcmp(d->firmware.model_number, "FlipVr Controller VC1B Left") == 0) {
+		d->variant = CONTROLLER_FLIPVR_LEFT;
+		VIVE_DEBUG(d, "Found Shiftall Inc. FlipVR VC1B Left controller");
+	} else if (strcmp(d->firmware.model_number, "FlipVr Controller VC1B Right") == 0) {
+		d->variant = CONTROLLER_FLIPVR_RIGHT;
+		VIVE_DEBUG(d, "Found Shiftall Inc. FlipVR VC1B Right controller");
 	} else if (strcmp(d->firmware.model_number, "Vive Tracker PVT") == 0 ||
 	           strcmp(d->firmware.model_number, "Vive. Tracker MV") == 0 ||
 	           strcmp(d->firmware.model_number, "Vive Tracker MV") == 0) {
@@ -644,6 +650,8 @@ vive_config_parse_controller(struct vive_controller_config *d, char *json_string
 	} break;
 	case CONTROLLER_INDEX_LEFT:
 	case CONTROLLER_INDEX_RIGHT:
+	case CONTROLLER_FLIPVR_LEFT:
+	case CONTROLLER_FLIPVR_RIGHT:
 	case CONTROLLER_TRACKER_GEN2:
 	case CONTROLLER_TRACKER_GEN3:
 	case CONTROLLER_TRACKER_TUNDRA: {
