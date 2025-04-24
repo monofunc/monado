@@ -102,6 +102,11 @@ if(Eigen3_VERSION VERSION_LESS "3.3")
 	message(FATAL_ERROR "Eigen3 version ${Eigen3_VERSION} is too old, need at least 3.3")
 endif()
 
+find_package(
+	CxxAtomics
+	COMPONENTS atomic_uint_fast64_t
+	REQUIRED
+	)
 find_package(Vulkan MODULE)
 find_package(HIDAPI MODULE)
 find_package(bluetooth MODULE)
