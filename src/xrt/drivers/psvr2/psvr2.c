@@ -1,6 +1,7 @@
 // Copyright 2020-2021, Collabora, Ltd.
 // Copyright 2023, Jan Schmidt
 // Copyright 2024, Joel Valenciano
+// Copyright 2025, Beyley Cardellio
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -10,6 +11,7 @@
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Ryan Pavlik <ryan.pavlik@collabora.com>
  * @author Joel Valenciano <joelv1907@gmail.com>
+ * @author Beyley Cardellio <ep1cm1n10n123@gmail.com>
  * @ingroup drv_psvr2
  */
 
@@ -199,12 +201,14 @@ psvr2_hmd_destroy(struct xrt_device *xdev)
 	u_device_free(&hmd->base);
 }
 
-static bool
+static xrt_result_t
 psvr2_compute_distortion(struct xrt_device *xdev, uint32_t view, float u, float v, struct xrt_uv_triplet *result)
 {
 	struct psvr2_hmd *hmd = psvr2_hmd(xdev);
 
-	return psvr2_compute_distortion_asymmetric(hmd->distortion_calibration, result, view, u, v);
+	psvr2_compute_distortion_asymmetric(hmd->distortion_calibration, result, view, u, v);
+
+	return XRT_SUCCESS;
 }
 
 static xrt_result_t
@@ -245,7 +249,7 @@ psvr2_hmd_get_tracked_pose(struct xrt_device *xdev,
 	return XRT_SUCCESS;
 }
 
-static void
+static xrt_result_t
 psvr2_hmd_get_view_poses(struct xrt_device *xdev,
                          const struct xrt_vec3 *default_eye_relation,
                          int64_t at_timestamp_ns,
@@ -267,8 +271,8 @@ psvr2_hmd_get_view_poses(struct xrt_device *xdev,
 	struct xrt_vec3 eye_relation = *default_eye_relation;
 	eye_relation.x = hmd->info.lens_horizontal_separation_meters;
 
-	u_device_get_view_poses(xdev, &eye_relation, at_timestamp_ns, view_count, out_head_relation, out_fovs,
-	                        out_poses);
+	return u_device_get_view_poses(xdev, &eye_relation, at_timestamp_ns, view_count, out_head_relation, out_fovs,
+	                               out_poses);
 }
 
 void
@@ -688,7 +692,31 @@ psvr2_usb_open(struct psvr2_hmd *hmd, struct xrt_prober_device *xpdev)
 }
 
 bool
-send_psvr2_control(struct psvr2_hmd *hmd, uint8_t report_id, uint8_t subcmd, uint8_t *pkt_data, uint32_t pkt_len)
+get_psvr2_control(struct psvr2_hmd *hmd, uint16_t report_id, uint8_t subcmd, uint8_t *out_data, uint32_t buf_size)
+{
+	struct sie_ctrl_pkt pkt = {0};
+	int ret;
+
+	assert(buf_size <= sizeof(pkt.data));
+
+	pkt.report_id = __cpu_to_le16(report_id);
+	pkt.subcmd = __cpu_to_le16(subcmd);
+	pkt.len = __cpu_to_le32(buf_size);
+
+	ret = libusb_control_transfer(hmd->dev, LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_ENDPOINT | 0x80, 0x1,
+	                              report_id, 0x0, (unsigned char *)&pkt, buf_size + 8, 100);
+	if (ret < 0) {
+		PSVR2_ERROR(hmd, "Failed to get report id %u subcmd %u, reason %d", report_id, subcmd, ret);
+		return false;
+	}
+
+	memcpy(out_data, pkt.data, buf_size);
+
+	return true;
+}
+
+bool
+send_psvr2_control(struct psvr2_hmd *hmd, uint16_t report_id, uint8_t subcmd, uint8_t *pkt_data, uint32_t pkt_len)
 {
 	struct sie_ctrl_pkt pkt;
 	int ret;
@@ -981,6 +1009,13 @@ psvr2_usb_destroy(struct psvr2_hmd *hmd)
 	}
 }
 
+struct distortion_calibration_block
+{
+	uint8_t version_unk;
+	uint8_t unk[7];
+	float distortion_params[32];
+};
+
 static void
 psvr2_setup_distortion_and_fovs(struct psvr2_hmd *hmd)
 {
@@ -999,17 +1034,33 @@ psvr2_setup_distortion_and_fovs(struct psvr2_hmd *hmd)
 	 *	float scale2_right;
 	 * } calibration;
 	 * */
-	float left[] = {-0.107, 0.005, 1, 0};
-	float right[] = {0.105, -0.005, 1, 0};
+	struct distortion_calibration_block calibration_block;
 
-	hmd->distortion_calibration[0] = left[0];
-	hmd->distortion_calibration[1] = left[1];
-	hmd->distortion_calibration[2] = right[0];
-	hmd->distortion_calibration[3] = right[1];
-	hmd->distortion_calibration[4] = left[2];
-	hmd->distortion_calibration[5] = left[3];
-	hmd->distortion_calibration[6] = right[2];
-	hmd->distortion_calibration[7] = right[3];
+	uint8_t buf[0x100];
+	get_psvr2_control(hmd, 0x8f, 1, buf, sizeof buf);
+	memcpy(&calibration_block, buf, sizeof calibration_block);
+
+	memset(hmd->distortion_calibration, 0, sizeof(hmd->distortion_calibration));
+	if (calibration_block.version_unk < 4) {
+		hmd->distortion_calibration[0] = -0.09919293;
+		hmd->distortion_calibration[2] = 0.09919293;
+	} else {
+		float *p = calibration_block.distortion_params;
+
+		hmd->distortion_calibration[0] = (((-p[0] - p[6]) * 29.9 + 14.95) / 1000.0 - 3.22) / 32.46199;
+		hmd->distortion_calibration[1] = (((-p[1] * 29.9) + 14.95) / 1000.0) / 32.46199;
+
+		hmd->distortion_calibration[2] = (((p[6] - p[2]) * 29.9 + 14.95) / 1000.0 + 3.22) / 32.46199;
+		hmd->distortion_calibration[3] = (((-p[3] * 29.9) + 14.95) / 1000.0) / 32.46199;
+
+		float left = -p[4] * M_PI / 180.0;
+		hmd->distortion_calibration[4] = cosf(left);
+		hmd->distortion_calibration[5] = sinf(left);
+
+		float right = -p[5] * M_PI / 180.0;
+		hmd->distortion_calibration[6] = cosf(right);
+		hmd->distortion_calibration[7] = sinf(right);
+	}
 
 	struct xrt_fov *fovs = hmd->base.hmd->distortion.fov;
 	fovs[0].angle_up = 53.0f * (M_PI / 180.0f);
@@ -1069,8 +1120,8 @@ psvr2_hmd_create(struct xrt_prober_device *xpdev)
 	hmd->base.name = XRT_DEVICE_GENERIC_HMD;
 	hmd->base.device_type = XRT_DEVICE_TYPE_HMD;
 	hmd->base.inputs[0].name = XRT_INPUT_GENERIC_HEAD_POSE;
-	hmd->base.orientation_tracking_supported = true;
-	hmd->base.position_tracking_supported = false;
+	hmd->base.supported.orientation_tracking = true;
+	hmd->base.supported.position_tracking = false;
 
 	// Set up display details
 	// refresh rate
