@@ -252,6 +252,32 @@ plot_points_by_index(cv::Mat &frame, Contour const &allPixels, std::vector<size_
 	}
 }
 
+// Plot a crosshair into `frame` at `center`, projected into the view's frame of reference.
+static void
+plot_projected_crosshair(View &view, cv::Mat &frame, cv::Vec3f const &center, float diameter, cv::Scalar color)
+{
+	// Get rvec and tvec from calibration pose.
+	xrt_vec3 cam_pos = view.calibration_transform.position;
+	xrt_vec3 cam_angles = {};
+	math_quat_to_euler_angles(&view.calibration_transform.orientation, &cam_angles);
+	cv::Vec3f rvec = {cam_angles.x, cam_angles.y, cam_angles.z};
+	cv::Vec3f tvec = {cam_pos.x, cam_pos.y, cam_pos.z};
+
+	// Each side is half the diameter.
+	float radius = diameter / 2;
+	std::vector<cv::Point2f> cross_tips = {{-radius, 0}, {radius, 0}, {0, radius}, {0, -radius}};
+
+	std::vector<cv::Point2f> projected(1);
+	cv::projectPoints(center, rvec, tvec, view.intrinsics, view.distortion, projected);
+
+	for (int i = 0; i < 4; i++) {
+		cross_tips[i] += projected[0];
+	}
+
+	cv::line(frame, cross_tips[0], cross_tips[1], color);
+	cv::line(frame, cross_tips[2], cross_tips[3], color);
+}
+
 static bool
 do_view_cone(TrackerPSMV &t, View &view, cv::Mat &grey, cv::Mat &rgb)
 {
@@ -276,6 +302,10 @@ do_view_cone(TrackerPSMV &t, View &view, cv::Mat &grey, cv::Mat &rgb)
 		// Debug is wanted, draw the keypoints.
 		if (rgb.cols > 0) {
 			plot_points_by_index(rgb, allPixels, indices, cv::Vec3b(255, 0, 0));
+
+			// Invert x and y axes (a sort-of hack to get the crosshair to show up at the right spot).
+			cv::Vec3f pos = {-position[0], -position[1], position[2]};
+			plot_projected_crosshair(view, rgb, pos, 10, cv::Vec3b(255, 0, 0));
 		}
 		// y axis in world is inverted from camera-land
 		position[1] = -position[1];
