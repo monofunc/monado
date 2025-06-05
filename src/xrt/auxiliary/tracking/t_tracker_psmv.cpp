@@ -292,6 +292,8 @@ do_view_cone(TrackerPSMV &t, View &view, cv::Mat &grey, cv::Mat &rgb)
 		return false;
 	}
 
+	cv::drawContours(rgb, contours, -1, cv::Vec3b(0, 255, 0));
+
 	std::vector<cv::Vec3f> directions;
 	directions.reserve(allPixels.size());
 
