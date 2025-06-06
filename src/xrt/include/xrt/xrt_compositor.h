@@ -131,6 +131,22 @@ enum xrt_layer_composition_flags
 	 * see XrCompositionLayerDepthTestFB.
 	 */
 	XRT_LAYER_COMPOSITION_DEPTH_TEST = 1u << 10u,
+
+	/*!
+	 * When "emulating" a quad view projection layer with two stereo
+	 * projection layers this is used to tag the context (background) layer
+	 * that the inset layer is blended with.
+	 */
+	XRT_LAYER_SPLIT_QUAD_VIEW_CONTEXT = 1u << 11u,
+
+	/*!
+	 * When "emulating" a quad view projection layer with two stereo
+	 * projection layers this is used to tag the inset layer so that the
+	 * compositor can apply blending between the two. Essentially this tells
+	 * the compositor to blend the edges of this layer with the context
+	 * layer below it.
+	 */
+	XRT_LAYER_SPLIT_QUAD_VIEW_INSET = 1u << 12u,
 };
 
 /*!
