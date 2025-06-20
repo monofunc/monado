@@ -1418,55 +1418,24 @@ populateCacheMats(const cv::Size &size,
 }
 
 NormalizedCoordsCache::NormalizedCoordsCache(cv::Size size, // NOLINT // small, pass by value
-                                             const cv::Matx33d &intrinsics,
-                                             const cv::Matx<double, 5, 1> &distortion)
+                                             t_camera_distortion_model distortion_model,
+                                             cv::InputArray intrinsics,
+                                             cv::InputArray distortion,
+                                             cv::InputArray rectification,
+                                             cv::InputArray new_camera_or_projection_matrix)
 {
 	std::vector<cv::Vec2f> outputCoords;
 	std::vector<cv::Vec2f> inputCoords = generateInputCoordsAndReserveOutputCoords(size, outputCoords);
+
 	// Undistort/reproject those coordinates in one call, to make use of
 	// cached internal/intermediate computations.
-	cv::undistortPoints(inputCoords, outputCoords, intrinsics, distortion);
-
-	populateCacheMats(size, inputCoords, outputCoords, cacheX_, cacheY_);
-}
-NormalizedCoordsCache::NormalizedCoordsCache(cv::Size size, // NOLINT // small, pass by value
-                                             const cv::Matx33d &intrinsics,
-                                             const cv::Matx<double, 5, 1> &distortion,
-                                             const cv::Matx33d &rectification,
-                                             const cv::Matx33d &new_camera_matrix)
-{
-	std::vector<cv::Vec2f> outputCoords;
-	std::vector<cv::Vec2f> inputCoords = generateInputCoordsAndReserveOutputCoords(size, outputCoords);
-	// Undistort/reproject those coordinates in one call, to make use of
-	// cached internal/intermediate computations.
-	cv::undistortPoints(inputCoords, outputCoords, intrinsics, distortion, rectification, new_camera_matrix);
-
-	populateCacheMats(size, inputCoords, outputCoords, cacheX_, cacheY_);
-}
-
-NormalizedCoordsCache::NormalizedCoordsCache(cv::Size size, // NOLINT // small, pass by value
-                                             const cv::Matx33d &intrinsics,
-                                             const cv::Matx<double, 5, 1> &distortion,
-                                             const cv::Matx33d &rectification,
-                                             const cv::Matx<double, 3, 4> &new_projection_matrix)
-{
-	std::vector<cv::Vec2f> outputCoords;
-	std::vector<cv::Vec2f> inputCoords = generateInputCoordsAndReserveOutputCoords(size, outputCoords);
-	// Undistort/reproject those coordinates in one call, to make use of
-	// cached internal/intermediate computations.
-	cv::undistortPoints(inputCoords, outputCoords, intrinsics, distortion, rectification, new_projection_matrix);
-
-	populateCacheMats(size, inputCoords, outputCoords, cacheX_, cacheY_);
-}
-NormalizedCoordsCache::NormalizedCoordsCache(cv::Size size, // NOLINT // small, pass by value
-                                             const cv::Mat &intrinsics,
-                                             const cv::Mat &distortion)
-{
-	std::vector<cv::Vec2f> outputCoords;
-	std::vector<cv::Vec2f> inputCoords = generateInputCoordsAndReserveOutputCoords(size, outputCoords);
-	// Undistort/reproject those coordinates in one call, to make use of
-	// cached internal/intermediate computations.
-	cv::undistortPoints(inputCoords, outputCoords, intrinsics, distortion);
+	if (t_camera_distortion_model_is_fisheye(distortion_model)) {
+		cv::fisheye::undistortPoints(inputCoords, outputCoords, intrinsics, distortion, rectification,
+		                             new_camera_or_projection_matrix);
+	} else {
+		cv::undistortPoints(inputCoords, outputCoords, intrinsics, distortion, rectification,
+		                    new_camera_or_projection_matrix);
+	}
 
 	populateCacheMats(size, inputCoords, outputCoords, cacheX_, cacheY_);
 }

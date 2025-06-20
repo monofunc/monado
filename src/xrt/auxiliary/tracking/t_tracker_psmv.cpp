@@ -85,8 +85,8 @@ public:
 		distortion = wrap.distortion_mat.clone();
 		distortion_model = wrap.distortion_model;
 
-		assert(!t_camera_distortion_model_is_fisheye(distortion_model));
-		norm_coords.reset(new NormalizedCoordsCache(wrap.image_size_pixels_cv, intrinsics, distortion));
+		norm_coords.reset(
+		    new NormalizedCoordsCache(wrap.image_size_pixels_cv, distortion_model, intrinsics, distortion));
 
 		undistort_rectify_map_x = rectification.remap_x;
 		undistort_rectify_map_y = rectification.remap_y;
