@@ -9,9 +9,6 @@
  * @ingroup aux_tracking
  */
 
-#include <stddef.h>
-#include <assert.h>
-
 #include "math/m_api.h"
 #include "util/u_var.h"
 #include "util/u_trace_marker.h"
@@ -24,6 +21,9 @@
 #include "tracking/t_helper_debug_sink.hpp"
 #include "tracking/t_conefitting.hpp"
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdio>
 #include <iostream>
 #include <memory>
 #include <numeric>
@@ -33,13 +33,11 @@
 #include <opencv2/core.hpp>
 #include <opencv2/calib3d.hpp>
 
-
 using namespace xrt::auxiliary::tracking;
 
 //! Namespace for PS Move tracking implementation
 namespace xrt::auxiliary::tracking::psmv {
 
-static const xrt_vec3 sphere_lever_arm = {0, 0.9, 0};
 using Contour = std::vector<cv::Point>;
 
 constexpr float SphereRadius = 0.045f / 2.f;
@@ -257,9 +255,9 @@ plot_points_by_index(cv::Mat &frame, Contour const &allPixels, std::vector<size_
 	}
 }
 
-// Plot a crosshair into `frame` at `center`, projected into the view's frame of reference.
+// Project points into a view's frame of reference. A wrapper around `cv::ProjectPoints()`.
 static void
-plot_projected_crosshair(View &view, cv::Mat &frame, cv::Vec3f const &center, float diameter, cv::Scalar color)
+project_points(View const &view, cv::InputArray points, cv::OutputArray outProjected)
 {
 	// Get rvec and tvec from calibration pose.
 	xrt_vec3 cam_pos = view.calibration_transform.position;
@@ -268,55 +266,124 @@ plot_projected_crosshair(View &view, cv::Mat &frame, cv::Vec3f const &center, fl
 	cv::Vec3f rvec = {cam_angles.x, cam_angles.y, cam_angles.z};
 	cv::Vec3f tvec = {cam_pos.x, cam_pos.y, cam_pos.z};
 
+	if (t_camera_distortion_model_is_fisheye(view.distortion_model)) {
+		cv::fisheye::projectPoints(points, outProjected, rvec, tvec, view.intrinsics, view.distortion);
+	} else {
+		cv::projectPoints(points, rvec, tvec, view.intrinsics, view.distortion, outProjected);
+	}
+}
+
+// Plot a crosshair into `frame` at `center`.
+static void
+plot_crosshair(cv::Mat &frame, cv::Point2f center, cv::Scalar color, float diameter, float thickness)
+{
 	// Each side is half the diameter.
 	float radius = diameter / 2;
 	std::vector<cv::Point2f> cross_tips = {{-radius, 0}, {radius, 0}, {0, radius}, {0, -radius}};
 
-	std::vector<cv::Point2f> projected(1);
-	cv::projectPoints(center, rvec, tvec, view.intrinsics, view.distortion, projected);
-
 	for (int i = 0; i < 4; i++) {
-		cross_tips[i] += projected[0];
+		cross_tips[i] += center;
 	}
 
-	cv::line(frame, cross_tips[0], cross_tips[1], color);
-	cv::line(frame, cross_tips[2], cross_tips[3], color);
+	cv::line(frame, cross_tips[0], cross_tips[1], color, thickness);
+	cv::line(frame, cross_tips[2], cross_tips[3], color, thickness);
+}
+
+struct Match
+{
+	Contour &contour;
+	std::vector<size_t> indices;
+	std::vector<cv::Vec3f> directions;
+	cv::Vec3f position;
+};
+
+static std::vector<Match>
+getMatches(View &view, std::vector<Contour> &contours, float threshold)
+{
+	// I think we want to do the bigger ones first; those are probably more likely to be good. We do:
+	// 1. Sort contours big -> small.
+	// 2. Try fitting for each, and merge similar results.
+	std::ranges::sort(contours, [](const auto &a, const auto &b) { return a.size() > b.size(); });
+
+	std::vector<Match> matches;
+
+	for (auto &contour : contours) {
+		std::vector<cv::Vec3f> directions;
+		std::vector<size_t> indices;
+		cv::Vec3f position;
+
+		if (contour.size() < MinPoints)
+			continue;
+
+		directions.reserve(contour.size());
+
+		for (const auto &pt : contour) {
+			cv::Vec3f normalizedVec = view.norm_coords->getNormalizedVector(pt);
+			directions.emplace_back(normalizedVec);
+		}
+
+		if (view.cone_fitter->fit_cone_and_get_inlier_indices(directions, MinPoints, SphereRadius, position,
+		                                                      indices)) {
+			// TODO: Find a better way to match disconnected blobs.
+			auto match = std::ranges::find_if(matches, [position, threshold](auto &match) {
+				auto l = cv::norm(position - match.position, cv::NORM_L1);
+				// std::cout << "L = " << l << std::endl;
+				return (l < threshold);
+			});
+
+			if (match == matches.end()) {
+				matches.emplace_back(contour, indices, directions, position);
+			}
+		}
+	}
+
+	return matches;
 }
 
 static bool
 do_view_cone(TrackerPSMV &t, View &view, cv::Mat &grey, cv::Mat &rgb)
 {
 	auto contours = getContours(grey);
-	auto allPixels = combineContours(contours);
-	if (allPixels.empty()) {
-		return false;
-	}
 
-	cv::drawContours(rgb, contours, -1, cv::Vec3b(0, 255, 0));
+	// TODO: Try different values for threshold.
+	auto threshold = SphereRadius * 4;
 
-	std::vector<cv::Vec3f> directions;
-	directions.reserve(allPixels.size());
+	auto matches = getMatches(view, contours, threshold);
 
-	for (const auto &point : allPixels) {
-		cv::Vec3f normalizedVec = view.norm_coords->getNormalizedVector(point);
-		directions.emplace_back(normalizedVec);
-	}
+	// Debug is wanted, draw a bunch of stuff.
+	if (rgb.cols > 0) {
+		cv::drawContours(rgb, contours, -1, cv::Vec3b(0, 255, 0));
 
-	cv::Vec3f position;
-	std::vector<size_t> indices;
+		for (size_t i = 0; i < matches.size(); i++) {
+			auto &match = matches[i];
 
-	if (view.cone_fitter->fit_cone_and_get_inlier_indices(directions, MinPoints, SphereRadius, position, indices)) {
-		// Debug is wanted, draw the keypoints.
-		if (rgb.cols > 0) {
-			plot_points_by_index(rgb, allPixels, indices, cv::Vec3b(255, 0, 0));
+			// Draw the keypoints.
+			plot_points_by_index(rgb, match.contour, match.indices, cv::Vec3b(255, 0, 0));
 
-			// Invert x and y axes (a sort-of hack to get the crosshair to show up at the right spot).
-			cv::Vec3f pos = {-position[0], -position[1], position[2]};
-			plot_projected_crosshair(view, rgb, pos, 10, cv::Vec3b(255, 0, 0));
+			auto pos = match.position;
+			pos = {-pos[0], -pos[1], pos[2]};
+
+			// Project the estimated position and plot the crosshair.
+			std::vector<cv::Point2f> projected(1);
+			project_points(view, std::vector{pos}, projected);
+			auto center = projected[0];
+
+			plot_crosshair(rgb, center, cv::Vec3b(255, 0, 0), 10, 3);
+
+			// Draw the Z-axis position.
+			char buf[64];
+			snprintf(buf, sizeof(buf), "Z=%.3f", match.position[2]);
+			auto s = std::string(buf);
+			cv::putText(rgb, s, center, cv::FONT_HERSHEY_PLAIN, 2.5, cv::Vec3b(0, 128, 0), 3.0);
 		}
+	}
+
+	// For PSMV, we just use the first (and biggest) match.
+	if (matches.size() > 0) {
+		auto pos = matches[0].position;
 		// y axis in world is inverted from camera-land
-		position[1] = -position[1];
-		view.position = position;
+		pos[1] = -pos[1];
+		view.position = pos;
 		return true;
 	}
 
@@ -339,9 +406,7 @@ incorporate_cone_fit_tracking(TrackerPSMV &t, View &view, timepoint_ns timestamp
 	//           << ", " << pos.z << "]\n";
 	//! @todo these are crude guesses.
 	const xrt_vec3 variance = {0.0001, 0.0001, 0.001};
-	// xrt_pose_sample p = {.timestamp_ns = timestamp, .pose = {.orientation = XRT_QUAT_IDENTITY, .position=pos}};
-	// t.filter->process_pose(&p, &variance, NULL, 15);
-	t.filter->process_3d_vision_data(timestamp, &pos, &variance, &sphere_lever_arm,
+	t.filter->process_3d_vision_data(timestamp, &pos, &variance, NULL,
 	                                 //! @todo tune cutoff for residual
 	                                 //! arbitrarily "too large"
 	                                 15);
