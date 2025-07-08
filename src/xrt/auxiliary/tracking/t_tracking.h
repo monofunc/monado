@@ -170,6 +170,19 @@ t_num_params_from_distortion_model(const enum t_camera_distortion_model model)
 	}
 }
 
+static inline bool
+t_camera_distortion_model_is_fisheye(enum t_camera_distortion_model model)
+{
+	switch (model) {
+	case T_DISTORTION_FISHEYE_KB4: return true;
+	case T_DISTORTION_OPENCV_RADTAN_5:
+	case T_DISTORTION_OPENCV_RADTAN_8:
+	case T_DISTORTION_OPENCV_RADTAN_14:
+	case T_DISTORTION_WMR: return false;
+	default: U_LOG_E("Invalid distortion_model! %d", model); return false;
+	}
+}
+
 /*!
  * Parameters for @ref T_DISTORTION_OPENCV_RADTAN_5
  * @ingroup aux_tracking
@@ -248,6 +261,7 @@ struct t_stereo_camera_calibration
 {
 	//! Ref counting
 	struct xrt_reference reference;
+	bool mono;
 
 	//! Calibration of individual views/sensor
 	struct t_camera_calibration view[2];
