@@ -46,7 +46,7 @@
  * to 3 anyways so we get what we want.
  */
 DEBUG_GET_ONCE_NUM_OPTION(preferred_at_least_image_count, "XRT_COMPOSITOR_PREFERRED_IMAGE_COUNT", 2)
-DEBUG_GET_ONCE_BOOL_OPTION(use_present_wait, "XRT_COMPOSITOR_USE_PRESENT_WAIT", false)
+DEBUG_GET_ONCE_BOOL_OPTION(use_present_wait, "XRT_COMPOSITOR_USE_PRESENT_WAIT", true)
 
 static inline struct vk_bundle *
 get_vk(struct comp_target_swapchain *cts)
