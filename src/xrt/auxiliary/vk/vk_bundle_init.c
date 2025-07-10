@@ -31,15 +31,6 @@
  *
  */
 
-static inline void
-append_to_pnext_chain(VkBaseInStructure *head, VkBaseInStructure *new_struct)
-{
-	assert(new_struct->pNext == NULL);
-	// Insert ourselves between head and its previous pNext
-	new_struct->pNext = head->pNext;
-	head->pNext = (void *)new_struct;
-}
-
 static bool
 should_skip_optional_instance_ext(struct vk_bundle *vk,
                                   struct u_string_list *required_instance_ext_list,
@@ -855,6 +846,13 @@ fill_in_has_device_extensions(struct vk_bundle *vk, struct u_string_list *ext_li
 		}
 #endif // defined(VK_KHR_maintenance4)
 
+#if defined(VK_KHR_present_wait) && defined(VK_KHR_present_id)
+		if (strcmp(ext, VK_KHR_PRESENT_WAIT_EXTENSION_NAME) == 0) {
+			vk->has_KHR_present_wait = true;
+			continue;
+		}
+#endif // defined(VK_KHR_present_wait) && defined(VK_KHR_present_id)
+
 #if defined(VK_KHR_synchronization2)
 		if (strcmp(ext, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) == 0) {
 			vk->has_KHR_synchronization2 = true;
@@ -1072,6 +1070,18 @@ filter_device_features(struct vk_bundle *vk,
 	};
 #endif
 
+#if defined(VK_KHR_present_id) && defined(VK_KHR_present_wait)
+	VkPhysicalDevicePresentIdFeaturesKHR present_id_info = {
+	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR,
+	    .pNext = NULL,
+	};
+
+	VkPhysicalDevicePresentWaitFeaturesKHR present_wait_info = {
+	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,
+	    .pNext = NULL,
+	};
+#endif
+
 #ifdef VK_KHR_synchronization2
 	VkPhysicalDeviceSynchronization2FeaturesKHR synchronization_2_info = {
 	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR,
@@ -1093,36 +1103,46 @@ filter_device_features(struct vk_bundle *vk,
 
 #ifdef VK_EXT_robustness2
 	if (vk->has_EXT_robustness2) {
-		append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
-		                      (VkBaseInStructure *)&robust_info);
+		vk_append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
+		                         (VkBaseInStructure *)&robust_info);
 	}
 #endif
 
 #ifdef VK_KHR_8bit_storage
 	if (vk->has_KHR_8bit_storage) {
-		append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
-		                      (VkBaseInStructure *)&storage_8bit);
+		vk_append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
+		                         (VkBaseInStructure *)&storage_8bit);
 	}
 #endif
 
 #ifdef VK_KHR_timeline_semaphore
 	if (vk->has_KHR_timeline_semaphore) {
-		append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
-		                      (VkBaseInStructure *)&timeline_semaphore_info);
+		vk_append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
+		                         (VkBaseInStructure *)&timeline_semaphore_info);
+	}
+#endif
+
+#if defined(VK_KHR_present_id) && defined(VK_KHR_present_wait)
+	if (vk->has_KHR_present_wait) {
+		vk_append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
+		                         (VkBaseInStructure *)&present_id_info);
+
+		vk_append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
+		                         (VkBaseInStructure *)&present_wait_info);
 	}
 #endif
 
 #ifdef VK_KHR_synchronization2
 	if (vk->has_KHR_synchronization2) {
-		append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
-		                      (VkBaseInStructure *)&synchronization_2_info);
+		vk_append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
+		                         (VkBaseInStructure *)&synchronization_2_info);
 	}
 #endif
 
 #ifdef VK_ANDROID_external_format_resolve
 	if (vk->has_ANDROID_external_format_resolve) {
-		append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
-		                      (VkBaseInStructure *)&ext_fmt_resolve_info);
+		vk_append_to_pnext_chain((VkBaseInStructure *)&physical_device_features,
+		                         (VkBaseInStructure *)&ext_fmt_resolve_info);
 	}
 #endif
 
@@ -1147,6 +1167,11 @@ filter_device_features(struct vk_bundle *vk,
 
 #ifdef VK_KHR_timeline_semaphore
 	CHECK(timeline_semaphore, timeline_semaphore_info.timelineSemaphore);
+#endif
+
+#if defined(VK_KHR_present_id) && defined(VK_KHR_present_wait)
+	// we need both extensions enabled/functional
+	CHECK(present_wait, present_id_info.presentId && present_wait_info.presentWait);
 #endif
 
 #ifdef VK_KHR_synchronization2
@@ -1227,6 +1252,7 @@ vk_create_device(struct vk_bundle *vk,
 	filter_device_features(vk, vk->physical_device, optional_device_features, &device_features);
 	vk->features.timeline_semaphore = device_features.timeline_semaphore;
 	vk->features.synchronization_2 = device_features.synchronization_2;
+	vk->features.present_wait = device_features.present_wait;
 
 
 	/*
@@ -1317,6 +1343,22 @@ vk_create_device(struct vk_bundle *vk,
 	};
 #endif
 
+#if VK_KHR_present_wait
+	VkPhysicalDevicePresentWaitFeaturesKHR present_wait = {
+	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,
+	    .pNext = NULL,
+	    .presentWait = device_features.present_wait,
+	};
+#endif
+
+#if VK_KHR_present_id
+	VkPhysicalDevicePresentIdFeaturesKHR present_id = {
+	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR,
+	    .pNext = NULL,
+	    .presentId = device_features.present_wait,
+	};
+#endif
+
 #ifdef VK_KHR_timeline_semaphore
 	VkPhysicalDeviceTimelineSemaphoreFeaturesKHR timeline_semaphore_info = {
 	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR,
@@ -1357,34 +1399,46 @@ vk_create_device(struct vk_bundle *vk,
 
 #ifdef VK_EXT_robustness2
 	if (vk->has_EXT_robustness2) {
-		append_to_pnext_chain((VkBaseInStructure *)&device_create_info, (VkBaseInStructure *)&robust_info);
+		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info, (VkBaseInStructure *)&robust_info);
 	}
 #endif
 
 #ifdef VK_KHR_8bit_storage
 	if (vk->has_KHR_8bit_storage) {
-		append_to_pnext_chain((VkBaseInStructure *)&device_create_info, (VkBaseInStructure *)&storage_8bit);
+		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info, (VkBaseInStructure *)&storage_8bit);
+	}
+#endif
+
+#ifdef VK_KHR_present_id
+	if (vk->has_KHR_present_wait) {
+		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info, (VkBaseInStructure *)&present_id);
+	}
+#endif
+
+#ifdef VK_KHR_present_wait
+	if (vk->has_KHR_present_wait) {
+		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info, (VkBaseInStructure *)&present_wait);
 	}
 #endif
 
 #ifdef VK_KHR_timeline_semaphore
 	if (vk->has_KHR_timeline_semaphore) {
-		append_to_pnext_chain((VkBaseInStructure *)&device_create_info,
-		                      (VkBaseInStructure *)&timeline_semaphore_info);
+		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info,
+		                         (VkBaseInStructure *)&timeline_semaphore_info);
 	}
 #endif
 
 #ifdef VK_KHR_synchronization2
 	if (vk->has_KHR_synchronization2) {
-		append_to_pnext_chain((VkBaseInStructure *)&device_create_info,
-		                      (VkBaseInStructure *)&synchronization_2_info);
+		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info,
+		                         (VkBaseInStructure *)&synchronization_2_info);
 	}
 #endif
 
 #ifdef VK_ANDROID_external_format_resolve
 	if (vk->has_ANDROID_external_format_resolve) {
-		append_to_pnext_chain((VkBaseInStructure *)&device_create_info,
-		                      (VkBaseInStructure *)&ext_fmt_resolve_info);
+		vk_append_to_pnext_chain((VkBaseInStructure *)&device_create_info,
+		                         (VkBaseInStructure *)&ext_fmt_resolve_info);
 	}
 #endif
 

@@ -373,6 +373,18 @@
 
 
 /*
+ * XR_EXT_hand_tracking_data_source
+ */
+#if defined(XR_EXT_hand_tracking_data_source) && defined(XRT_FEATURE_OPENXR_HAND_TRACKING_DATA_SOURCE_EXT)
+#define OXR_HAVE_EXT_hand_tracking_data_source
+#define OXR_EXTENSION_SUPPORT_EXT_hand_tracking_data_source(_)                                                         \
+	_(EXT_hand_tracking_data_source, EXT_HAND_TRACKING_DATA_SOURCE)
+#else
+#define OXR_EXTENSION_SUPPORT_EXT_hand_tracking_data_source(_)
+#endif
+
+
+/*
  * XR_EXT_hp_mixed_reality_controller
  */
 #if defined(XR_EXT_hp_mixed_reality_controller) && defined(XRT_FEATURE_OPENXR_INTERACTION_WINMR)
@@ -437,6 +449,17 @@
 	_(EXT_samsung_odyssey_controller, EXT_SAMSUNG_ODYSSEY_CONTROLLER)
 #else
 #define OXR_EXTENSION_SUPPORT_EXT_samsung_odyssey_controller(_)
+#endif
+
+
+/*
+ * XR_EXT_user_presence
+ */
+#if defined(XR_EXT_user_presence) && defined(XRT_FEATURE_OPENXR_USER_PRESENCE)
+#define OXR_HAVE_EXT_user_presence
+#define OXR_EXTENSION_SUPPORT_EXT_user_presence(_) _(EXT_user_presence, EXT_USER_PRESENCE)
+#else
+#define OXR_EXTENSION_SUPPORT_EXT_user_presence(_)
 #endif
 
 
@@ -859,12 +882,14 @@
     OXR_EXTENSION_SUPPORT_EXT_eye_gaze_interaction(_) \
     OXR_EXTENSION_SUPPORT_EXT_hand_interaction(_) \
     OXR_EXTENSION_SUPPORT_EXT_hand_tracking(_) \
+    OXR_EXTENSION_SUPPORT_EXT_hand_tracking_data_source(_) \
     OXR_EXTENSION_SUPPORT_EXT_hp_mixed_reality_controller(_) \
     OXR_EXTENSION_SUPPORT_EXT_local_floor(_) \
     OXR_EXTENSION_SUPPORT_EXT_palm_pose(_) \
     OXR_EXTENSION_SUPPORT_EXT_performance_settings(_) \
     OXR_EXTENSION_SUPPORT_EXT_plane_detection(_) \
     OXR_EXTENSION_SUPPORT_EXT_samsung_odyssey_controller(_) \
+    OXR_EXTENSION_SUPPORT_EXT_user_presence(_) \
     OXR_EXTENSION_SUPPORT_BD_controller_interaction(_) \
     OXR_EXTENSION_SUPPORT_FB_body_tracking(_) \
     OXR_EXTENSION_SUPPORT_FB_composition_layer_alpha_blend(_) \

@@ -153,7 +153,7 @@ get_frame_or_null(struct fake_timing *ft, int64_t frame_id)
 static struct frame *
 get_new_frame(struct fake_timing *ft)
 {
-	int64_t frame_id = ft->frame_id_generator++;
+	int64_t frame_id = ++ft->frame_id_generator;
 
 	uint64_t index = (uint64_t)frame_id % FRAME_COUNT;
 	struct frame *f = &ft->frames[index];
@@ -460,9 +460,6 @@ u_pc_fake_create(int64_t estimated_frame_period_ns, int64_t now_ns, struct u_pac
 	snprintf(ft->gpu_delay.name, ARRAY_SIZE(ft->gpu_delay.name), "gpu_delay");
 	snprintf(ft->total_frame.name, ARRAY_SIZE(ft->total_frame.name), "total_frame");
 
-	// To make sure the code can start from a non-zero frame id.
-	ft->frame_id_generator = 5;
-
 	// An arbitrary guess, that happens to be based on Index.
 	float present_to_display_offset_ms = debug_get_float_option_present_to_display_offset_ms();
 
@@ -492,7 +489,7 @@ u_pc_fake_create(int64_t estimated_frame_period_ns, int64_t now_ns, struct u_pac
 	u_var_add_root(ft, "Compositor timing info", true);
 	u_var_add_draggable_f32(ft, &ft->present_to_display_offset_ms, "Present to display offset(ms)");
 	u_var_add_ro_i64(ft, &ft->frame_period_ns, "Frame period(ns)");
-	u_var_add_ro_i64(ft, &ft->comp_time_ns, "Compositor time(ns)");
+	u_var_add_i64(ft, &ft->comp_time_ns, "Compositor time(ns)");
 	u_var_add_ro_i64(ft, &ft->last_present_time_ns, "Last present time(ns)");
 
 	// Return value.
