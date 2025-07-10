@@ -41,7 +41,6 @@ if(XRT_BUILD_DRIVER_DEPTHAI)
 			aux_tracking
 			${OpenCV_LIBRARIES}
 			depthai::core
-			XLink
 		)
 	target_include_directories(drv_depthai PRIVATE ${OpenCV_INCLUDE_DIRS})
 	list(APPEND ENABLED_DRIVERS depthai)

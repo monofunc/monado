@@ -105,7 +105,7 @@ find_package(
 find_package(Libusb1 MODULE)
 find_package(JPEG MODULE)
 find_package(realsense2 CONFIG)
-find_package(depthai CONFIG)
+find_package(depthai "3" CONFIG)
 find_package(SDL2 CONFIG)
 find_package(ZLIB MODULE)
 find_package(cJSON MODULE)
