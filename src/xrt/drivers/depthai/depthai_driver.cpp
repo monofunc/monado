@@ -36,7 +36,6 @@
 #include "depthai/depthai.hpp"
 
 #include <unistd.h>
-#include <pthread.h>
 
 #include <memory>
 #include <sstream>
@@ -748,8 +747,8 @@ depthai_setup_monocular_pipeline(struct depthai_fs *depthai, enum depthai_camera
 
 	depthai->pipeline = std::make_shared<dai::Pipeline>(depthai->device);
 
-	std::shared_ptr<dai::node::ColorCamera> colorCam = nullptr;
-	std::shared_ptr<dai::node::MonoCamera> grayCam = nullptr;
+	std::shared_ptr<dai::node::ColorCamera> colorCam;
+	std::shared_ptr<dai::node::MonoCamera> grayCam;
 
 	if (depthai->format == XRT_FORMAT_R8G8B8) {
 		colorCam = depthai->pipeline->create<dai::node::ColorCamera>();
@@ -818,9 +817,9 @@ depthai_setup_stereo_grayscale_pipeline(struct depthai_fs *depthai)
 		    dai::CameraBoardSocket::CAM_B,
 		    dai::CameraBoardSocket::CAM_C,
 		};
-		std::shared_ptr<dai::MessageQueue> collected_frames = nullptr;
+		std::shared_ptr<dai::MessageQueue> collected_frames;
 		for (int i = 0; i < 2; i++) {
-			std::shared_ptr<dai::node::MonoCamera> grayCam = nullptr;
+			std::shared_ptr<dai::node::MonoCamera> grayCam;
 
 			grayCam = depthai->pipeline->create<dai::node::MonoCamera>();
 			grayCam->setBoardSocket(sockets[i]);
