@@ -74,11 +74,3 @@ os_hid_set_feature(struct os_hid_device *hid_dev, const uint8_t *data, size_t si
 {
 	return hid_send_feature_report(hid_dev->handle, data, size);
 }
-
-#ifdef XRT_OS_LINUX
-int
-os_hid_open_hidraw(const char *path, struct os_hid_device **out_hid)
-{
-	return os_hid_open(path, out_hid);
-}
-#endif
