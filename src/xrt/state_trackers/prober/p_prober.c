@@ -1,10 +1,11 @@
-// Copyright 2019-2024, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Main prober code.
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Simon Zeni <simon.zeni@collabora.com>
  * @ingroup st_prober
  */
 
@@ -20,10 +21,15 @@
 #include "util/u_trace_marker.h"
 
 #include "os/os_hid.h"
+
 #include "p_prober.h"
 
 #ifdef XRT_HAVE_V4L2
 #include "v4l2/v4l2_interface.h"
+#endif
+
+#ifdef XRT_HAVE_HIDAPI
+#include <hidapi.h>
 #endif
 
 #ifdef XRT_BUILD_DRIVER_VF
@@ -554,20 +560,6 @@ teardown_devices(struct prober *p)
 			free(pdev->v4ls);
 			pdev->v4ls = NULL;
 			pdev->num_v4ls = 0;
-		}
-#endif
-
-#ifdef XRT_OS_LINUX
-		for (size_t j = 0; j < pdev->num_hidraws; j++) {
-			struct prober_hidraw *hidraw = &pdev->hidraws[j];
-			free((char *)hidraw->path);
-			hidraw->path = NULL;
-		}
-
-		if (pdev->hidraws != NULL) {
-			free(pdev->hidraws);
-			pdev->hidraws = NULL;
-			pdev->num_hidraws = 0;
 		}
 #endif
 	}
@@ -1192,36 +1184,31 @@ p_open_hid_interface(struct xrt_prober *xp,
 {
 	XRT_TRACE_MARKER();
 
+#if defined(XRT_HAVE_HIDAPI)
 	struct prober_device *pdev = (struct prober_device *)xpdev;
-	int ret;
+	struct hid_device_info *devs = hid_enumerate(pdev->base.vendor_id, pdev->base.product_id);
+	struct hid_device_info *current = devs;
 
-#if defined(XRT_OS_LINUX)
-	for (size_t j = 0; j < pdev->num_hidraws; j++) {
-		struct prober_hidraw *hidraw = &pdev->hidraws[j];
-
-		if (hidraw->hid_iface != hid_iface) {
-			continue;
+	int ret = -1;
+	while (current != NULL) {
+		if (current->interface_number == hid_iface) {
+			ret = os_hid_open(current->path, out_hid_dev);
+			if (ret == 0) {
+				break;
+			}
 		}
-
-		ret = os_hid_open_hidraw(hidraw->path, out_hid_dev);
-		if (ret != 0) {
-			U_LOG_E("Failed to open device '%s' got '%i'", hidraw->path, ret);
-			return ret;
-		}
-
-		return 0;
+		current = current->next;
 	}
 
-	U_LOG_E("Could not find the requested hid interface (%i) on the device!", hid_iface);
-	return -1;
+	hid_free_enumeration(devs);
 
-#elif defined(XRT_OS_WINDOWS)
-	(void)pdev;
-	(void)ret;
-	U_LOG_E("HID devices not yet supported on Windows, cannot open interface (%i)", hid_iface);
-	return -1;
+	if (ret != 0) {
+		U_LOG_E("Could not find the requested hid interface (%d) on the device!", hid_iface);
+	}
+	return ret;
 #else
-#error "no port of hid code"
+	U_LOG_E("Support for HIDAPI not enabled");
+	return -1;
 #endif
 }
 
