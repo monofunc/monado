@@ -1,9 +1,10 @@
-// Copyright 2019, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Prober code to dump information.
  * @author Jakob Bornecrantz <jakob@collabora.com>
+ * @author Simon Zeni <simon.zeni@collabora.com>
  * @ingroup st_prober
  */
 
@@ -14,6 +15,10 @@
 #include "util/u_pretty_print.h"
 
 #include "p_prober.h"
+
+#ifdef XRT_HAVE_HIDAPI
+#include <hidapi.h>
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -151,13 +156,16 @@ p_dump_device(struct prober *p, struct prober_device *pdev, int id, bool use_std
 	}
 #endif
 
-#ifdef XRT_OS_LINUX
-	for (size_t j = 0; j < pdev->num_hidraws; j++) {
-		struct prober_hidraw *hidraw = &pdev->hidraws[j];
+#ifdef XRT_HAVE_HIDAPI
+	struct hid_device_info *devs = hid_enumerate(pdev->base.vendor_id, pdev->base.product_id);
+	struct hid_device_info *current = devs;
 
-		PTT("hidraw.iface:     %i", (int)hidraw->hid_iface);
-		PTT("hidraw.path:      '%s'", hidraw->path);
+	while (current != NULL) {
+		PTT("hid.iface:     %i", current->interface_number);
+		PTT("hid.path:      '%s'", current->path);
+		current = current->next;
 	}
+	hid_free_enumeration(devs);
 #endif
 
 	if (use_stdout) {
