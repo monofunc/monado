@@ -116,9 +116,8 @@ if(XRT_BUILD_DRIVER_XREAL_AIR)
 				     xreal_air/xreal_air_interface.h xreal_air/xreal_air_packet.c
 		)
 	target_link_libraries(
-		drv_xreal_air PRIVATE xrt-interfaces HIDAPI::hidapi aux_util xrt-external-cjson
+		drv_xreal_air PRIVATE xrt-interfaces aux_os aux_util xrt-external-cjson
 		)
-	target_include_directories(drv_xreal_air PRIVATE ${HIDAPI_INCLUDE_DIRS})
 	list(APPEND ENABLED_HEADSET_DRIVERS xreal_air)
 endif()
 
@@ -191,8 +190,7 @@ if(XRT_BUILD_DRIVER_PSVR)
 		psvr/psvr_packet.c
 		psvr/psvr_prober.c
 		)
-	target_link_libraries(drv_psvr PRIVATE xrt-interfaces HIDAPI::hidapi aux_util)
-	target_include_directories(drv_psvr PRIVATE ${HIDAPI_INCLUDE_DIRS})
+	target_link_libraries(drv_psvr PRIVATE xrt-interfaces aux_os aux_util)
 	list(APPEND ENABLED_HEADSET_DRIVERS psvr)
 endif()
 
