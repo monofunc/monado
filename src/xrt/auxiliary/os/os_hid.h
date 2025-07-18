@@ -99,17 +99,6 @@ os_hid_get_feature_timeout(struct os_hid_device *hid_dev, void *data, size_t siz
 int
 os_hid_set_feature(struct os_hid_device *hid_dev, const uint8_t *data, size_t size);
 
-#ifdef XRT_OS_LINUX
-/*!
- * Open the given path as a hidraw device.
- *
- * @see hid_hidraw
- * @public @memberof os_hid_device
- */
-int
-os_hid_open_hidraw(const char *path, struct os_hid_device **out_hid);
-#endif
-
 #ifdef __cplusplus
 } // extern "C"
 #endif
