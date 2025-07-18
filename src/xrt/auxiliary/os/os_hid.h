@@ -1,10 +1,11 @@
-// Copyright 2019, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Wrapper around OS native hid functions.
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
+ * @author Simon Zeni <simon.zeni@collabora.com>
  *
  * @ingroup aux_os
  */
@@ -12,6 +13,7 @@
 #pragma once
 
 #include "xrt/xrt_config_os.h"
+
 #include <stdint.h>
 #include <stddef.h>
 
@@ -19,28 +21,35 @@
 extern "C" {
 #endif
 
+// Forward from hidapi.h
+struct hid_device_;
+typedef struct hid_device_ hid_device;
 
 /*!
  * @interface os_hid_device
  *
- * Representing a single hid interface on a device.
+ * A wrapper around hidapi hid_device
  */
 struct os_hid_device
 {
-	int (*read)(struct os_hid_device *hid_dev, uint8_t *data, size_t size, int milliseconds);
-
-	int (*write)(struct os_hid_device *hid_dev, const uint8_t *data, size_t size);
-
-	int (*get_feature)(struct os_hid_device *hid_dev, uint8_t report_num, uint8_t *data, size_t size);
-
-	int (*get_feature_timeout)(struct os_hid_device *hid_dev, void *data, size_t size, uint32_t timeout);
-
-	int (*set_feature)(struct os_hid_device *hid_dev, const uint8_t *data, size_t size);
-
-	int (*get_physical_address)(struct os_hid_device *hid_dev, uint8_t *data, size_t size);
-
-	void (*destroy)(struct os_hid_device *hid_dev);
+	hid_device *handle;
 };
+
+/*!
+ * Open the given path as a hid device.
+ *
+ * @public @memberof os_hid_device
+ */
+int
+os_hid_open(const char *path, struct os_hid_device **out_hid);
+
+/*!
+ * Close and free the given device.
+ *
+ * @public @memberof os_hid_device
+ */
+void
+os_hid_destroy(struct os_hid_device *hid_dev);
 
 /*!
  * Read the next input report, if any, from the given hid device.
@@ -50,22 +59,16 @@ struct os_hid_device
  *
  * @public @memberof os_hid_device
  */
-static inline int
-os_hid_read(struct os_hid_device *hid_dev, uint8_t *data, size_t size, int milliseconds)
-{
-	return hid_dev->read(hid_dev, data, size, milliseconds);
-}
+int
+os_hid_read(struct os_hid_device *hid_dev, uint8_t *data, size_t size, int milliseconds);
 
 /*!
  * Write an output report to the given device.
  *
  * @public @memberof os_hid_device
  */
-static inline int
-os_hid_write(struct os_hid_device *hid_dev, const uint8_t *data, size_t size)
-{
-	return hid_dev->write(hid_dev, data, size);
-}
+int
+os_hid_write(struct os_hid_device *hid_dev, const uint8_t *data, size_t size);
 
 /*!
  * Get a numbered feature report.
@@ -74,22 +77,16 @@ os_hid_write(struct os_hid_device *hid_dev, const uint8_t *data, size_t size)
  *
  * @public @memberof os_hid_device
  */
-static inline int
-os_hid_get_feature(struct os_hid_device *hid_dev, uint8_t report_num, uint8_t *data, size_t size)
-{
-	return hid_dev->get_feature(hid_dev, report_num, data, size);
-}
+int
+os_hid_get_feature(struct os_hid_device *hid_dev, uint8_t report_num, uint8_t *data, size_t size);
 
 /*!
  * Get a feature report with a timeout.
  *
  * @public @memberof os_hid_device
  */
-static inline int
-os_hid_get_feature_timeout(struct os_hid_device *hid_dev, void *data, size_t size, uint32_t timeout)
-{
-	return hid_dev->get_feature_timeout(hid_dev, data, size, timeout);
-}
+int
+os_hid_get_feature_timeout(struct os_hid_device *hid_dev, void *data, size_t size, uint32_t timeout);
 
 /*!
  * Set a feature report.
@@ -99,37 +96,8 @@ os_hid_get_feature_timeout(struct os_hid_device *hid_dev, void *data, size_t siz
  *
  * @public @memberof os_hid_device
  */
-static inline int
-os_hid_set_feature(struct os_hid_device *hid_dev, const uint8_t *data, size_t size)
-{
-	return hid_dev->set_feature(hid_dev, data, size);
-}
-
-/*!
- * Get the physical address.
- *
- * For USB devices, the string contains the physical path to the device (the
- * USB controller, hubs, ports, etc).  For Bluetooth *devices, the string
- * contains the hardware (MAC) address of the device.
- *
- * @public @memberof os_hid_device
- */
-static inline int
-os_hid_get_physical_address(struct os_hid_device *hid_dev, uint8_t *data, size_t size)
-{
-	return hid_dev->get_physical_address(hid_dev, data, size);
-}
-
-/*!
- * Close and free the given device.
- *
- * @public @memberof os_hid_device
- */
-static inline void
-os_hid_destroy(struct os_hid_device *hid_dev)
-{
-	hid_dev->destroy(hid_dev);
-}
+int
+os_hid_set_feature(struct os_hid_device *hid_dev, const uint8_t *data, size_t size);
 
 #ifdef XRT_OS_LINUX
 /*!
