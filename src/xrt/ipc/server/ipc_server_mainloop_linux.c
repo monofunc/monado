@@ -41,6 +41,7 @@
 #include <assert.h>
 #include <limits.h>
 #include "util/u_debug.h"
+#include "xrt/xrt_session.h"
 
 #ifdef XRT_HAVE_SYSTEMD
 #include <systemd/sd-daemon.h>
@@ -261,6 +262,32 @@ ipc_server_mainloop_poll(struct ipc_server *vs, struct ipc_server_mainloop *ml)
 		if (events[i].data.fd == ml->listen_socket) {
 			handle_listen(vs, ml);
 		}
+	}
+}
+
+void
+ipc_server_mainloop_poll_session(struct ipc_server *vs)
+{
+	IPC_TRACE_MARKER();
+
+	union xrt_session_event event;
+	int ret = xrt_session_poll_events(vs->session, &event);
+	if (ret != XRT_SUCCESS) {
+		U_LOG_E("xrt_session_poll_events failed with '%i'.", ret);
+		return;
+	}
+
+	switch (event.type) {
+	case XRT_SESSION_EVENT_DEVICE_ADDED: {
+		for (uint32_t i = 0; i < IPC_MAX_CLIENTS; i++) {
+			volatile struct ipc_client_state *cs = &vs->threads[i].ics;
+			if (cs->server_thread_index < 0) {
+				ipc_server_handle_new_devices(vs, &vs->threads[i].ics,
+				                              event.devices_change.new_device_index);
+			}
+		}
+	}
+	default: break;
 	}
 }
 

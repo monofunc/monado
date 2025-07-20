@@ -303,6 +303,15 @@ struct xrt_space_overseer
 	                                   struct xrt_space **out_local_space,
 	                                   struct xrt_space **out_local_floor_space);
 
+
+	/*!
+	 * Add a new device to the space.
+	 *
+	 * @param[in] xso  Owning space overseer.
+	 * @param[out] xdev The new device.
+	 */
+	xrt_result_t (*add_device)(struct xrt_space_overseer *xso, struct xrt_device *xdev);
+
 	/*!
 	 * Destroy function.
 	 *
@@ -513,6 +522,19 @@ xrt_space_overseer_create_local_space(struct xrt_space_overseer *xso,
                                       struct xrt_space **out_local_floor_space)
 {
 	return xso->create_local_space(xso, out_local_space, out_local_floor_space);
+}
+
+/**
+ * @copydoc xrt_space_overseer::add_device
+ *
+ * Helper for calling through the function pointer.
+ *
+ * @public @memberof xrt_space_overseer
+ */
+static inline xrt_result_t
+xrt_space_overseer_add_device(struct xrt_space_overseer *xso, struct xrt_device *xdev)
+{
+	return xso->add_device(xso, xdev);
 }
 
 /*!

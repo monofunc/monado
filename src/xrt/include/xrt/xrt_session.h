@@ -197,6 +197,7 @@ struct xrt_session_event_user_presence_change
 struct xrt_session_event_devices_changed
 {
 	enum xrt_session_event_type type;
+	size_t new_device_index;
 };
 
 /*!

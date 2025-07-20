@@ -1033,6 +1033,11 @@ unlock:
 	return xret;
 }
 
+static xrt_result_t add_device(struct xrt_space_overseer *xso, struct xrt_device *xdev) {
+	u_space_overseer_add_device(u_space_overseer(xso), xdev);
+	return XRT_SUCCESS;
+}
+
 static void
 destroy(struct xrt_space_overseer *xso)
 {
@@ -1089,6 +1094,7 @@ u_space_overseer_create(struct xrt_session_event_sink *broadcast)
 	uso->base.set_tracking_origin_offset = set_tracking_origin_offset;
 	uso->base.get_reference_space_offset = get_reference_space_offset;
 	uso->base.set_reference_space_offset = set_reference_space_offset;
+	uso->base.add_device = add_device;
 	uso->base.destroy = destroy;
 	uso->broadcast = broadcast;
 

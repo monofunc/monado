@@ -12,10 +12,12 @@
  */
 
 #include "xrt/xrt_device.h"
+#include "xrt/xrt_space.h"
 #include "xrt/xrt_system.h"
 #include "xrt/xrt_instance.h"
 #include "xrt/xrt_compositor.h"
 #include "xrt/xrt_config_have.h"
+#include "xrt/xrt_config_os.h"
 #include "xrt/xrt_config_os.h"
 
 #include "os/os_time.h"
@@ -27,6 +29,7 @@
 #include "util/u_process.h"
 #include "util/u_debug_gui.h"
 #include "util/u_pretty_print.h"
+#include "math/m_api.h"
 
 #include "util/u_git_tag.h"
 
@@ -214,6 +217,26 @@ teardown_all(struct ipc_server *s)
 	os_mutex_destroy(&s->global_state.lock);
 }
 
+static int
+init_tracking_origin(struct ipc_server *s, struct xrt_device *xdev)
+{
+	struct xrt_tracking_origin *xtrack = xdev->tracking_origin;
+	assert(xtrack != NULL);
+	size_t index = 0;
+
+	for (; index < XRT_SYSTEM_MAX_DEVICES; index++) {
+		if (s->xtracks[index] == NULL) {
+			s->xtracks[index] = xtrack;
+			break;
+		}
+		if (s->xtracks[index] == xtrack) {
+			break;
+		}
+	}
+
+	return index;
+}
+
 static void
 init_tracking_origins(struct ipc_server *s)
 {
@@ -223,19 +246,7 @@ init_tracking_origins(struct ipc_server *s)
 			continue;
 		}
 
-		struct xrt_tracking_origin *xtrack = xdev->tracking_origin;
-		assert(xtrack != NULL);
-		size_t index = 0;
-
-		for (; index < XRT_SYSTEM_MAX_DEVICES; index++) {
-			if (s->xtracks[index] == NULL) {
-				s->xtracks[index] = xtrack;
-				break;
-			}
-			if (s->xtracks[index] == xtrack) {
-				break;
-			}
-		}
+		init_tracking_origin(s, xdev);
 	}
 }
 
@@ -279,64 +290,30 @@ handle_binding(struct ipc_shared_memory *ism,
 	*output_pair_index_ptr = output_pair_index;
 }
 
-XRT_CHECK_RESULT static xrt_result_t
-init_shm(struct ipc_server *s, volatile struct ipc_client_state *cs)
+static void
+sync_shm_devices(struct ipc_server *s, volatile struct ipc_client_state *cs, size_t from_index)
 {
-	const size_t size = sizeof(struct ipc_shared_memory);
-	xrt_shmem_handle_t handle;
-
-	xrt_result_t xret = ipc_shmem_create(size, &handle, (void **)&s->isms[cs->server_thread_index]);
-	IPC_CHK_AND_RET(s, xret, "ipc_shmem_create");
-
-	// we have a filehandle, we will pass this to our client
-	cs->ism_handle = handle;
-
-
-	/*
-	 *
-	 * Setup the shared memory state.
-	 *
-	 */
-
-	uint32_t count = 0;
 	struct ipc_shared_memory *ism = s->isms[cs->server_thread_index];
 
-	ism->startup_timestamp = os_monotonic_get_ns();
-
-	// Setup the tracking origins.
-	count = 0;
-	for (size_t i = 0; i < XRT_SYSTEM_MAX_DEVICES; i++) {
-		struct xrt_tracking_origin *xtrack = s->xtracks[i];
-		if (xtrack == NULL) {
-			continue;
-		}
-
-		// The position of the tracking origin matches that in the
-		// server's memory.
-		assert(i < XRT_SYSTEM_MAX_DEVICES);
-
-		struct ipc_shared_tracking_origin *itrack = &ism->itracks[count++];
-		memcpy(itrack->name, xtrack->name, sizeof(itrack->name));
-		itrack->type = xtrack->type;
-		itrack->offset = xtrack->initial_offset;
-	}
-
-	ism->itrack_count = count;
-
-	count = 0;
 	uint32_t input_index = 0;
 	uint32_t output_index = 0;
 	uint32_t binding_index = 0;
-	uint32_t input_pair_index = 0;
-	uint32_t output_pair_index = 0;
 
 	for (size_t i = 0; i < XRT_SYSTEM_MAX_DEVICES; i++) {
 		struct xrt_device *xdev = s->idevs[i].xdev;
+
 		if (xdev == NULL) {
 			continue;
 		}
 
-		struct ipc_shared_device *isdev = &ism->isdevs[count++];
+		if (i < from_index) {
+			input_index += xdev->input_count;
+			output_index += xdev->output_count;
+			binding_index += xdev->binding_profile_count;
+			continue;
+		}
+
+		struct ipc_shared_device *isdev = &ism->isdevs[ism->isdev_count++];
 
 		isdev->name = xdev->name;
 		memcpy(isdev->str, xdev->str, sizeof(isdev->str));
@@ -365,6 +342,8 @@ init_shm(struct ipc_server *s, volatile struct ipc_client_state *cs)
 		// Bindings
 		uint32_t binding_start = binding_index;
 		for (size_t k = 0; k < xdev->binding_profile_count; k++) {
+			uint32_t input_pair_index = 0;
+			uint32_t output_pair_index = 0;
 			handle_binding(ism, &xdev->binding_profiles[k], &ism->binding_profiles[binding_index++],
 			               &input_pair_index, &output_pair_index);
 		}
@@ -399,6 +378,75 @@ init_shm(struct ipc_server *s, volatile struct ipc_client_state *cs)
 			isdev->first_output_index = output_start;
 		}
 	}
+}
+
+static void
+sync_tracking_origins(struct ipc_server *s, volatile struct ipc_client_state *cs, size_t itrack_index)
+{
+	struct ipc_shared_memory *ism = s->isms[cs->server_thread_index];
+
+	for (; itrack_index < XRT_SYSTEM_MAX_DEVICES; itrack_index++) {
+		struct xrt_tracking_origin *xtrack = s->xtracks[itrack_index];
+		if (xtrack == NULL) {
+			continue;
+		}
+
+		// The position of the tracking origin matches that in the
+		// server's memory.
+		assert(itrack_index < XRT_SYSTEM_MAX_DEVICES);
+
+		struct ipc_shared_tracking_origin *itrack = &ism->itracks[ism->itrack_count++];
+		memcpy(itrack->name, xtrack->name, sizeof(itrack->name));
+		itrack->type = xtrack->type;
+		itrack->offset = xtrack->initial_offset;
+	}
+}
+
+static void
+update_roles(struct ipc_server *s, volatile struct ipc_client_state *cs)
+{
+	struct ipc_shared_memory *ism = s->isms[cs->server_thread_index];
+
+	// Assign all of the roles.
+	ism->roles.head = find_xdev_index(s, s->xsysd->static_roles.head);
+	ism->roles.eyes = find_xdev_index(s, s->xsysd->static_roles.eyes);
+	ism->roles.face = find_xdev_index(s, s->xsysd->static_roles.face);
+	ism->roles.body = find_xdev_index(s, s->xsysd->static_roles.body);
+#define SET_HT_ROLE(SRC)                                                                                               \
+	ism->roles.hand_tracking.SRC.left = find_xdev_index(s, s->xsysd->static_roles.hand_tracking.SRC.left);         \
+	ism->roles.hand_tracking.SRC.right = find_xdev_index(s, s->xsysd->static_roles.hand_tracking.SRC.right);
+	SET_HT_ROLE(unobstructed)
+	SET_HT_ROLE(conforming)
+#undef SET_HT_ROLE
+}
+
+XRT_CHECK_RESULT static xrt_result_t
+init_shm(struct ipc_server *s, volatile struct ipc_client_state *cs)
+{
+	const size_t size = sizeof(struct ipc_shared_memory);
+	xrt_shmem_handle_t handle;
+
+	xrt_result_t xret = ipc_shmem_create(size, &handle, (void **)&s->isms[cs->server_thread_index]);
+	IPC_CHK_AND_RET(s, xret, "ipc_shmem_create");
+
+	// we have a filehandle, we will pass this to our client
+	cs->ism_handle = handle;
+
+
+	/*
+	 *
+	 * Setup the shared memory state.
+	 *
+	 */
+
+	struct ipc_shared_memory *ism = s->isms[cs->server_thread_index];
+
+	ism->startup_timestamp = os_monotonic_get_ns();
+
+	// Setup the tracking origins.
+	sync_tracking_origins(s, cs, 0);
+
+	sync_shm_devices(s, cs, 0);
 
 	// Setup the HMD
 	// set view count
@@ -416,20 +464,7 @@ init_shm(struct ipc_server *s, volatile struct ipc_client_state *cs)
 	}
 	ism->hmd.blend_mode_count = s->xsysd->static_roles.head->hmd->blend_mode_count;
 
-	// Finally tell the client how many devices we have.
-	ism->isdev_count = count;
-
-	// Assign all of the roles.
-	ism->roles.head = find_xdev_index(s, s->xsysd->static_roles.head);
-	ism->roles.eyes = find_xdev_index(s, s->xsysd->static_roles.eyes);
-	ism->roles.face = find_xdev_index(s, s->xsysd->static_roles.face);
-	ism->roles.body = find_xdev_index(s, s->xsysd->static_roles.body);
-#define SET_HT_ROLE(SRC)                                                                                               \
-	ism->roles.hand_tracking.SRC.left = find_xdev_index(s, s->xsysd->static_roles.hand_tracking.SRC.left);         \
-	ism->roles.hand_tracking.SRC.right = find_xdev_index(s, s->xsysd->static_roles.hand_tracking.SRC.right);
-	SET_HT_ROLE(unobstructed)
-	SET_HT_ROLE(conforming)
-#undef SET_HT_ROLE
+	update_roles(s, cs);
 
 	// Fill out git version info.
 	snprintf(ism->u_git_tag, IPC_VERSION_NAME_LEN, "%s", u_git_tag);
@@ -496,6 +531,7 @@ init_all(struct ipc_server *s, enum u_logging_level log_level)
 	init_idevs(s);
 	init_tracking_origins(s);
 
+
 	ret = ipc_server_mainloop_init(&s->ml);
 	if (ret < 0) {
 		xret = XRT_ERROR_IPC_MAINLOOP_FAILED_TO_INIT;
@@ -528,6 +564,9 @@ main_loop(struct ipc_server *s)
 
 		// Check polling.
 		ipc_server_mainloop_poll(s, &s->ml);
+
+		// Check session events
+		ipc_server_mainloop_poll_session(s);
 	}
 
 	return 0;
@@ -968,6 +1007,28 @@ ipc_server_handle_client_connected(struct ipc_server *vs, xrt_ipc_handle_t ipc_h
 	os_thread_start(&it->thread, ipc_server_client_thread, (void *)ics);
 
 	// Unlock when we are done.
+	os_mutex_unlock(&vs->global_state.lock);
+}
+
+void
+ipc_server_handle_new_devices(struct ipc_server *vs, volatile struct ipc_client_state *cs, size_t device_start_index)
+{
+	size_t itrack_start_index = 0;
+	for (size_t i = device_start_index; i < XRT_SYSTEM_MAX_DEVICES; i++) {
+		struct xrt_device *xdev = vs->xsysd->xdevs[i];
+		if (xdev == NULL) {
+			continue;
+		}
+
+		xrt_space_overseer_add_device(vs->xso, xdev);
+		init_idev(&vs->idevs[i], xdev);
+		size_t itrack_index = init_tracking_origin(vs, xdev);
+		itrack_start_index = (itrack_start_index == 0) ? itrack_index : MIN(itrack_start_index, itrack_index);
+	}
+
+	os_mutex_lock(&vs->global_state.lock);
+	sync_shm_devices(vs, cs, device_start_index);
+	sync_tracking_origins(vs, cs, itrack_start_index);
 	os_mutex_unlock(&vs->global_state.lock);
 }
 

@@ -13,6 +13,7 @@
 
 #include "xrt/xrt_compiler.h"
 #include "xrt/xrt_limits.h"
+#include "xrt/xrt_session.h"
 #include "xrt/xrt_space.h"
 #include "xrt/xrt_system.h"
 
@@ -337,6 +338,12 @@ void
 ipc_server_mainloop_poll(struct ipc_server *vs, struct ipc_server_mainloop *ml);
 
 /*!
+ * @brief Poll and handle events from the session.
+ */
+void
+ipc_server_mainloop_poll_session(struct ipc_server *vs);
+
+/*!
  * Main IPC object for the server.
  *
  * @ingroup ipc_server
@@ -361,6 +368,13 @@ struct ipc_server
 
 	//! System compositor.
 	struct xrt_system_compositor *xsysc;
+
+	//! Headless session for listening to events.
+	struct xrt_session *session;
+
+	size_t devices_set_up;
+
+	struct xrt_system_roles device_roles;
 
 	struct ipc_device idevs[XRT_SYSTEM_MAX_DEVICES];
 	struct xrt_tracking_origin *xtracks[XRT_SYSTEM_MAX_DEVICES];
@@ -502,6 +516,13 @@ ipc_server_handle_failure(struct ipc_server *vs);
  */
 void
 ipc_server_handle_shutdown_signal(struct ipc_server *vs);
+
+/*!
+ * Perform whatever needs to be done when the mainloop polling encounters a failure.
+ * @memberof ipc_server
+ */
+void
+ipc_server_handle_new_devices(struct ipc_server *vs, volatile struct ipc_client_state *cs, size_t start_device_index);
 
 xrt_result_t
 ipc_server_get_system_properties(struct ipc_server *vs, struct xrt_system_properties *out_properties);
