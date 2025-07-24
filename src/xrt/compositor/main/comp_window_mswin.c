@@ -46,8 +46,11 @@ struct comp_window_mswin
 	bool thread_exited;
 };
 
+int window_count = 0;
 static WCHAR szWindowClass[] = L"Monado";
 static WCHAR szWindowData[] = L"MonadoWindow";
+ATOM global_window_class;
+bool window_registered;
 
 #define COMP_ERROR_GETLASTERROR(C, MSG_WITH_PLACEHOLDER, MSG_WITHOUT_PLACEHOLDER)                                      \
 	do {                                                                                                           \
@@ -135,7 +138,7 @@ static void
 comp_window_mswin_update_window_title(struct comp_target *ct, const char *title)
 {
 	struct comp_window_mswin *cwm = (struct comp_window_mswin *)ct;
-	//! @todo
+	SetWindowTextA(cwm->window, title);
 }
 
 static void
@@ -201,12 +204,30 @@ static void
 comp_window_mswin_window_loop(struct comp_window_mswin *cwm)
 {
 	struct comp_target *ct = &cwm->base.base;
-	RECT rc = {0, 0, (LONG)(ct->width), (LONG)ct->height};
+
+	ct->width = (ct->c->xdev->hmd->screens[ct->index].w_pixels);
+	ct->height = (ct->c->xdev->hmd->screens[ct->index].h_pixels);
+
+	int x = ct->c->xdev->hmd->screens[ct->index].x_pixels;
+	int y = ct->c->xdev->hmd->screens[ct->index].y_pixels;
+	int w = (ct->c->xdev->hmd->screens[ct->index].w_pixels);
+	int h = (ct->c->xdev->hmd->screens[ct->index].h_pixels);
 
 	COMP_INFO(ct->c, "Creating window");
 	cwm->window =
-	    CreateWindowExW(0, szWindowClass, L"Monado (Windowed)", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-	                    rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, cwm->instance, NULL);
+	    CreateWindowExW(
+	        WS_EX_LAYERED, // 0
+	        szWindowClass,
+	        L"Monado (Windowed)",
+	        WS_POPUP, // WS_OVERLAPPEDWINDOW
+	        x,
+	        y,
+	        w,
+	        h,
+	        NULL,
+	        NULL,
+	        cwm->instance,
+	        NULL);
 	if (cwm->window == NULL) {
 		COMP_ERROR_GETLASTERROR(ct->c, "Failed to create window: %s", "Failed to create window");
 		// parent thread will be notified (by caller) that we have exited.
@@ -298,7 +319,15 @@ comp_window_mswin_thread(struct comp_window_mswin *cwm)
 	wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 #endif
 	COMP_INFO(ct->c, "Registering window class");
-	ATOM window_class = RegisterClassExW(&wcex);
+
+	ATOM window_class;
+	if (window_registered) {
+		window_class = global_window_class;
+	} else {
+		global_window_class = window_class = RegisterClassExW(&wcex);
+		window_registered = true;
+	}
+
 	if (!window_class) {
 		COMP_ERROR_GETLASTERROR(ct->c, "Failed to register window class: %s",
 		                        "Failed to register window class");
@@ -308,11 +337,12 @@ comp_window_mswin_thread(struct comp_window_mswin *cwm)
 
 	comp_window_mswin_window_loop(cwm);
 
-	COMP_INFO(ct->c, "Unregistering window class");
-	if (0 == UnregisterClassW((LPCWSTR)window_class, NULL)) {
-		COMP_ERROR_GETLASTERROR(ct->c, "Failed to unregister window class: %s",
-		                        "Failed to unregister window class");
-	}
+	// Not strictly required to unregister class.
+	//	COMP_INFO(ct->c, "Unregistering window class");
+	//	if (0 == UnregisterClassW((LPCWSTR)window_class, NULL)) {
+	//		COMP_ERROR_GETLASTERROR(ct->c, "Failed to unregister window class: %s",
+	//		                        "Failed to unregister window class");
+	//	}
 
 	comp_window_mswin_mark_exited(cwm);
 }
@@ -335,9 +365,6 @@ comp_window_mswin_init(struct comp_target *ct)
 {
 	struct comp_window_mswin *cwm = (struct comp_window_mswin *)ct;
 	cwm->instance = GetModuleHandle(NULL);
-
-	ct->width = 1280;
-	ct->height = 720;
 
 	if (os_thread_helper_start(&cwm->oth, comp_window_mswin_thread_func, cwm) != 0) {
 		COMP_ERROR(ct->c, "Failed to start Windows window message thread");

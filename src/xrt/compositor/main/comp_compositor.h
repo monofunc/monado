@@ -106,11 +106,14 @@ struct comp_compositor
 	//! The selected target factory that we create our target from.
 	const struct comp_target_factory *target_factory;
 
-	//! The target we are displaying to.
-	struct comp_target *target;
+	//! The number of active targets.
+	uint32_t target_count;
 
-	//! Renderer helper.
-	struct comp_renderer *r;
+	//! The targets we are displaying to.
+	struct comp_target *targets[XRT_MAX_VIEWS];
+
+	//! Renderer helper. Up to one renderer per view.
+	struct comp_renderer *r[XRT_MAX_VIEWS];
 
 	//! Duration of a frame at current refresh rate.
 	int64_t frame_interval_ns;
@@ -143,7 +146,7 @@ struct comp_compositor
 	{
 		struct comp_frame waited;
 		struct comp_frame rendering;
-	} frame;
+	} frames[XRT_MAX_VIEWS];
 
 	// Scratch images for the renderer.
 	struct chl_scratch scratch;

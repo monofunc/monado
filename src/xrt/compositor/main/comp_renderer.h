@@ -38,7 +38,7 @@ struct comp_renderer;
  * @ingroup comp_main
  */
 struct comp_renderer *
-comp_renderer_create(struct comp_compositor *c, VkExtent2D scratch_extent);
+comp_renderer_create(struct comp_compositor *c, VkExtent2D scratch_extent, uint32_t target_index);
 
 /*!
  * Clean up and free the renderer.

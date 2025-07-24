@@ -79,6 +79,9 @@ struct xrt_view
 	 * the vertex positions.
 	 */
 	struct xrt_matrix_2x2 rot;
+
+	uint32_t target_index;
+	enum xrt_eye_flags eyes;
 };
 
 /*!
@@ -98,11 +101,16 @@ struct xrt_hmd_parts
 	 */
 	struct
 	{
+		int x_pixels;
+		int y_pixels;
+
 		int w_pixels;
 		int h_pixels;
 		//! Nominal frame interval
 		uint64_t nominal_frame_interval_ns;
-	} screens[1];
+	} screens[XRT_MAX_VIEWS];
+
+	size_t screen_count;
 
 	/*!
 	 * Display information.
@@ -112,6 +120,9 @@ struct xrt_hmd_parts
 	struct xrt_view views[XRT_MAX_VIEWS];
 
 	size_t view_count;
+
+	bool stereo;
+
 	/*!
 	 * Array of supported blend modes.
 	 */

@@ -108,6 +108,9 @@ struct comp_settings
 
 	//! Try to choose the mode with this index for direct mode
 	int desired_mode;
+
+	//! Use hardware stereoscopic features
+	bool stereo;
 };
 
 /*!

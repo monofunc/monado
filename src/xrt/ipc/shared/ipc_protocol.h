@@ -168,7 +168,7 @@ struct ipc_layer_entry
 	struct xrt_layer_data data;
 };
 
-static_assert(sizeof(struct ipc_layer_entry) == 392,
+static_assert(sizeof(struct ipc_layer_entry) == 1576,
               "invalid structure size, maybe different 32/64 bits sizes or padding");
 
 /*!
@@ -279,7 +279,7 @@ struct ipc_shared_memory
 				uint32_t w_pixels;
 				uint32_t h_pixels;
 			} display;
-		} views[2];
+		} views[XRT_MAX_VIEWS];
 		// view count
 		uint32_t view_count;
 		enum xrt_blend_mode blend_modes[XRT_MAX_DEVICE_BLEND_MODES];
@@ -300,7 +300,7 @@ struct ipc_shared_memory
 	struct xrt_plane_detector_begin_info_ext plane_begin_info_ext;
 };
 
-static_assert(sizeof(struct ipc_shared_memory) == 6500056,
+static_assert(sizeof(struct ipc_shared_memory) == 25898776,
               "invalid structure size, maybe different 32/64 bits sizes or padding");
 
 /*!
@@ -370,7 +370,7 @@ struct ipc_info_get_view_poses_2
 	struct xrt_space_relation head_relation;
 };
 
-static_assert(sizeof(struct ipc_info_get_view_poses_2) == 144,
+static_assert(sizeof(struct ipc_info_get_view_poses_2) == 496,
               "invalid structure size, maybe different 32/64 bits sizes or padding");
 
 struct ipc_pcm_haptic_buffer

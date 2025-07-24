@@ -2150,6 +2150,12 @@ enum xrt_visibility_mask_type
 	XRT_VISIBILITY_MASK_TYPE_LINE_LOOP = 3,
 };
 
+enum xrt_eye_flags
+{
+	XRT_EYE_LEFT  = (1 << 0),
+	XRT_EYE_RIGHT = (1 << 1)
+};
+
 
 /*
  *

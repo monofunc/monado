@@ -916,7 +916,8 @@ render_gfx_target_resources_init(struct render_gfx_target_resources *rtr,
                                  struct render_resources *r,
                                  struct render_gfx_render_pass *rgrp,
                                  VkImageView target,
-                                 VkExtent2D extent)
+                                 VkExtent2D extent,
+                                 uint32_t framebuffer)
 {
 	struct vk_bundle *vk = r->vk;
 	VkResult ret;
@@ -928,9 +929,9 @@ render_gfx_target_resources_init(struct render_gfx_target_resources *rtr,
 	    rgrp->render_pass,    //
 	    extent.width,         //
 	    extent.height,        //
-	    &rtr->framebuffer);   // out_external_framebuffer
+	    &rtr->framebuffers[framebuffer]);   // out_external_framebuffer
 	VK_CHK_WITH_RET(ret, "create_framebuffer", false);
-	VK_NAME_FRAMEBUFFER(vk, rtr->framebuffer, "render_gfx_target_resources framebuffer");
+	VK_NAME_FRAMEBUFFER(vk, rtr->framebuffers[framebuffer], "render_gfx_target_resources framebuffer");
 
 	// Set fields.
 	rtr->rgrp = rgrp;
@@ -944,7 +945,8 @@ render_gfx_target_resources_fini(struct render_gfx_target_resources *rtr)
 {
 	struct vk_bundle *vk = vk_from_rtr(rtr);
 
-	D(Framebuffer, rtr->framebuffer);
+	D(Framebuffer, rtr->framebuffers[0]);
+	D(Framebuffer, rtr->framebuffers[1]);
 
 	U_ZERO(rtr);
 }
@@ -1047,7 +1049,8 @@ render_gfx_fini(struct render_gfx *render)
 bool
 render_gfx_begin_target(struct render_gfx *render,
                         struct render_gfx_target_resources *rtr,
-                        const VkClearColorValue *color)
+                        const VkClearColorValue *color,
+                        uint32_t framebuffer_id)
 {
 	struct vk_bundle *vk = vk_from_render(render);
 
@@ -1055,7 +1058,7 @@ render_gfx_begin_target(struct render_gfx *render,
 	render->rtr = rtr;
 
 	VkRenderPass render_pass = rtr->rgrp->render_pass;
-	VkFramebuffer framebuffer = rtr->framebuffer;
+	VkFramebuffer framebuffer = rtr->framebuffers[framebuffer_id];
 	VkExtent2D extent = rtr->extent;
 
 	begin_render_pass(  //
@@ -1088,7 +1091,7 @@ render_gfx_begin_view(struct render_gfx *render, uint32_t view, const struct ren
 	struct vk_bundle *vk = vk_from_render(render);
 
 	// We currently only support two views.
-	assert(view == 0 || view == 1);
+	// assert(view == 0 || view == 1);
 	assert(render->rtr != NULL);
 
 
