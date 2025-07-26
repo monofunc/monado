@@ -11,6 +11,7 @@ EXPORTS
     mnd_root_set_client_focused
     mnd_root_toggle_client_io_active
     mnd_root_set_global_viewport_scale
+    mnd_root_set_client_viewport_scale
     mnd_root_get_device_count
     mnd_root_get_device_info
     mnd_root_get_device_from_role
