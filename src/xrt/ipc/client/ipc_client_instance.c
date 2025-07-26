@@ -229,7 +229,18 @@ ipc_client_instance_get_viewport_scale(struct xrt_instance *xinst, double *out_s
 {
 	struct ipc_client_instance *ii = ipc_client_instance(xinst);
 
+	uint64_t generation = ii->ipc_c.ism->per_client_viewport_scale_generation;
+	if (ii->viewport_scale_generation != generation) {
+		float viewport_scale = 1.0;
+		xrt_result_t xret = ipc_call_instance_get_client_viewport_scale(&ii->ipc_c, &viewport_scale);
+		if (xret == XRT_SUCCESS) {
+			ii->viewport_scale = viewport_scale;
+			ii->viewport_scale_generation = generation;
+		}
+	}
+
 	*out_scale = ii->ipc_c.ism->global_viewport_scale;
+	*out_scale *= ii->viewport_scale;
 	return XRT_SUCCESS;
 }
 

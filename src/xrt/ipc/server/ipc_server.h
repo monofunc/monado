@@ -157,6 +157,8 @@ struct ipc_client_state
 	struct xrt_device **plane_detection_xdev;
 
 	int server_thread_index;
+
+	double viewport_scale;
 };
 
 enum ipc_thread_state

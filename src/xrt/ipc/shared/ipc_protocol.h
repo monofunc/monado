@@ -300,9 +300,10 @@ struct ipc_shared_memory
 	struct xrt_plane_detector_begin_info_ext plane_begin_info_ext;
 
 	double global_viewport_scale;
+	uint64_t per_client_viewport_scale_generation;
 };
 
-static_assert(sizeof(struct ipc_shared_memory) == 6500064,
+static_assert(sizeof(struct ipc_shared_memory) == 6500072,
               "invalid structure size, maybe different 32/64 bits sizes or padding");
 
 /*!
@@ -314,7 +315,7 @@ struct ipc_client_description
 	struct xrt_application_info info;
 };
 
-static_assert(sizeof(struct ipc_client_description) == 140,
+static_assert(sizeof(struct ipc_client_description) == 152,
               "invalid structure size, maybe different 32/64 bits sizes or padding");
 
 struct ipc_client_list
@@ -347,7 +348,7 @@ struct ipc_app_state
 	struct xrt_application_info info;
 };
 
-static_assert(sizeof(struct ipc_app_state) == 156,
+static_assert(sizeof(struct ipc_app_state) == 168,
               "invalid structure size, maybe different 32/64 bits sizes or padding");
 
 

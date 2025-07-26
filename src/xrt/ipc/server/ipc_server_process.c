@@ -310,6 +310,8 @@ init_shm(struct ipc_server *s)
 	ism->startup_timestamp = os_monotonic_get_ns();
 
 	ism->global_viewport_scale = 1.0;
+	/* Make every client update its viewport scale at startup */
+	ism->per_client_viewport_scale_generation = 1;
 
 	// Setup the tracking origins.
 	count = 0;
@@ -997,6 +999,7 @@ ipc_server_handle_client_connected(struct ipc_server *vs, xrt_ipc_handle_t ipc_h
 	ics->server = vs;
 	ics->server_thread_index = cs_index;
 	ics->io_active = true;
+	ics->viewport_scale = 1.0;
 
 	ics->plane_detection_size = 0;
 	ics->plane_detection_count = 0;

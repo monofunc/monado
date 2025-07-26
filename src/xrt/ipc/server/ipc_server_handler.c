@@ -313,6 +313,7 @@ ipc_handle_instance_describe_client(volatile struct ipc_client_state *ics,
 {
 	ics->client_state.info = client_desc->info;
 	ics->client_state.pid = client_desc->pid;
+	ics->viewport_scale = client_desc->info.initial_viewport_scale;
 
 	struct u_pp_sink_stack_only sink;
 	u_pp_delegate_t dg = u_pp_sink_stack_only_init(&sink);
@@ -325,6 +326,7 @@ ipc_handle_instance_describe_client(volatile struct ipc_client_state *ics,
 	P("Client info:");
 	PNT("id: %u", ics->client_state.id);
 	PNT("application_name: '%s'", client_desc->info.application_name);
+	PNT("initial_viewport_scale: %lf", client_desc->info.initial_viewport_scale);
 	PNT("pid: %i", client_desc->pid);
 	PNT("extensions:");
 
@@ -355,6 +357,17 @@ ipc_handle_system_compositor_get_info(volatile struct ipc_client_state *ics,
 	IPC_TRACE_MARKER();
 
 	*out_info = ics->server->xsysc->info;
+
+	return XRT_SUCCESS;
+}
+
+xrt_result_t
+ipc_handle_system_get_client_viewport_scale(volatile struct ipc_client_state *ics,
+                                            float *scale)
+{
+	IPC_TRACE_MARKER();
+
+	*scale = ics->viewport_scale;
 
 	return XRT_SUCCESS;
 }

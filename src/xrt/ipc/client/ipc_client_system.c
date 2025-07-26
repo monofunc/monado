@@ -28,6 +28,9 @@ struct ipc_client_system
 	struct ipc_connection *ipc_c;
 
 	struct xrt_system_compositor *xsysc;
+
+	double viewport_scale;
+	uint64_t viewport_scale_generation;
 };
 
 
@@ -116,6 +119,26 @@ ipc_client_system_create_session(struct xrt_system *xsys,
 	}
 }
 
+static xrt_result_t
+ipc_client_system_get_viewport_scale(struct xrt_system *xsys, double *out_scale)
+{
+	struct ipc_client_system *icsys = ipc_system(xsys);
+
+	uint64_t generation = icsys->ipc_c->ism->per_client_viewport_scale_generation;
+	if (icsys->viewport_scale_generation != generation) {
+		float viewport_scale = 1.0;
+		xrt_result_t xret = ipc_call_system_get_client_viewport_scale(icsys->ipc_c, &viewport_scale);
+		if (xret == XRT_SUCCESS) {
+			icsys->viewport_scale = viewport_scale;
+			icsys->viewport_scale_generation = generation;
+		}
+	}
+
+	*out_scale = icsys->ipc_c->ism->global_viewport_scale;
+	*out_scale *= icsys->viewport_scale;
+	return XRT_SUCCESS;
+}
+
 static void
 ipc_client_system_destroy(struct xrt_system *xsys)
 {
@@ -142,7 +165,7 @@ ipc_client_system_create(struct ipc_connection *ipc_c, struct xrt_system_composi
 	}
 
 	icsys->base.create_session = ipc_client_system_create_session;
-	icsys->base.get_viewport_scale = u_instance_ni_get_viewport_scale;
+	icsys->base.get_viewport_scale = ipc_client_system_get_viewport_scale;
 	icsys->base.destroy = ipc_client_system_destroy;
 	icsys->ipc_c = ipc_c;
 	icsys->xsysc = xsysc;

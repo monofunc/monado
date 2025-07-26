@@ -26,7 +26,6 @@
 #include "oxr_conversions.h"
 
 
-DEBUG_GET_ONCE_NUM_OPTION(scale_percentage, "OXR_VIEWPORT_SCALE_PERCENTAGE", 100)
 DEBUG_GET_ONCE_BOOL_OPTION(dynamic_scale, "OXR_DYNAMIC_VIEWPORT_SCALE", false)
 
 
@@ -106,7 +105,6 @@ update_viewport_scale(struct oxr_logger *log, struct oxr_system *sys)
 {
 	double scale = 0.0;
 	xrt_system_get_viewport_scale(sys->xsys, &scale);
-	scale *= debug_get_num_option_scale_percentage() / 100.0;
 	if (scale > 2.0) {
 		scale = 2.0;
 		if (log) {
