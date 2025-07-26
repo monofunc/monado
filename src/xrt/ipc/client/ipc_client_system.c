@@ -142,6 +142,7 @@ ipc_client_system_create(struct ipc_connection *ipc_c, struct xrt_system_composi
 	}
 
 	icsys->base.create_session = ipc_client_system_create_session;
+	icsys->base.get_viewport_scale = u_instance_ni_get_viewport_scale;
 	icsys->base.destroy = ipc_client_system_destroy;
 	icsys->ipc_c = ipc_c;
 	icsys->xsysc = xsysc;

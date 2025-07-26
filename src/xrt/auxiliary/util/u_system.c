@@ -124,6 +124,7 @@ u_system_init(struct u_system *usys, void (*destroy_fn)(struct xrt_system *))
 {
 	// xrt_system fields.
 	usys->base.create_session = create_session;
+	usys->base.get_viewport_scale = u_system_ni_get_viewport_scale;
 	usys->base.destroy = destroy_fn;
 
 	// xrt_session_event_sink fields.
