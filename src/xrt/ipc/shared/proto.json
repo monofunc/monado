@@ -56,6 +56,13 @@
 		]
 	},
 
+	"system_set_client_viewport_scale": {
+		"in": [
+			{"name": "id", "type": "uint32_t"},
+			{"name": "scale", "type": "float"}
+		]
+	},
+
 	"system_toggle_io_device": {
 		"in": [
 			{"name": "id", "type": "uint32_t"}

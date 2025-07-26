@@ -811,6 +811,20 @@ set_global_viewport_scale_locked(struct ipc_server *s, double scale)
 	return XRT_SUCCESS;
 }
 
+static xrt_result_t
+set_client_viewport_scale_locked(struct ipc_server *s, uint32_t client_id, double scale)
+{
+	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
+	if (ics == NULL) {
+		return XRT_ERROR_IPC_FAILURE;
+	}
+
+	ics->viewport_scale = scale;
+	ics->server->ism->per_client_viewport_scale_generation++;
+
+	return XRT_SUCCESS;
+}
+
 
 /*
  *
@@ -853,6 +867,16 @@ ipc_server_set_global_viewport_scale(struct ipc_server *s, double scale)
 {
 	os_mutex_lock(&s->global_state.lock);
 	xrt_result_t xret = set_global_viewport_scale_locked(s, scale);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_set_client_viewport_scale(struct ipc_server *s, uint32_t client_id, double scale)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = set_client_viewport_scale_locked(s, client_id, scale);
 	os_mutex_unlock(&s->global_state.lock);
 
 	return xret;
