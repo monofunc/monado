@@ -27,6 +27,7 @@
 
 
 DEBUG_GET_ONCE_NUM_OPTION(scale_percentage, "OXR_VIEWPORT_SCALE_PERCENTAGE", 100)
+DEBUG_GET_ONCE_BOOL_OPTION(dynamic_scale, "OXR_DYNAMIC_VIEWPORT_SCALE", false)
 
 
 
@@ -647,6 +648,9 @@ oxr_system_enumerate_view_conf_views(struct oxr_logger *log,
 {
 	if (viewConfigurationType != sys->view_config_type) {
 		return oxr_error(log, XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED, "Invalid view configuration type");
+	}
+	if (debug_get_bool_option_dynamic_scale()) {
+		update_viewport_scale(NULL, sys);
 	}
 	if (sys->view_config_type == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
 		OXR_TWO_CALL_FILL_IN_HELPER(log, viewCapacityInput, viewCountOutput, views, 1,
