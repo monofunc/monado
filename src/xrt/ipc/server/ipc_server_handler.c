@@ -1570,6 +1570,16 @@ ipc_handle_system_toggle_io_client(volatile struct ipc_client_state *_ics, uint3
 }
 
 xrt_result_t
+ipc_handle_system_set_global_viewport_scale(volatile struct ipc_client_state *_ics, float scale)
+{
+	struct ipc_server *s = _ics->server;
+
+	IPC_INFO(s, "System updating global viewport scale.");
+
+	return ipc_server_set_global_viewport_scale(s, scale);
+}
+
+xrt_result_t
 ipc_handle_system_toggle_io_device(volatile struct ipc_client_state *ics, uint32_t device_id)
 {
 	if (device_id >= IPC_MAX_DEVICES) {

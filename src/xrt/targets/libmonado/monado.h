@@ -260,6 +260,16 @@ mnd_result_t
 mnd_root_toggle_client_io_active(mnd_root_t *root, uint32_t client_id);
 
 /*!
+ * Update global viewport scale.
+ *
+ * @param root      The libmonado state.
+ *
+ * @return MND_SUCCESS on success
+ */
+mnd_result_t
+mnd_root_set_global_viewport_scale(mnd_root_t *root, double scale);
+
+/*!
  * Get the number of devices
  *
  * @param root                  The libmonado state.

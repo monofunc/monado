@@ -801,6 +801,14 @@ toggle_io_client_locked(struct ipc_server *s, uint32_t client_id)
 	return XRT_SUCCESS;
 }
 
+static xrt_result_t
+set_global_viewport_scale_locked(struct ipc_server *s, double scale)
+{
+	s->ism->global_viewport_scale = scale;
+
+	return XRT_SUCCESS;
+}
+
 
 /*
  *
@@ -833,6 +841,16 @@ ipc_server_toggle_io_client(struct ipc_server *s, uint32_t client_id)
 {
 	os_mutex_lock(&s->global_state.lock);
 	xrt_result_t xret = toggle_io_client_locked(s, client_id);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_set_global_viewport_scale(struct ipc_server *s, double scale)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = set_global_viewport_scale_locked(s, scale);
 	os_mutex_unlock(&s->global_state.lock);
 
 	return xret;

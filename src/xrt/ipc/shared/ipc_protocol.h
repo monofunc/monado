@@ -302,7 +302,7 @@ struct ipc_shared_memory
 	double global_viewport_scale;
 };
 
-static_assert(sizeof(struct ipc_shared_memory) == 6500056,
+static_assert(sizeof(struct ipc_shared_memory) == 6500064,
               "invalid structure size, maybe different 32/64 bits sizes or padding");
 
 /*!

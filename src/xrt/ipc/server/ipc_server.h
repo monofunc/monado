@@ -430,6 +430,14 @@ xrt_result_t
 ipc_server_toggle_io_client(struct ipc_server *s, uint32_t client_id);
 
 /*!
+ * Update the viewport size of a client.
+ *
+ * @ingroup ipc_server
+ */
+xrt_result_t
+ipc_server_set_global_viewport_scale(struct ipc_server *s, double scale);
+
+/*!
  * Called by client threads to set a session to active.
  *
  * @ingroup ipc_server
