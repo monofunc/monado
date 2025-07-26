@@ -103,7 +103,9 @@ oxr_system_get_by_id(struct oxr_logger *log, struct oxr_instance *inst, XrSystem
 static void
 update_viewport_scale(struct oxr_logger *log, struct oxr_system *sys)
 {
-	double scale = debug_get_num_option_scale_percentage() / 100.0;
+	double scale = 0.0;
+	xrt_system_get_viewport_scale(sys->xsys, &scale);
+	scale *= debug_get_num_option_scale_percentage() / 100.0;
 	if (scale > 2.0) {
 		scale = 2.0;
 		if (log) {
