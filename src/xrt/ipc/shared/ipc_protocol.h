@@ -298,6 +298,8 @@ struct ipc_shared_memory
 
 	uint64_t startup_timestamp;
 	struct xrt_plane_detector_begin_info_ext plane_begin_info_ext;
+
+	double global_viewport_scale;
 };
 
 static_assert(sizeof(struct ipc_shared_memory) == 6500056,

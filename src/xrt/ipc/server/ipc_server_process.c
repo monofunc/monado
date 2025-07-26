@@ -309,6 +309,8 @@ init_shm(struct ipc_server *s)
 
 	ism->startup_timestamp = os_monotonic_get_ns();
 
+	ism->global_viewport_scale = 1.0;
+
 	// Setup the tracking origins.
 	count = 0;
 	for (size_t i = 0; i < XRT_SYSTEM_MAX_DEVICES; i++) {
