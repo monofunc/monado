@@ -100,6 +100,46 @@ oxr_system_get_by_id(struct oxr_logger *log, struct oxr_instance *inst, XrSystem
 
 
 
+static void
+update_viewport_scale(struct oxr_logger *log, struct oxr_system *sys)
+{
+	double scale = debug_get_num_option_scale_percentage() / 100.0;
+	if (scale > 2.0) {
+		scale = 2.0;
+		if (log) {
+			oxr_log(log, "Clamped scale to 200%%\n");
+		}
+	}
+
+	uint32_t view_count = 0;
+	if (sys->view_config_type == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
+		view_count = 1;
+	} else if (sys->view_config_type == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
+		view_count = 2;
+	} else {
+		assert(false && "view_config_type must be PRIMARY_MONO or PRIMARY_STEREO");
+	}
+
+	struct xrt_system_compositor_info *info = &sys->xsysc->info;
+
+#define imin(a, b) (a < b ? a : b)
+	for (uint32_t i = 0; i < view_count; ++i) {
+		uint32_t w = (uint32_t)(info->views[i].recommended.width_pixels * scale);
+		uint32_t h = (uint32_t)(info->views[i].recommended.height_pixels * scale);
+		uint32_t w_2 = info->views[i].max.width_pixels;
+		uint32_t h_2 = info->views[i].max.height_pixels;
+
+		w = imin(w, w_2);
+		h = imin(h, h_2);
+
+		sys->views[i].recommendedImageRectWidth = w;
+		sys->views[i].maxImageRectWidth = w_2;
+		sys->views[i].recommendedImageRectHeight = h;
+		sys->views[i].maxImageRectHeight = h_2;
+	}
+#undef imin
+}
+
 XrResult
 oxr_system_fill_in(
     struct oxr_logger *log, struct oxr_instance *inst, XrSystemId systemId, uint32_t view_count, struct oxr_system *sys)
@@ -134,33 +174,13 @@ oxr_system_fill_in(
 		return XR_SUCCESS;
 	}
 
-	double scale = debug_get_num_option_scale_percentage() / 100.0;
-	if (scale > 2.0) {
-		scale = 2.0;
-		oxr_log(log, "Clamped scale to 200%%\n");
-	}
-
 	struct xrt_system_compositor_info *info = &sys->xsysc->info;
 
-#define imin(a, b) (a < b ? a : b)
 	for (uint32_t i = 0; i < view_count; ++i) {
-		uint32_t w = (uint32_t)(info->views[i].recommended.width_pixels * scale);
-		uint32_t h = (uint32_t)(info->views[i].recommended.height_pixels * scale);
-		uint32_t w_2 = info->views[i].max.width_pixels;
-		uint32_t h_2 = info->views[i].max.height_pixels;
-
-		w = imin(w, w_2);
-		h = imin(h, h_2);
-
-		sys->views[i].recommendedImageRectWidth = w;
-		sys->views[i].maxImageRectWidth = w_2;
-		sys->views[i].recommendedImageRectHeight = h;
-		sys->views[i].maxImageRectHeight = h_2;
 		sys->views[i].recommendedSwapchainSampleCount = info->views[i].recommended.sample_count;
 		sys->views[i].maxSwapchainSampleCount = info->views[i].max.sample_count;
 	}
-
-#undef imin
+	update_viewport_scale(log, sys);
 
 
 	/*
