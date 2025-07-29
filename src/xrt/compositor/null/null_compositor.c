@@ -534,7 +534,9 @@ null_compositor_request_display_refresh_rate(struct xrt_compositor *xc, float di
  */
 
 xrt_result_t
-null_compositor_create_system(struct xrt_device *xdev, struct xrt_system_compositor **out_xsysc)
+null_compositor_create_system(struct xrt_device *xdev,
+                              struct xrt_session_event_sink *xses,
+                              struct xrt_system_compositor **out_xsysc)
 {
 	struct null_compositor *c = U_TYPED_CALLOC(struct null_compositor);
 
@@ -569,7 +571,7 @@ null_compositor_create_system(struct xrt_device *xdev, struct xrt_system_composi
 	          "################################################################################");
 
 	// Do this as early as possible
-	comp_base_init(&c->base);
+	comp_base_init(&c->base, xses);
 
 
 	/*
