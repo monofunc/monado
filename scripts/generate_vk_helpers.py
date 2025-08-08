@@ -287,6 +287,7 @@ def get_instance_cmds():
 # Sorted KHR, EXT, Vendor, interally alphabetically
 INSTANCE_EXTENSIONS_TO_CHECK = [
     "VK_KHR_external_memory_capabilities",
+    "VK_EXT_acquire_drm_display",
     "VK_EXT_display_surface_counter",
     "VK_EXT_swapchain_colorspace",
     "VK_EXT_debug_utils",

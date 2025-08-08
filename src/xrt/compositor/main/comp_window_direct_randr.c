@@ -243,6 +243,211 @@ comp_window_direct_randr_current_display(struct comp_window_direct_randr *w)
 	return &w->displays[index];
 }
 
+#ifdef VK_EXT_acquire_drm_display
+
+/*
+ * The next four functions are copied from
+ * https://gitlab.freedesktop.org/mesa/mesa/-/blob/658f3db4650cee9c9214d7ce437e0cfe8b91e313/src/vulkan/wsi/wsi_common_display.c
+ * with only minor changes.
+ *
+ * The following permission notice and disclaimer apply only to these four
+ * functions:
+ *
+ * Copyright © 2017 Keith Packard
+ *
+ * Permission to use, copy, modify, distribute, and sell this software and its
+ * documentation for any purpose is hereby granted without fee, provided that
+ * the above copyright notice appear in all copies and that both that copyright
+ * notice and this permission notice appear in supporting documentation, and
+ * that the name of the copyright holders not be used in advertising or
+ * publicity pertaining to distribution of the software without specific,
+ * written prior permission.  The copyright holders make no representations
+ * about the suitability of this software for any purpose.  It is provided "as
+ * is" without express or implied warranty.
+ *
+ * THE COPYRIGHT HOLDERS DISCLAIM ALL WARRANTIES WITH REGARD TO THIS SOFTWARE,
+ * INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS, IN NO
+ * EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE FOR ANY SPECIAL, INDIRECT OR
+ * CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
+ * DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+ * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
+ * OF THIS SOFTWARE.
+ */
+
+static bool
+comp_window_direct_randr_check_version(xcb_connection_t *connection)
+{
+	xcb_randr_query_version_cookie_t qv_c = xcb_randr_query_version(connection, 1, 6);
+	xcb_randr_query_version_reply_t *qv_r = xcb_randr_query_version_reply(connection, qv_c, NULL);
+	if (!qv_r)
+		return false;
+	/* Check for version 1.6 or newer */
+	bool ret = (qv_r->major_version > 1 || (qv_r->major_version == 1 && qv_r->minor_version >= 6));
+	free(qv_r);
+	return ret;
+}
+
+static xcb_window_t
+comp_window_direct_randr_output_to_root(xcb_connection_t *connection, xcb_randr_output_t output)
+{
+	if (!comp_window_direct_randr_check_version(connection))
+		return 0;
+
+	const xcb_setup_t *setup = xcb_get_setup(connection);
+	xcb_window_t root = 0;
+	/* Search all of the screens for the provided output */
+	for (xcb_screen_iterator_t iter = xcb_setup_roots_iterator(setup); root == 0 && iter.rem;
+	     xcb_screen_next(&iter)) {
+		xcb_randr_get_screen_resources_cookie_t gsr_c =
+		    xcb_randr_get_screen_resources(connection, iter.data->root);
+		xcb_randr_get_screen_resources_reply_t *gsr_r =
+		    xcb_randr_get_screen_resources_reply(connection, gsr_c, NULL);
+		if (!gsr_r)
+			return 0;
+
+		xcb_randr_output_t *ro = xcb_randr_get_screen_resources_outputs(gsr_r);
+		for (int o = 0; o < gsr_r->num_outputs; o++) {
+			if (ro[o] == output) {
+				root = iter.data->root;
+				break;
+			}
+		}
+		free(gsr_r);
+	}
+	return root;
+}
+
+static xcb_randr_crtc_t
+comp_window_direct_randr_find_crtc_for_output(xcb_connection_t *connection,
+                                              xcb_window_t root,
+                                              xcb_randr_output_t output)
+{
+	xcb_randr_get_screen_resources_cookie_t gsr_c = xcb_randr_get_screen_resources(connection, root);
+	xcb_randr_get_screen_resources_reply_t *gsr_r = xcb_randr_get_screen_resources_reply(connection, gsr_c, NULL);
+	if (!gsr_r)
+		return 0;
+
+	xcb_randr_crtc_t *rc = xcb_randr_get_screen_resources_crtcs(gsr_r);
+	xcb_randr_crtc_t idle_crtc = 0;
+	xcb_randr_crtc_t active_crtc = 0;
+
+	/* Find either a crtc already connected to the desired output or idle */
+	for (int c = 0; active_crtc == 0 && c < gsr_r->num_crtcs; c++) {
+		xcb_randr_get_crtc_info_cookie_t gci_c =
+		    xcb_randr_get_crtc_info(connection, rc[c], gsr_r->config_timestamp);
+		xcb_randr_get_crtc_info_reply_t *gci_r = xcb_randr_get_crtc_info_reply(connection, gci_c, NULL);
+
+		if (gci_r) {
+			if (gci_r->mode) {
+				int num_outputs = xcb_randr_get_crtc_info_outputs_length(gci_r);
+				xcb_randr_output_t *outputs = xcb_randr_get_crtc_info_outputs(gci_r);
+				if (num_outputs == 1 && outputs[0] == output)
+					active_crtc = rc[c];
+			} else if (idle_crtc == 0) {
+				int num_possible = xcb_randr_get_crtc_info_possible_length(gci_r);
+				xcb_randr_output_t *possible = xcb_randr_get_crtc_info_possible(gci_r);
+				for (int p = 0; p < num_possible; p++) {
+					if (possible[p] == output) {
+						idle_crtc = rc[c];
+						break;
+					}
+				}
+			}
+			free(gci_r);
+		}
+	}
+	free(gsr_r);
+
+	if (active_crtc)
+		return active_crtc;
+	return idle_crtc;
+}
+
+static int
+comp_window_direct_randr_lease_display(struct comp_window_direct_randr *w, xcb_window_t root, xcb_randr_crtc_t crtc)
+{
+	struct comp_window_direct_randr_display *d = comp_window_direct_randr_current_display(w);
+
+	xcb_connection_t *connection = XGetXCBConnection(w->dpy);
+
+	xcb_randr_lease_t lease = xcb_generate_id(connection);
+	xcb_randr_create_lease_cookie_t cl_c = xcb_randr_create_lease(connection, root, lease, 1, 1, &crtc, &d->output);
+	xcb_randr_create_lease_reply_t *cl_r = xcb_randr_create_lease_reply(connection, cl_c, NULL);
+	if (!cl_r)
+		return -1;
+
+	int fd = -1;
+	if (cl_r->nfd > 0) {
+		fd = *xcb_randr_create_lease_reply_fds(connection, cl_r);
+	}
+	free(cl_r);
+	return fd;
+}
+
+static bool
+comp_window_direct_randr_init_drm_swapchain(struct comp_window_direct_randr *w, uint32_t width, uint32_t height)
+{
+	struct comp_window_direct_randr_display *d = comp_window_direct_randr_current_display(w);
+
+	struct vk_bundle *vk = get_vk(w);
+
+	if (!vk->has_EXT_acquire_drm_display) {
+		COMP_INFO(w->base.base.c,
+		          "Vulkan instance does not support VK_EXT_acquire_drm_display, "
+		          "falling back to VK_EXT_acquire_xlib_display");
+		return false;
+	}
+
+	xcb_connection_t *connection = XGetXCBConnection(w->dpy);
+
+	xcb_window_t root = comp_window_direct_randr_output_to_root(connection, d->output);
+	if (!root) {
+		COMP_ERROR(w->base.base.c, "Failed to find root window of RandR output!");
+		return false;
+	}
+
+	xcb_randr_crtc_t crtc = comp_window_direct_randr_find_crtc_for_output(connection, root, d->output);
+	if (!crtc) {
+		COMP_ERROR(w->base.base.c, "Failed to find a suitable CRTC for RandR output!");
+		return false;
+	}
+
+	int lease_fd = comp_window_direct_randr_lease_display(w, root, crtc);
+	if (lease_fd < 0) {
+		COMP_ERROR(w->base.base.c, "Failed to lease display!");
+		return false;
+	}
+
+	struct comp_target_swapchain *cts = (struct comp_target_swapchain *)w;
+
+	VkResult ret = vk->vkAcquireDrmDisplayEXT(vk->physical_device, lease_fd, cts->display);
+	if (ret != VK_SUCCESS) {
+		COMP_ERROR(w->base.base.c, "vkAcquireDrmDisplayEXT failed: %s", vk_result_string(ret));
+		return false;
+	}
+
+	ret = comp_window_direct_create_surface(cts, cts->display, width, height);
+	if (ret != VK_SUCCESS) {
+		COMP_ERROR(w->base.base.c, "Failed to create surface: %s", vk_result_string(ret));
+		return false;
+	}
+
+	return true;
+}
+
+#else
+
+static bool
+comp_window_direct_randr_init_drm_swapchain(struct comp_window_direct_randr *w, uint32_t width, uint32_t height)
+{
+	(void)w;
+	(void)width;
+	(void)height;
+	return false;
+}
+
+#endif
+
 static bool
 comp_window_direct_randr_init_swapchain(struct comp_target *ct, uint32_t width, uint32_t height)
 {
@@ -266,6 +471,10 @@ comp_window_direct_randr_init_swapchain(struct comp_target *ct, uint32_t width, 
 
 	struct comp_target_swapchain *cts = (struct comp_target_swapchain *)ct;
 	cts->display = d->display;
+
+	if (comp_window_direct_randr_init_drm_swapchain(w_direct, width, height)) {
+		return true;
+	}
 
 	return comp_window_direct_init_swapchain(&w_direct->base, w_direct->dpy, d->display, width, height);
 }
@@ -477,6 +686,12 @@ static const char *instance_extensions[] = {
     VK_EXT_ACQUIRE_XLIB_DISPLAY_EXTENSION_NAME,
 };
 
+static const char *optional_instance_extensions[] = {
+#ifdef VK_EXT_acquire_drm_display
+    VK_EXT_ACQUIRE_DRM_DISPLAY_EXTENSION_NAME,
+#endif
+};
+
 static bool
 detect(const struct comp_target_factory *ctf, struct comp_compositor *c)
 {
@@ -504,6 +719,8 @@ const struct comp_target_factory comp_target_factory_direct_randr = {
     .required_instance_version = 0,
     .required_instance_extensions = instance_extensions,
     .required_instance_extension_count = ARRAY_SIZE(instance_extensions),
+    .optional_instance_extensions = optional_instance_extensions,
+    .optional_instance_extension_count = ARRAY_SIZE(optional_instance_extensions),
     .optional_device_extensions = NULL,
     .optional_device_extension_count = 0,
     .detect = detect,

@@ -122,6 +122,7 @@ struct vk_bundle
 
 	// beginning of GENERATED instance extension code - do not modify - used by scripts
 	bool has_KHR_external_memory_capabilities;
+	bool has_EXT_acquire_drm_display;
 	bool has_EXT_display_surface_counter;
 	bool has_EXT_swapchain_colorspace;
 	bool has_EXT_debug_utils;

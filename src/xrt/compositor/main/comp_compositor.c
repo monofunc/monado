@@ -643,6 +643,12 @@ compositor_init_vulkan(struct comp_compositor *c)
 	    optional_instance_extensions,              //
 	    ARRAY_SIZE(optional_instance_extensions)); //
 
+	// Per target optional instance extensions.
+	u_string_list_append_array(                                //
+	    optional_instance_ext_list,                            //
+	    c->target_factory->optional_instance_extensions,       //
+	    c->target_factory->optional_instance_extension_count); //
+
 
 	/*
 	 * Device extensions.

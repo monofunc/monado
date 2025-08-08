@@ -707,6 +707,12 @@ struct comp_target_factory
 	//! Required instance extension count.
 	size_t required_instance_extension_count;
 
+	//! Optional instance extensions.
+	const char **optional_instance_extensions;
+
+	//! Optional instance extension count.
+	size_t optional_instance_extension_count;
+
 	//! Optional device extensions.
 	const char **optional_device_extensions;
 
