@@ -43,6 +43,8 @@ struct comp_window_peek
 	struct os_thread_helper oth;
 
 	bool use_compute;
+
+	uint32_t window_id;
 };
 
 
@@ -70,6 +72,45 @@ create_images(struct comp_window_peek *w)
 	comp_target_create_images(&w->base.base, &info);
 }
 
+static int
+window_peek_event_filter(void *ptr, SDL_Event *event)
+{
+	struct comp_window_peek *w = (struct comp_window_peek *)ptr;
+
+	// Only process events for the window
+	if (event->type == SDL_WINDOWEVENT && event->window.windowID == w->window_id) {
+		switch (event->window.event) {
+		case SDL_WINDOWEVENT_HIDDEN: w->hidden = true; break;
+		case SDL_WINDOWEVENT_SHOWN: w->hidden = false; break;
+		case SDL_WINDOWEVENT_SIZE_CHANGED:
+			w->width = event->window.data1;
+			w->height = event->window.data2;
+			break;
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+		case SDL_WINDOWEVENT_DISPLAY_CHANGED:
+#endif
+		case SDL_WINDOWEVENT_MOVED: SDL_GetWindowSize(w->window, (int *)&w->width, (int *)&w->height); break;
+		case SDL_WINDOWEVENT_CLOSE: w->running = false; break;
+		default: break;
+		}
+	} else if (event->type == SDL_KEYDOWN) {
+		// Only process keyboard events if the window has focus
+		SDL_Window *focused = SDL_GetKeyboardFocus();
+		if (focused && SDL_GetWindowID(focused) == w->window_id) {
+			switch (event->key.keysym.sym) {
+			case SDLK_ESCAPE: w->running = false; break;
+			default: break;
+			}
+		}
+	} else if (event->type == SDL_QUIT) {
+		// Global quit event
+		w->running = false;
+	}
+
+	// Return 1 to keep the event in the queue for other handlers
+	return 1;
+}
+
 static void *
 window_peek_run_thread(void *ptr)
 {
@@ -77,42 +118,18 @@ window_peek_run_thread(void *ptr)
 
 	w->running = true;
 	w->hidden = false;
-	while (w->running) {
-		SDL_Event event;
-		while (SDL_PollEvent(&event)) {
-			switch (event.type) {
-			case SDL_QUIT: w->running = false; break;
-			case SDL_WINDOWEVENT:
-				switch (event.window.event) {
-				case SDL_WINDOWEVENT_HIDDEN: w->hidden = true; break;
-				case SDL_WINDOWEVENT_SHOWN: w->hidden = false; break;
-				case SDL_WINDOWEVENT_SIZE_CHANGED:
-					w->width = event.window.data1;
-					w->height = event.window.data2;
-					break;
-#if SDL_VERSION_ATLEAST(2, 0, 18)
-				case SDL_WINDOWEVENT_DISPLAY_CHANGED:
-#endif
-				case SDL_WINDOWEVENT_MOVED:
-					SDL_GetWindowSize(w->window, (int *)&w->width, (int *)&w->height);
-					break;
-				default: break;
-				}
-				break;
-			case SDL_KEYDOWN:
-				switch (event.key.keysym.sym) {
-				case SDLK_ESCAPE: w->running = false; break;
-				default: break;
-				}
-				break;
-			default: break;
-			}
 
-			if (event.type == SDL_QUIT) {
-				w->running = false;
-			}
-		}
+	// Add the event filter
+	SDL_AddEventWatch(window_peek_event_filter, w);
+
+	// Wait while the window is running
+	// Events are handled by the filter
+	while (w->running) {
+		SDL_Delay(10);
 	}
+
+	// Remove the event filter
+	SDL_DelEventWatch(window_peek_event_filter, w);
 
 	return NULL;
 }
@@ -182,9 +199,12 @@ comp_window_peek_create(struct comp_compositor *c)
 	 * SDL
 	 */
 
-	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-		COMP_ERROR(c, "Failed to init SDL2");
-		goto err_pool;
+	// Only initialize SDL if it hasn't been initialized yet
+	if (SDL_WasInit(SDL_INIT_VIDEO) == 0) {
+		if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+			COMP_ERROR(c, "Failed to init SDL2");
+			goto err_pool;
+		}
 	}
 
 	int x = SDL_WINDOWPOS_UNDEFINED;
@@ -200,6 +220,7 @@ comp_window_peek_create(struct comp_compositor *c)
 
 	w->width = width;
 	w->height = height;
+	w->window_id = SDL_GetWindowID(w->window);
 
 	comp_target_swapchain_init_and_set_fnptrs(&w->base, COMP_TARGET_FORCE_FAKE_DISPLAY_TIMING);
 
