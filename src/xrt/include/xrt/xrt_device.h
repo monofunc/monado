@@ -263,6 +263,7 @@ struct xrt_device_supported
 	bool stage;
 	bool face_tracking;
 	bool body_tracking;
+	bool body_tracking_fidelity;
 	bool battery_status;
 	bool brightness_control;
 
@@ -432,6 +433,17 @@ struct xrt_device
 	                                enum xrt_input_name body_tracking_type,
 	                                int64_t desired_timestamp_ns,
 	                                struct xrt_body_joint_set *out_value);
+
+	/*!
+	 * @brief XR_META_body_tracking_fidelity - body tracking extension for request changing the tracking fidelity
+	 *
+	 * @param[in] xdev              The body tracking device.
+	 * @param[in] new_fidelity      The new tracking fidelity mode.
+	 *
+	 * @see xrt_body_tracking_fidelity_meta
+	 */
+	xrt_result_t (*set_body_tracking_fidelity_meta)(struct xrt_device *xdev,
+	                                                enum xrt_body_tracking_fidelity_meta new_fidelity);
 
 	/*!
 	 * Set a output value.
@@ -763,6 +775,22 @@ xrt_device_get_body_joints(struct xrt_device *xdev,
                            struct xrt_body_joint_set *out_value)
 {
 	return xdev->get_body_joints(xdev, body_tracking_type, desired_timestamp_ns, out_value);
+}
+
+/*!
+ * Helper function for @ref xrt_device::set_body_tracking_fidelity_meta.
+ *
+ * @copydoc xrt_device::set_body_tracking_fidelity_meta
+ *
+ * @public @memberof xrt_device
+ */
+static inline xrt_result_t
+xrt_device_set_body_tracking_fidelity_meta(struct xrt_device *xdev, enum xrt_body_tracking_fidelity_meta new_fidelity)
+{
+	if (xdev->set_body_tracking_fidelity_meta == NULL) {
+		return XRT_ERROR_NOT_IMPLEMENTED;
+	}
+	return xdev->set_body_tracking_fidelity_meta(xdev, new_fidelity);
 }
 
 /*!

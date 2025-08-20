@@ -38,8 +38,7 @@ DEBUG_GET_ONCE_BOOL_OPTION(negotiate, "OXR_DEBUG_NEGOTIATE", false)
 
 #ifdef XRT_OS_WINDOWS
 __declspec(dllexport) XRAPI_ATTR XrResult XRAPI_CALL
-    xrNegotiateLoaderRuntimeInterface(const XrNegotiateLoaderInfo *loaderInfo,
-                                      XrNegotiateRuntimeRequest *runtimeRequest);
+xrNegotiateLoaderRuntimeInterface(const XrNegotiateLoaderInfo *loaderInfo, XrNegotiateRuntimeRequest *runtimeRequest);
 #endif
 
 XRAPI_ATTR XrResult XRAPI_CALL
@@ -408,6 +407,10 @@ handle_non_null(struct oxr_instance *inst, struct oxr_logger *log, const char *n
 	ENTRY_IF_EXT(xrDestroyXDevListMNDX, MNDX_xdev_space);
 	ENTRY_IF_EXT(xrCreateXDevSpaceMNDX, MNDX_xdev_space);
 #endif // OXR_HAVE_MNDX_xdev_space
+
+#ifdef OXR_HAVE_META_body_tracking_fidelity
+	ENTRY_IF_EXT(xrRequestBodyTrackingFidelityMETA, META_body_tracking_fidelity);
+#endif
 
 #ifdef OXR_HAVE_KHR_extended_struct_name_lengths
 	ENTRY_IF_EXT(xrStructureTypeToString2KHR, KHR_extended_struct_name_lengths);
