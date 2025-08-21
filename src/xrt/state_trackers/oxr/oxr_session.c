@@ -656,11 +656,17 @@ oxr_session_locate_views(struct oxr_logger *log,
 		return ret;
 	}
 
+	T_xdev_head.pose.orientation.x = 0;
+	T_xdev_head.pose.orientation.y = 0;
+	T_xdev_head.pose.orientation.z = 0;
+	T_xdev_head.pose.orientation.w = 1;
+
 	struct xrt_space_relation T_base_head;
 	struct xrt_relation_chain xrc = {0};
-	m_relation_chain_push_relation(&xrc, &T_xdev_head);
-	m_relation_chain_push_relation(&xrc, &T_base_xdev);
+	m_relation_chain_push_relation(&xrc, &T_xdev_head); // pose head rel xdev
+	m_relation_chain_push_relation(&xrc, &T_base_xdev); // pose xdev rel base
 	m_relation_chain_resolve(&xrc, &T_base_head);
+
 
 	if (print) {
 		for (uint32_t i = 0; i < view_count; i++) {
@@ -687,8 +693,8 @@ oxr_session_locate_views(struct oxr_logger *log,
 		// Do the magical space relation dance here.
 		struct xrt_space_relation result = {0};
 		struct xrt_relation_chain xrc = {0};
-		m_relation_chain_push_pose_if_not_identity(&xrc, &view_pose);
-		m_relation_chain_push_relation(&xrc, &T_base_head);
+		m_relation_chain_push_pose_if_not_identity(&xrc, &view_pose); // pose view rel head
+		m_relation_chain_push_relation(&xrc, &T_base_head); // pose head rel base; cf au dessus
 		m_relation_chain_resolve(&xrc, &result);
 		OXR_XRT_POSE_TO_XRPOSEF(result.pose, views[i].pose);
 
