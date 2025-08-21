@@ -972,7 +972,7 @@ render_resources_init(struct render_resources *r,
 
 	struct compute_distortion_params distortion_timewarp_params = {
 	    .distortion_texel_count = RENDER_DISTORTION_IMAGE_DIMENSIONS,
-	    .do_timewarp = true,
+	    .do_timewarp = false,
 	};
 
 	ret = create_compute_distortion_pipeline(      //
