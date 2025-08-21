@@ -186,7 +186,7 @@ if(XRT_HAVE_OPENGL)
 			)
 		target_include_directories(
 			xrt-external-imgui-sdl2 SYSTEM
-			PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui
+			PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui
 			)
 		target_compile_definitions(xrt-external-imgui-sdl2 PUBLIC CIMGUI_USE_SDL2)
 		target_link_libraries(
