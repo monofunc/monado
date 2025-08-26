@@ -13,6 +13,7 @@
 
 #include "xrt/xrt_gfx_vk.h"
 #include "xrt/xrt_config_build.h"
+#include "xrt/xrt_config_gpu_power_profile.h"
 
 #include "util/u_threading.h"
 #include "util/u_index_fifo.h"
@@ -32,6 +33,10 @@
 #include "main/comp_window.h"
 #include "main/comp_settings.h"
 #include "main/comp_renderer.h"
+
+#ifdef XRT_FEATURE_AMDGPU_POWER_PROFILE
+#include "gpu_power_profile/gpu_power_profile.h"
+#endif
 
 struct comp_window_peek;
 struct comp_target_factory;
@@ -161,6 +166,11 @@ struct comp_compositor
 
 	//! If true, part of the compositor startup will be delayed until a session is started
 	bool deferred_surface;
+
+#ifdef XRT_FEATURE_AMDGPU_POWER_PROFILE
+	//! used to set VR power profile on GPU
+	struct gpu_power_profile *gpu_pp;
+#endif
 };
 
 
