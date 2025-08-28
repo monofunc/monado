@@ -157,6 +157,8 @@ struct ipc_client_state
 	struct xrt_device **plane_detection_xdev;
 
 	int server_thread_index;
+
+	double viewport_scale;
 };
 
 enum ipc_thread_state
@@ -428,6 +430,22 @@ ipc_server_set_active_client(struct ipc_server *s, uint32_t client_id);
  */
 xrt_result_t
 ipc_server_toggle_io_client(struct ipc_server *s, uint32_t client_id);
+
+/*!
+ * Update the viewport size of a client.
+ *
+ * @ingroup ipc_server
+ */
+xrt_result_t
+ipc_server_set_global_viewport_scale(struct ipc_server *s, double scale);
+
+/*!
+ * Update the viewport size of a client.
+ *
+ * @ingroup ipc_server
+ */
+xrt_result_t
+ipc_server_set_client_viewport_scale(struct ipc_server *s, uint32_t client_id, double scale);
 
 /*!
  * Called by client threads to set a session to active.

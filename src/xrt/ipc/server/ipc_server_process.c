@@ -304,6 +304,10 @@ init_shm(struct ipc_server *s)
 
 	ism->startup_timestamp = os_monotonic_get_ns();
 
+	ism->global_viewport_scale = 1.0;
+	/* Make every client update its viewport scale at startup */
+	ism->per_client_viewport_scale_generation = 1;
+
 	// Setup the tracking origins.
 	count = 0;
 	for (size_t i = 0; i < XRT_SYSTEM_MAX_DEVICES; i++) {
@@ -775,6 +779,28 @@ toggle_io_client_locked(struct ipc_server *s, uint32_t client_id)
 	return XRT_SUCCESS;
 }
 
+static xrt_result_t
+set_global_viewport_scale_locked(struct ipc_server *s, double scale)
+{
+	s->ism->global_viewport_scale = scale;
+
+	return XRT_SUCCESS;
+}
+
+static xrt_result_t
+set_client_viewport_scale_locked(struct ipc_server *s, uint32_t client_id, double scale)
+{
+	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
+	if (ics == NULL) {
+		return XRT_ERROR_IPC_FAILURE;
+	}
+
+	ics->viewport_scale = scale;
+	ics->server->ism->per_client_viewport_scale_generation++;
+
+	return XRT_SUCCESS;
+}
+
 
 /*
  *
@@ -807,6 +833,26 @@ ipc_server_toggle_io_client(struct ipc_server *s, uint32_t client_id)
 {
 	os_mutex_lock(&s->global_state.lock);
 	xrt_result_t xret = toggle_io_client_locked(s, client_id);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_set_global_viewport_scale(struct ipc_server *s, double scale)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = set_global_viewport_scale_locked(s, scale);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_set_client_viewport_scale(struct ipc_server *s, uint32_t client_id, double scale)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = set_client_viewport_scale_locked(s, client_id, scale);
 	os_mutex_unlock(&s->global_state.lock);
 
 	return xret;
@@ -953,6 +999,7 @@ ipc_server_handle_client_connected(struct ipc_server *vs, xrt_ipc_handle_t ipc_h
 	ics->server = vs;
 	ics->server_thread_index = cs_index;
 	ics->io_active = true;
+	ics->viewport_scale = 1.0;
 
 	ics->plane_detection_size = 0;
 	ics->plane_detection_count = 0;

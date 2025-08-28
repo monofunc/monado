@@ -10,8 +10,9 @@
 #include "util/u_misc.h"
 
 
-int
-u_silence_pedantic_warning(void)
+xrt_result_t
+u_system_ni_get_viewport_scale(struct xrt_system *xsys, double *out_scale)
 {
-	return 42;
+	*out_scale = 1.0;
+	return XRT_SUCCESS;
 }

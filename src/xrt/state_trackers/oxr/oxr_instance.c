@@ -51,6 +51,7 @@ DEBUG_GET_ONCE_BOOL_OPTION(debug_spaces, "OXR_DEBUG_SPACES", false)
 DEBUG_GET_ONCE_BOOL_OPTION(debug_bindings, "OXR_DEBUG_BINDINGS", false)
 DEBUG_GET_ONCE_BOOL_OPTION(lifecycle_verbose, "OXR_LIFECYCLE_VERBOSE", false)
 DEBUG_GET_ONCE_TRISTATE_OPTION(parallel_views, "OXR_PARALLEL_VIEWS")
+DEBUG_GET_ONCE_NUM_OPTION(scale_percentage, "OXR_VIEWPORT_SCALE_PERCENTAGE", 100)
 
 
 #ifdef XRT_OS_ANDROID
@@ -296,11 +297,18 @@ oxr_instance_create(struct oxr_logger *log,
 		cache_path(log, inst, *path_cache->path_cache[i].path_cache_name, path_cache->path_cache[i].path_cache);
 	}
 
+	double scale = debug_get_num_option_scale_percentage() / 100.0;
+	if (scale > 2.0) {
+		scale = 2.0;
+		oxr_log(log, "Clamped scale to 200%%\n");
+	}
+
 	// fill in our application info - @todo - replicate all createInfo
 	// fields?
 
 	struct xrt_instance_info i_info = {0};
 	i_info.app_info = (struct xrt_application_info){
+	    .initial_viewport_scale = scale,
 #ifdef OXR_HAVE_EXT_hand_tracking
 	    .ext_hand_tracking_enabled = extensions->EXT_hand_tracking,
 #endif

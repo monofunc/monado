@@ -12,6 +12,9 @@
 #include <stdlib.h> // for calloc
 #include <string.h> // for memset // IWYU pragma: keep
 
+#include "xrt/xrt_instance.h"
+#include "xrt/xrt_results.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -115,6 +118,14 @@ u_realloc_or_free(void *ptr, size_t new_size)
  * @ingroup aux_util
  */
 #define U_ARRAY_REALLOC_OR_FREE(VAR, TYPE, COUNT) (VAR) = ((TYPE *)u_realloc_or_free((VAR), sizeof(TYPE) * (COUNT)))
+
+/*!
+ * Not implemented function for @ref xrt_system::get_viewport_scale.
+ *
+ * @ingroup aux_util
+ */
+xrt_result_t
+u_system_ni_get_viewport_scale(struct xrt_system *xsys, double *out_scale);
 
 #ifdef __cplusplus
 }

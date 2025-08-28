@@ -75,6 +75,20 @@ struct xrt_system
 	                               struct xrt_compositor_native **out_xcn);
 
 	/*!
+	 * Get the configured viewport scale.
+	 *
+	 * @note Code consuming this interface should use
+	 * xrt_system_get_viewport_scale().
+	 *
+	 * @param xsys Pointer to self
+	 * @param[out] out_scale Pointer to double, will be populated with the
+	 * desired viewport scale.
+	 *
+	 * @return XRT_SUCCESS on success, other error code on error.
+	 */
+	xrt_result_t (*get_viewport_scale)(struct xrt_system *xsys, double *out_scale);
+
+	/*!
 	 * Destroy the system, must be destroyed after system devices and system
 	 * compositor has been destroyed.
 	 *
@@ -101,6 +115,19 @@ xrt_system_create_session(struct xrt_system *xsys,
                           struct xrt_compositor_native **out_xcn)
 {
 	return xsys->create_session(xsys, xsi, out_xs, out_xcn);
+}
+
+/*!
+ * @copydoc xrt_system::get_viewport_scale
+ *
+ * Helper for calling through the function pointer.
+ *
+ * @public @memberof xrt_system
+ */
+static inline xrt_result_t
+xrt_system_get_viewport_scale(struct xrt_system *xsys, double *out_scale)
+{
+	return xsys->get_viewport_scale(xsys, out_scale);
 }
 
 /*!

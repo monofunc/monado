@@ -28,6 +28,8 @@ typedef enum op_mode
 	MODE_SET_PRIMARY,
 	MODE_SET_FOCUSED,
 	MODE_TOGGLE_IO,
+	MODE_SET_SCALE,
+	MODE_SET_CLIENT_SCALE,
 	MODE_RECENTER,
 	MODE_GET_BRIGHTNESS,
 	MODE_SET_BRIGHTNESS,
@@ -128,6 +130,34 @@ toggle_io(struct ipc_connection *ipc_c, int client_id)
 	r = ipc_call_system_toggle_io_client(ipc_c, client_id);
 	if (r != XRT_SUCCESS) {
 		PE("Failed to toggle io for client %d.\n", client_id);
+		return 1;
+	}
+
+	return 0;
+}
+
+int
+set_viewport_scale(struct ipc_connection *ipc_c, double scale)
+{
+	xrt_result_t r;
+
+	r = ipc_call_system_set_global_viewport_scale(ipc_c, scale);
+	if (r != XRT_SUCCESS) {
+		PE("Failed to set global viewport scale to %f.\n", scale);
+		return 1;
+	}
+
+	return 0;
+}
+
+int
+set_client_viewport_scale(struct ipc_connection *ipc_c, int client_id, double scale)
+{
+	xrt_result_t r;
+
+	r = ipc_call_system_set_client_viewport_scale(ipc_c, client_id, scale);
+	if (r != XRT_SUCCESS) {
+		PE("Failed to set viewport scale for client %d to %f.\n", client_id, scale);
 		return 1;
 	}
 
@@ -244,6 +274,8 @@ main(int argc, char *argv[])
 	int s_val = 0;
 	int device_val = -1;
 	char *brightness;
+	double scale = 1.0;
+	char *sep;
 
 	static struct option long_options[] = {
 	    {"device", required_argument, NULL, OPTION_DEVICE},
@@ -254,7 +286,7 @@ main(int argc, char *argv[])
 
 	int option_index = 0;
 	opterr = 0;
-	while ((c = getopt_long(argc, argv, "p:f:i:c", long_options, &option_index)) != -1) {
+	while ((c = getopt_long(argc, argv, "p:f:i:s:c", long_options, &option_index)) != -1) {
 		switch (c) {
 		case 'p':
 			s_val = atoi(optarg);
@@ -267,6 +299,19 @@ main(int argc, char *argv[])
 		case 'i':
 			s_val = atoi(optarg);
 			op_mode = MODE_TOGGLE_IO;
+			break;
+		case 's':
+			sep = strchr(optarg, '=');
+			if (sep) {
+				*sep = 0;
+				s_val = atoi(optarg);
+				*sep = '=';
+				scale = atof(sep + 1);
+				op_mode = MODE_SET_CLIENT_SCALE;
+			} else {
+				scale = atof(optarg);
+				op_mode = MODE_SET_SCALE;
+			}
 			break;
 		case 'c': op_mode = MODE_RECENTER; break;
 		case OPTION_DEVICE: {
@@ -291,6 +336,7 @@ main(int argc, char *argv[])
 				PE("    -f <id>: Set focused client\n");
 				PE("    -p <id>: Set primary client\n");
 				PE("    -i <id>: Toggle whether client receives input\n");
+				PE("    -s <id>=<scale>: Set client's viewport scale\n");
 				PE("    --device <id>: Set device for subsequent command, otherwise defaults to the "
 				   "primary device\n");
 				PE("    --get-brightness: Get current display brightness in percent\n");
@@ -321,6 +367,8 @@ main(int argc, char *argv[])
 	case MODE_SET_PRIMARY: exit(set_primary(&ipc_c, s_val)); break;
 	case MODE_SET_FOCUSED: exit(set_focused(&ipc_c, s_val)); break;
 	case MODE_TOGGLE_IO: exit(toggle_io(&ipc_c, s_val)); break;
+	case MODE_SET_SCALE: exit(set_viewport_scale(&ipc_c, scale)); break;
+	case MODE_SET_CLIENT_SCALE: exit(set_client_viewport_scale(&ipc_c, s_val, scale)); break;
 	case MODE_RECENTER: exit(recenter_local_spaces(&ipc_c)); break;
 	case MODE_GET_BRIGHTNESS: exit(get_brightness(&ipc_c, device_val)); break;
 	case MODE_SET_BRIGHTNESS: exit(set_brightness(&ipc_c, device_val, brightness)); break;
