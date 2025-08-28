@@ -132,6 +132,11 @@ struct fake_timing
 
 	//! Live stats we keep track off.
 	struct u_live_stats_ns cpu, draw, submit, gpu, gpu_delay, total_frame;
+
+#ifdef U_TRACE_TRACY
+	//! Trace name for Tracy.
+	char* trace_name;
+#endif
 };
 
 
@@ -407,7 +412,7 @@ pc_info_gpu(
 
 #ifdef U_TRACE_TRACY
 	int64_t diff_ns = gpu_end_ns - gpu_start_ns;
-	TracyCPlot("Compositor GPU(ms)", time_ns_to_ms_f(diff_ns));
+	TracyCPlot(ft->trace_name, time_ns_to_ms_f(diff_ns));
 #endif
 }
 
@@ -450,6 +455,8 @@ pc_destroy(struct u_pacing_compositor *upc)
  *
  */
 
+int nextId = 0;
+
 xrt_result_t
 u_pc_fake_create(int64_t estimated_frame_period_ns, int64_t now_ns, struct u_pacing_compositor **out_upc)
 {
@@ -462,6 +469,11 @@ u_pc_fake_create(int64_t estimated_frame_period_ns, int64_t now_ns, struct u_pac
 	ft->base.update_present_offset = pc_update_present_offset;
 	ft->base.destroy = pc_destroy;
 	ft->frame_period_ns = estimated_frame_period_ns;
+
+#ifdef U_TRACE_TRACY
+	ft->trace_name = U_TYPED_ARRAY_CALLOC(char, 64);
+	snprintf(ft->trace_name, 64, "Compositor %d GPU(ms)", nextId++);
+#endif
 
 	snprintf(ft->cpu.name, ARRAY_SIZE(ft->cpu.name), "cpu");
 	snprintf(ft->draw.name, ARRAY_SIZE(ft->draw.name), "draw");
