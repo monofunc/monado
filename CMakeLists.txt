@@ -344,7 +344,7 @@ option_with_deps(XRT_BUILD_DRIVER_WMR "Enable Windows Mixed Reality driver" DEPE
 option_with_deps(XRT_BUILD_DRIVER_XREAL_AIR "Enable Xreal Air HMD driver" DEPENDS XRT_HAVE_HIDAPI)
 option_with_deps(XRT_BUILD_DRIVER_SIMULAVR "Enable simula driver" DEPENDS XRT_HAVE_REALSENSE)
 option(XRT_BUILD_DRIVER_SIMULATED "Enable simulated driver" ON)
-option(XRT_BUILD_DRIVER_VROOM "Enable VROOM driver" ON)
+option_with_deps(XRT_BUILD_DRIVER_VROOM "Enable VROOM driver" DEPENDS XRT_HAVE_SDL2 "NOT ANDROID")
 
 option(XRT_BUILD_SAMPLES "Enable compiling sample code implementations that will not be linked into any final targets" ON)
 set(XRT_IPC_MSG_SOCK_FILENAME monado_comp_ipc CACHE STRING "Service socket filename")
