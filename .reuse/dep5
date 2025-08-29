@@ -132,6 +132,21 @@ Copyright: 2016-2023, Matthias Moeller
 License: MIT
 Comment: SPDX-License-Identifier missing.
 
+Files: src/external/dtrack/*
+Copyright: 2007-2023, Advanced Realtime Tracking GmbH & Co. KG
+License: BSD-3-Clause
+Comment: SPDX-License-Identifier missing.
+
+Files: src/external/joyshocklibrary/*
+Copyright: 2018-2023, Julian Smart
+License: MIT
+Comment: SPDX-License-Identifier missing.
+
+Files: src/external/vrpn/*
+Copyright: The VRPN contributors
+License: BSL-1.0
+Comment: SPDX-License-Identifier missing.
+
 Files: flake.lock
 Copyright: No copyright
 License: CC0-1.0
