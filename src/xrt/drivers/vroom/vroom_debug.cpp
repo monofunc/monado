@@ -417,7 +417,7 @@ vroom_debug_window(struct vroom_device *vroom)
 
 					char text[64]{0};
 					if (display_config.name != nullptr) {
-						strcpy_s(text, display_config.name);
+						strcpy(text, display_config.name);
 					} else {
 						snprintf(text, 64, "Display %d", i);
 					}

@@ -13,6 +13,7 @@
 #include "GamepadMotion.hpp"
 #include "JoyShock.cpp"
 #include "InputHelpers.cpp"
+#include <vector>
 
 std::shared_timed_mutex _callbackLock;
 std::shared_timed_mutex _connectedLock;

@@ -11,6 +11,7 @@
 #include <fstream>
 #include <filesystem>
 #include "cjson/cJSON.h"
+#include <cstring>
 
 #define CONFIG_FILEPATH "vroom.json"
 
@@ -35,7 +36,7 @@
                             cJSON* obj = cJSON_GetObjectItem(json, key); \
                             if (obj != nullptr) {                        \
                             var = (char*)malloc(strlen(obj->valuestring)+1);         \
-                            strcpy_s(var, strlen(obj->valuestring)+1, obj->valuestring); } \
+                            strcpy(var, obj->valuestring); } \
                             else { var = nullptr; } } (void*)0
 
 vroom_config *
@@ -218,7 +219,7 @@ vroom_load_config()
 void set_charptr(char** dest, const char* src)
 {
 	*dest = new char[strlen(src) + 1]{0};
-	strcpy_s(*dest, strlen(src)+1, src);
+	strcpy(*dest, src);
 }
 
 vroom_config

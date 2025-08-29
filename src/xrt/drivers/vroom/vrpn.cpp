@@ -1,11 +1,6 @@
 #include <cstdio>
 #include "vrpn.hpp"
-
-#include <corecrt_math_defines.h>
-
 #include "vroom_device.h"
-
-
 #include "math/m_api.h"
 
 
