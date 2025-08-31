@@ -9,6 +9,7 @@
  */
 
 #include "xrt/xrt_results.h"
+#include "xrt/xrt_system.h"
 #if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
 #define _CRT_SECURE_NO_WARNINGS
 #endif
@@ -81,9 +82,6 @@ struct ipc_client_instance
 	struct xrt_tracking_origin *xtracks[XRT_SYSTEM_MAX_DEVICES];
 	size_t xtrack_count;
 
-	struct xrt_device *xdevs[XRT_SYSTEM_MAX_DEVICES];
-	size_t xdev_count;
-
 #ifdef XRT_OS_ANDROID
 	struct android_instance_base android;
 #endif
@@ -135,6 +133,8 @@ err_xina:
  *
  */
 
+static void ipc_client_update_devices(struct xrt_instance *xinst, struct xrt_system_devices *xsysd);
+
 static xrt_result_t
 ipc_client_instance_create_system(struct xrt_instance *xinst,
                                   struct xrt_system **out_xsys,
@@ -157,13 +157,7 @@ ipc_client_instance_create_system(struct xrt_instance *xinst,
 	// Allocate a helper xrt_system_devices struct.
 	xsysd = ipc_client_system_devices_create(&ii->ipc_c);
 
-	// Take the devices from this instance.
-	for (uint32_t i = 0; i < ii->xdev_count; i++) {
-		xsysd->xdevs[i] = ii->xdevs[i];
-		ii->xdevs[i] = NULL;
-	}
-	xsysd->xdev_count = ii->xdev_count;
-	ii->xdev_count = 0;
+	ipc_client_update_devices((struct xrt_instance *)ii, xsysd);
 
 #define SET_ROLE(ROLE)                                                                                                 \
 	do {                                                                                                           \
@@ -224,6 +218,59 @@ ipc_client_instance_get_prober(struct xrt_instance *xinst, struct xrt_prober **o
 	return XRT_ERROR_PROBER_NOT_SUPPORTED;
 }
 
+static void ipc_client_update_devices(struct xrt_instance *xinst, struct xrt_system_devices *xsysd) {
+	struct ipc_client_instance *ii = ipc_client_instance(xinst);
+
+	size_t count = 0;
+	struct xrt_tracking_origin *xtrack = NULL;
+	struct ipc_shared_memory *ism = ii->ipc_c.ism;
+
+	// Query the server for how many tracking origins it has.
+	count = 0;
+	for (uint32_t i = 0; i < ism->itrack_count; i++) {
+		if (i < ii->xtrack_count) {
+			count++;
+			continue;
+		}
+
+		xtrack = U_TYPED_CALLOC(struct xrt_tracking_origin);
+
+		memcpy(xtrack->name, ism->itracks[i].name, sizeof(xtrack->name));
+
+		xtrack->type = ism->itracks[i].type;
+		xtrack->initial_offset = ism->itracks[i].offset;
+		ii->xtracks[count++] = xtrack;
+
+		u_var_add_root(xtrack, "Tracking origin", true);
+		u_var_add_ro_text(xtrack, xtrack->name, "name");
+		u_var_add_pose(xtrack, &xtrack->initial_offset, "offset");
+	}
+
+	IPC_DEBUG(&ii->ipc_c, "ipc_client_update_devices: xtrack count was %zu, now %zu", ii->xtrack_count, count);
+	ii->xtrack_count = count;
+
+	// Query the server for how many devices it has.
+	count = 0;
+	for (uint32_t i = 0; i < ism->isdev_count; i++) {
+		if (i < xsysd->xdev_count) {
+			count++;
+			continue;
+		}
+
+		struct ipc_shared_device *isdev = &ism->isdevs[i];
+		xtrack = ii->xtracks[isdev->tracking_origin_index];
+
+		if (isdev->name == XRT_DEVICE_GENERIC_HMD) {
+			xsysd->xdevs[count++] = ipc_client_hmd_create(&ii->ipc_c, xtrack, i);
+		} else {
+			xsysd->xdevs[count++] = ipc_client_device_create(&ii->ipc_c, xtrack, i);
+		}
+	}
+
+	IPC_DEBUG(&ii->ipc_c, "ipc_client_update_devices: xdev count was %zu, now %zu", xsysd->xdev_count, count);
+	xsysd->xdev_count = count;
+}
+
 static void
 ipc_client_instance_destroy(struct xrt_instance *xinst)
 {
@@ -271,6 +318,7 @@ ipc_instance_create(const struct xrt_instance_info *i_info, struct xrt_instance 
 	struct ipc_client_instance *ii = U_TYPED_CALLOC(struct ipc_client_instance);
 	ii->base.create_system = ipc_client_instance_create_system;
 	ii->base.get_prober = ipc_client_instance_get_prober;
+	ii->base.update_devices = ipc_client_update_devices;
 	ii->base.destroy = ipc_client_instance_destroy;
 
 #ifdef XRT_OS_WINDOWS
@@ -294,43 +342,6 @@ ipc_instance_create(const struct xrt_instance_info *i_info, struct xrt_instance 
 		free(ii);
 		return xret;
 	}
-
-	uint32_t count = 0;
-	struct xrt_tracking_origin *xtrack = NULL;
-	struct ipc_shared_memory *ism = ii->ipc_c.ism;
-
-	// Query the server for how many tracking origins it has.
-	count = 0;
-	for (uint32_t i = 0; i < ism->itrack_count; i++) {
-		xtrack = U_TYPED_CALLOC(struct xrt_tracking_origin);
-
-		memcpy(xtrack->name, ism->itracks[i].name, sizeof(xtrack->name));
-
-		xtrack->type = ism->itracks[i].type;
-		xtrack->initial_offset = ism->itracks[i].offset;
-		ii->xtracks[count++] = xtrack;
-
-		u_var_add_root(xtrack, "Tracking origin", true);
-		u_var_add_ro_text(xtrack, xtrack->name, "name");
-		u_var_add_pose(xtrack, &xtrack->initial_offset, "offset");
-	}
-
-	ii->xtrack_count = count;
-
-	// Query the server for how many devices it has.
-	count = 0;
-	for (uint32_t i = 0; i < ism->isdev_count; i++) {
-		struct ipc_shared_device *isdev = &ism->isdevs[i];
-		xtrack = ii->xtracks[isdev->tracking_origin_index];
-
-		if (isdev->name == XRT_DEVICE_GENERIC_HMD) {
-			ii->xdevs[count++] = ipc_client_hmd_create(&ii->ipc_c, xtrack, i);
-		} else {
-			ii->xdevs[count++] = ipc_client_device_create(&ii->ipc_c, xtrack, i);
-		}
-	}
-
-	ii->xdev_count = count;
 
 	ii->base.startup_timestamp = ii->ipc_c.ism->startup_timestamp;
 
