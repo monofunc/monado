@@ -53,7 +53,7 @@ vroom_debug_window(struct vroom_device *vroom)
 
 	// Set up window
 	u32 WindowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-	SDL_Window *Window = SDL_CreateWindow("Informations VROOM", 64, 64, width, height, WindowFlags);
+	SDL_Window *Window = SDL_CreateWindow("VROOM Information", 64, 64, width, height, WindowFlags);
 	assert(Window);
 	SDL_GLContext Context = SDL_GL_CreateContext(Window);
 	SDL_GL_MakeCurrent(Window, Context);

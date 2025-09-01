@@ -238,7 +238,7 @@ if(WIN32)
 endif()
 
 # JoyShockLibrary
-if (NOT ANDROID)
+if(NOT ANDROID)
 	add_subdirectory(joyshocklibrary)
 endif()
 

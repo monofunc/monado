@@ -15,7 +15,6 @@ struct HandlerUserdata
 	int sensor;
 };
 
-// Impl classe
 VroomVRPN::VroomVRPN()
 {
 	head = nullptr;
