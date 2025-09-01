@@ -100,7 +100,7 @@ chl_scratch_ensure(struct chl_scratch *scratch,
 			    &scratch->render_pass,         // struct render_gfx_render_pass
 			    target_image_view,             // target
 			    extent,
-			    i % 2);                       // extent
+			    i % 2); // extent
 		}
 
 		/*

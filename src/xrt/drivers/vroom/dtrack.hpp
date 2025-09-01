@@ -27,12 +27,9 @@ public:
 	int leftBody = 0;
 	int rightBody = 0;
 
-	VroomDTrack() : VroomDTrack(DEFAULT_DTRACK_PORT)
-	{
-	}
+	VroomDTrack() : VroomDTrack(DEFAULT_DTRACK_PORT) {}
 
-	explicit
-	VroomDTrack(uint16_t port);
+	explicit VroomDTrack(uint16_t port);
 
 	~VroomDTrack();
 

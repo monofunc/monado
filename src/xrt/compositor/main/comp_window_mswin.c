@@ -214,20 +214,10 @@ comp_window_mswin_window_loop(struct comp_window_mswin *cwm)
 	int h = (ct->c->xdev->hmd->screens[ct->index].h_pixels);
 
 	COMP_INFO(ct->c, "Creating window");
-	cwm->window =
-	    CreateWindowExW(
-	        WS_EX_LAYERED, // 0
-	        szWindowClass,
-	        L"Monado (Windowed)",
-	        WS_POPUP, // WS_OVERLAPPEDWINDOW
-	        x,
-	        y,
-	        w,
-	        h,
-	        NULL,
-	        NULL,
-	        cwm->instance,
-	        NULL);
+	cwm->window = CreateWindowExW(WS_EX_LAYERED, // 0
+	                              szWindowClass, L"Monado (Windowed)",
+	                              WS_POPUP, // WS_OVERLAPPEDWINDOW
+	                              x, y, w, h, NULL, NULL, cwm->instance, NULL);
 	if (cwm->window == NULL) {
 		COMP_ERROR_GETLASTERROR(ct->c, "Failed to create window: %s", "Failed to create window");
 		// parent thread will be notified (by caller) that we have exited.

@@ -135,7 +135,7 @@ struct fake_timing
 
 #ifdef U_TRACE_TRACY
 	//! Trace name for Tracy.
-	char* trace_name;
+	char *trace_name;
 #endif
 };
 

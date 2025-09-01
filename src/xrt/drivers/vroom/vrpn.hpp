@@ -1,10 +1,10 @@
 /*!
-* @file
-* @brief VRPN thread interface
-* @author Jeremy Auzou <jeremy.auzou@insa-rouen.fr>
-*
-* @ingroup drv_vroom
-*/
+ * @file
+ * @brief VRPN thread interface
+ * @author Jeremy Auzou <jeremy.auzou@insa-rouen.fr>
+ *
+ * @ingroup drv_vroom
+ */
 
 #pragma once
 

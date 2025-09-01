@@ -125,12 +125,12 @@ create_image_views(struct comp_target_swapchain *cts)
 
 	for (uint32_t i = 0; i < cts->base.image_count; i++) {
 		cts->base.images[i].handle = images[i];
-		vk_create_view(                 //
-		    vk,                         // vk_bundle
-		    cts->base.images[i].handle, // image
-		    VK_IMAGE_VIEW_TYPE_2D,      // type
-		    cts->surface.format.format, // format
-		    subresource_range,          // subresource_range
+		vk_create_view(                     //
+		    vk,                             // vk_bundle
+		    cts->base.images[i].handle,     // image
+		    VK_IMAGE_VIEW_TYPE_2D,          // type
+		    cts->surface.format.format,     // format
+		    subresource_range,              // subresource_range
 		    &cts->base.images[i].views[0]); // out_view
 
 
@@ -142,13 +142,13 @@ create_image_views(struct comp_target_swapchain *cts)
 
 		for (uint32_t i = 0; i < cts->base.image_count; i++) {
 			cts->base.images[i].handle = images[i];
-			vk_create_view(                 //
-				vk,                         // vk_bundle
-				cts->base.images[i].handle, // image
-				VK_IMAGE_VIEW_TYPE_2D,      // type
-				cts->surface.format.format, // format
-				subresource_range,          // subresource_range
-				&cts->base.images[i].views[1]); // out_view
+			vk_create_view(                     //
+			    vk,                             // vk_bundle
+			    cts->base.images[i].handle,     // image
+			    VK_IMAGE_VIEW_TYPE_2D,          // type
+			    cts->surface.format.format,     // format
+			    subresource_range,              // subresource_range
+			    &cts->base.images[i].views[1]); // out_view
 
 
 			VK_NAME_IMAGE_VIEW(vk, cts->base.images[i].views[1], "comp_target_swapchain image view right");

@@ -2185,7 +2185,7 @@ enum xrt_visibility_mask_type
 
 enum xrt_eye_flags
 {
-	XRT_EYE_LEFT  = (1 << 0),
+	XRT_EYE_LEFT = (1 << 0),
 	XRT_EYE_RIGHT = (1 << 1)
 };
 

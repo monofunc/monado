@@ -694,7 +694,7 @@ oxr_session_locate_views(struct oxr_logger *log,
 		struct xrt_space_relation result = {0};
 		struct xrt_relation_chain xrc = {0};
 		m_relation_chain_push_pose_if_not_identity(&xrc, &view_pose); // pose view rel head
-		m_relation_chain_push_relation(&xrc, &T_base_head); // pose head rel base; cf au dessus
+		m_relation_chain_push_relation(&xrc, &T_base_head);           // pose head rel base; cf au dessus
 		m_relation_chain_resolve(&xrc, &result);
 		OXR_XRT_POSE_TO_XRPOSEF(result.pose, views[i].pose);
 

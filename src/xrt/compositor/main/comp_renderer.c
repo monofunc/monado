@@ -263,14 +263,14 @@ calc_pose_data(struct comp_renderer *r,
 	struct xrt_fov xdev_fovs[XRT_MAX_VIEWS] = XRT_STRUCT_INIT;
 	struct xrt_pose xdev_poses[XRT_MAX_VIEWS] = XRT_STRUCT_INIT;
 
-	xrt_result_t xret = xrt_device_get_view_poses(       //
-	    r->c->xdev,                                      //
-	    &default_eye_relation,                           //
+	xrt_result_t xret = xrt_device_get_view_poses(                  //
+	    r->c->xdev,                                                 //
+	    &default_eye_relation,                                      //
 	    r->c->frames[r->index].rendering.predicted_display_time_ns, // at_timestamp_ns
-	    view_count,                                      //
-	    &head_relation,                                  // out_head_relation
-	    xdev_fovs,                                       // out_fovs
-	    xdev_poses);                                     // out_poses
+	    view_count,                                                 //
+	    &head_relation,                                             // out_head_relation
+	    xdev_fovs,                                                  // out_fovs
+	    xdev_poses);                                                // out_poses
 	if (xret != XRT_SUCCESS) {
 		struct u_pp_sink_stack_only sink;
 		u_pp_delegate_t dg = u_pp_sink_stack_only_init(&sink);
@@ -327,12 +327,12 @@ renderer_build_rendering_target_resources(struct comp_renderer *r,
 		VkExtent2D extent = {r->c->targets[r->index]->width, r->c->targets[r->index]->height};
 
 		render_gfx_target_resources_init( //
-			rtr,                          //
-			&c->nr,                       //
-			&r->target_render_pass,       //
-			image_view,                   //
-			extent,
-			i);                      //
+		    rtr,                          //
+		    &c->nr,                       //
+		    &r->target_render_pass,       //
+		    image_view,                   //
+		    extent,
+		    i); //
 	}
 }
 
@@ -357,11 +357,11 @@ renderer_create_renderings_and_fences(struct comp_renderer *r)
 	if (!use_compute) {
 		r->rtr_array = U_TYPED_ARRAY_CALLOC(struct render_gfx_target_resources, r->buffer_count);
 
-		render_gfx_render_pass_init(     //
-		    &r->target_render_pass,      // rgrp
-		    &r->c->nr,                   // struct render_resources
+		render_gfx_render_pass_init(                //
+		    &r->target_render_pass,                 // rgrp
+		    &r->c->nr,                              // struct render_resources
 		    r->c->targets[r->index]->format,        //
-		    VK_ATTACHMENT_LOAD_OP_CLEAR, // load_op
+		    VK_ATTACHMENT_LOAD_OP_CLEAR,            // load_op
 		    r->c->targets[r->index]->final_layout); // final_layout
 
 		for (uint32_t i = 0; i < r->buffer_count; ++i) {
@@ -476,17 +476,15 @@ renderer_ensure_images_and_renderings(struct comp_renderer *r, bool force_recrea
 		image_usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	}
 
-	struct comp_target_create_images_info info = {
-	    .extent =
-	        {
-	            .width = r->c->settings.preferred.width,
-	            .height = r->c->settings.preferred.height,
-	        },
-	    .image_usage = image_usage,
-	    .color_space = r->settings->color_space,
-	    .present_mode = r->settings->present_mode,
-	    .stereo = r->settings->stereo
-	};
+	struct comp_target_create_images_info info = {.extent =
+	                                                  {
+	                                                      .width = r->c->settings.preferred.width,
+	                                                      .height = r->c->settings.preferred.height,
+	                                                  },
+	                                              .image_usage = image_usage,
+	                                              .color_space = r->settings->color_space,
+	                                              .present_mode = r->settings->present_mode,
+	                                              .stereo = r->settings->stereo};
 
 	static_assert(ARRAY_SIZE(info.formats) == ARRAY_SIZE(r->c->settings.formats), "Miss-match format array sizes");
 	for (uint32_t i = 0; i < r->c->settings.format_count; i++) {
@@ -1082,8 +1080,8 @@ comp_renderer_draw(struct comp_renderer *r)
 		} break;
 		case COMP_WINDOW_PEEK_EYE_BOTH:
 			/* TODO: display the undistorted image */
-			comp_window_peek_blit(c->peek, c->targets[r->index]->images[r->acquired_buffer].handle, c->targets[r->index]->width,
-			                      c->targets[r->index]->height);
+			comp_window_peek_blit(c->peek, c->targets[r->index]->images[r->acquired_buffer].handle,
+			                      c->targets[r->index]->width, c->targets[r->index]->height);
 			break;
 		}
 	}

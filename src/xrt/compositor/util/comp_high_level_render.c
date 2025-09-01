@@ -134,9 +134,8 @@ chl_frame_state_gfx_set_target(struct chl_frame_state *frame_state,
 		    sample_view,                 // squash_as_src_sample_view
 		    &layer_norm_rect,            // squash_as_src_norm_rect
 		    &vertex_rots[i],             // target_vertex_rot
-		    &target_viewport_datas[i],
-		    target_viewport_datas[i].target_index,
-		    target_viewport_datas[i].eyes);  // target_viewport_data
+		    &target_viewport_datas[i], target_viewport_datas[i].target_index,
+		    target_viewport_datas[i].eyes); // target_viewport_data
 	}
 }
 
@@ -219,8 +218,7 @@ chl_frame_state_cs_set_target(struct chl_frame_state *frame_state,
 		    &frame_state->data,         //
 		    sample_view,                // squash_as_src_sample_view
 		    &layer_norm_rect,           // squash_as_src_norm_rect
-		    &views[i],
-		    views[i].target_index,
-		    views[i].eyes);                 // target_viewport_data
+		    &views[i], views[i].target_index,
+		    views[i].eyes); // target_viewport_data
 	}
 }

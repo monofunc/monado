@@ -151,15 +151,21 @@ vroom_debug_window(struct vroom_device *vroom)
 
 						ImGui::Text("name: %s", display.name);
 
-						ImGui::Text("position: %f %f %f", display.position.x, display.position.y, display.position.z);
-						ImGui::Text("rotation: %f %f %f", display.rotation.x, display.rotation.y, display.rotation.z);
+						ImGui::Text("position: %f %f %f", display.position.x,
+						            display.position.y, display.position.z);
+						ImGui::Text("rotation: %f %f %f", display.rotation.x,
+						            display.rotation.y, display.rotation.z);
 
-						ImGui::Text("dimensions: %f %f", display.dimensions.x, display.dimensions.y);
+						ImGui::Text("dimensions: %f %f", display.dimensions.x,
+						            display.dimensions.y);
 
-						ImGui::Text("screenPosition: %f %f %f", display.screenPosition.x, display.screenPosition.y);
-						ImGui::Text("screenSize: %f %f %f", display.screenSize.x, display.screenSize.y);
+						ImGui::Text("screenPosition: %f %f %f", display.screenPosition.x,
+						            display.screenPosition.y);
+						ImGui::Text("screenSize: %f %f %f", display.screenSize.x,
+						            display.screenSize.y);
 
-						ImGui::Text("textureSize: %f %f %f", display.textureSize.x, display.textureSize.y);
+						ImGui::Text("textureSize: %f %f %f", display.textureSize.x,
+						            display.textureSize.y);
 
 						ImGui::TreePop();
 					}
@@ -172,12 +178,12 @@ vroom_debug_window(struct vroom_device *vroom)
 
 			if (ImGui::TreeNode("tracking")) {
 
-				auto& tr = cfg->tracking;
+				auto &tr = cfg->tracking;
 
 				ImGui::Text("system: %s", tr.system);
 
 				if (ImGui::TreeNode("dtrack")) {
-					auto& dt = tr.dtrack;
+					auto &dt = tr.dtrack;
 
 					ImGui::Text("port: %d", dt.port);
 
@@ -194,7 +200,7 @@ vroom_debug_window(struct vroom_device *vroom)
 				}
 
 				if (ImGui::TreeNode("vrpn")) {
-					auto& vr = tr.vrpn;
+					auto &vr = tr.vrpn;
 
 					if (ImGui::TreeNode("trackers")) {
 						if (ImGui::TreeNode("head##vrpn_head")) {
@@ -216,23 +222,26 @@ vroom_debug_window(struct vroom_device *vroom)
 						}
 
 						ImGui::TreePop();
-
 					}
 
 					if (ImGui::TreeNode("space_correction")) {
-						ImGui::Text("position: %f %f %f", vr.space_correction.pos.x, vr.space_correction.pos.y, vr.space_correction.pos.z);
-						ImGui::Text("rotation: %f %f %f", vr.space_correction.rot.x, vr.space_correction.rot.y, vr.space_correction.rot.z);
+						ImGui::Text("position: %f %f %f", vr.space_correction.pos.x,
+						            vr.space_correction.pos.y, vr.space_correction.pos.z);
+						ImGui::Text("rotation: %f %f %f", vr.space_correction.rot.x,
+						            vr.space_correction.rot.y, vr.space_correction.rot.z);
 
 						if (ImGui::TreeNode("mirror")) {
-							ImGui::Text("x: %s", vr.space_correction.mirror.x ? "true" : "false");
-							ImGui::Text("y: %s", vr.space_correction.mirror.y ? "true" : "false");
-							ImGui::Text("z: %s", vr.space_correction.mirror.z ? "true" : "false");
+							ImGui::Text("x: %s",
+							            vr.space_correction.mirror.x ? "true" : "false");
+							ImGui::Text("y: %s",
+							            vr.space_correction.mirror.y ? "true" : "false");
+							ImGui::Text("z: %s",
+							            vr.space_correction.mirror.z ? "true" : "false");
 							ImGui::TreePop();
 						}
 
 						ImGui::TreePop();
 					}
-
 				}
 
 				ImGui::TreePop();
@@ -270,20 +279,20 @@ vroom_debug_window(struct vroom_device *vroom)
 			{
 				ImGui::SeparatorText("Head");
 				auto p = vroom->pose;
-				ImGui::Text("Position (xyz ): %6.3fm %6.3fm %6.3fm",
-				            p.position.x, p.position.y, p.position.z);
-				ImGui::Text("Rotation (xyzw): %6.3f  %6.3f  %6.3f  %6.3f",
-				            p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w);
+				ImGui::Text("Position (xyz ): %6.3fm %6.3fm %6.3fm", p.position.x, p.position.y,
+				            p.position.z);
+				ImGui::Text("Rotation (xyzw): %6.3f  %6.3f  %6.3f  %6.3f", p.orientation.x,
+				            p.orientation.y, p.orientation.z, p.orientation.w);
 			}
 
 			// Flystick
 			if (vroom->flystick) {
 				ImGui::SeparatorText("FlyStick");
 				auto p = vroom->flystick->pose;
-				ImGui::Text("Position (xyz ): %6.3fm %6.3fm %6.3fm",
-				            p.position.x, p.position.y, p.position.z);
-				ImGui::Text("Rotation (xyzw): %6.3f  %6.3f  %6.3f  %6.3f",
-				            p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w);
+				ImGui::Text("Position (xyz ): %6.3fm %6.3fm %6.3fm", p.position.x, p.position.y,
+				            p.position.z);
+				ImGui::Text("Rotation (xyzw): %6.3f  %6.3f  %6.3f  %6.3f", p.orientation.x,
+				            p.orientation.y, p.orientation.z, p.orientation.w);
 			}
 
 			// Joy-Con (L)
@@ -294,10 +303,10 @@ vroom_debug_window(struct vroom_device *vroom)
 				else
 					ImGui::Text("Connected - Handle: %d", vroom->joycon_left->handle);
 				auto p = vroom->joycon_left->pose;
-				ImGui::Text("Position (xyz ): %6.3fm %6.3fm %6.3fm",
-				            p.position.x, p.position.y, p.position.z);
-				ImGui::Text("Rotation (xyzw): %6.3f  %6.3f  %6.3f  %6.3f",
-				            p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w);
+				ImGui::Text("Position (xyz ): %6.3fm %6.3fm %6.3fm", p.position.x, p.position.y,
+				            p.position.z);
+				ImGui::Text("Rotation (xyzw): %6.3f  %6.3f  %6.3f  %6.3f", p.orientation.x,
+				            p.orientation.y, p.orientation.z, p.orientation.w);
 			}
 
 			// Joy-Con (R)
@@ -308,10 +317,10 @@ vroom_debug_window(struct vroom_device *vroom)
 				else
 					ImGui::Text("Connected - Handle: %d", vroom->joycon_right->handle);
 				auto p = vroom->joycon_right->pose;
-				ImGui::Text("Position (xyz ): %6.3fm %6.3fm %6.3fm",
-				            p.position.x, p.position.y, p.position.z);
-				ImGui::Text("Rotation (xyzw): %6.3f  %6.3f  %6.3f  %6.3f",
-				            p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w);
+				ImGui::Text("Position (xyz ): %6.3fm %6.3fm %6.3fm", p.position.x, p.position.y,
+				            p.position.z);
+				ImGui::Text("Rotation (xyzw): %6.3f  %6.3f  %6.3f  %6.3f", p.orientation.x,
+				            p.orientation.y, p.orientation.z, p.orientation.w);
 			}
 
 			ImGui::End();
@@ -330,9 +339,10 @@ vroom_debug_window(struct vroom_device *vroom)
 
 			if (ImGui::TreeNode("Space correction##scvrpn")) {
 				ImGui::DragFloat3("Position (m)",
-					reinterpret_cast<float *>(&vroom->vrpn->space_correction.pos), 0.001);
+				                  reinterpret_cast<float *>(&vroom->vrpn->space_correction.pos), 0.001);
 				ImGui::DragFloat3("Rotation (rad)",
-					reinterpret_cast<float *>(&vroom->vrpn->space_correction.rot), 0.001, -M_PI, M_PI);
+				                  reinterpret_cast<float *>(&vroom->vrpn->space_correction.rot), 0.001,
+				                  -M_PI, M_PI);
 				ImGui::Checkbox("Mirror X", &vroom->vrpn->space_correction.mirrorX);
 				ImGui::SameLine();
 				ImGui::Checkbox("Mirror Y", &vroom->vrpn->space_correction.mirrorY);
@@ -358,9 +368,8 @@ vroom_debug_window(struct vroom_device *vroom)
 			}
 
 			if (vrpn->leftHand != nullptr) {
-				auto pose = vrpn_corrected
-					            ? vrpn->get_corrected_pose(vrpn->leftHandPose)
-					            : vrpn->leftHandPose;
+				auto pose =
+				    vrpn_corrected ? vrpn->get_corrected_pose(vrpn->leftHandPose) : vrpn->leftHandPose;
 
 				ImGui::Text("Left hand: tracker \"%s\" (sensor %d)", vrpn->leftHandTrackerName,
 				            vrpn->leftHandTrackerSensor);
@@ -373,10 +382,8 @@ vroom_debug_window(struct vroom_device *vroom)
 			}
 
 			if (vrpn->rightHand != nullptr) {
-				auto pose =
-					vrpn_corrected
-						? vrpn->get_corrected_pose(vrpn->rightHandPose)
-						: vrpn->rightHandPose;
+				auto pose = vrpn_corrected ? vrpn->get_corrected_pose(vrpn->rightHandPose)
+				                           : vrpn->rightHandPose;
 
 				ImGui::Text("Right hand: tracker \"%s\" (sensor %d)", vrpn->rightHandTrackerName,
 				            vrpn->rightHandTrackerSensor);
@@ -403,7 +410,8 @@ vroom_debug_window(struct vroom_device *vroom)
 			ImGui::SeparatorText("Positions");
 
 			ImGui::DragFloat3("Head pos (xyz )", (float *)&vroom->pose.position, 0.001f);
-			ImGui::DragFloat4("Head rot (xyzw)", (float *)&vroom->pose.orientation, 0.001f); // convert to degrees?
+			ImGui::DragFloat4("Head rot (xyzw)", (float *)&vroom->pose.orientation,
+			                  0.001f); // convert to degrees?
 			if (ImGui::Button("Normalize rotation")) {
 				math_quat_normalize(&vroom->pose.orientation);
 			}
@@ -423,25 +431,22 @@ vroom_debug_window(struct vroom_device *vroom)
 					}
 					if (ImGui::BeginTabItem(text)) {
 						ImGui::Text("Position      : %6.3fm %6.3fm %6.3fm",
-						            display_config.position.x,
-						            display_config.position.y, display_config.position.z);
+						            display_config.position.x, display_config.position.y,
+						            display_config.position.z);
 						ImGui::Text("Rotation (deg): %6.3f° %6.3f° %6.3f°",
-						            display_config.rotation.x,
-						            display_config.rotation.y, display_config.rotation.z);
+						            display_config.rotation.x, display_config.rotation.y,
+						            display_config.rotation.z);
 						ImGui::Text("Dimensions    : %6.3fm %6.3fm",
-						            display_config.dimensions.x,
-						            display_config.dimensions.y);
+						            display_config.dimensions.x, display_config.dimensions.y);
 
 						ImGui::Text("Screen size: %5d x %5d", display_config.screenSize.x,
 						            display_config.screenSize.y);
 						ImGui::Text("Screen pos : %5d ; %5d", display_config.screenPosition.x,
 						            display_config.screenPosition.y);
 
-						xrt_vec3 transformed{
-							vroom->pose.position.x + display_pose.position.x,
-							vroom->pose.position.y + display_pose.position.y,
-							vroom->pose.position.z + display_pose.position.z
-						};
+						xrt_vec3 transformed{vroom->pose.position.x + display_pose.position.x,
+						                     vroom->pose.position.y + display_pose.position.y,
+						                     vroom->pose.position.z + display_pose.position.z};
 
 						math_quat_rotate_vec3(&display_pose.orientation, &transformed,
 						                      &transformed);

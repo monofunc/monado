@@ -7,13 +7,15 @@
 static bool running = false;
 static VroomVRPN *instance = nullptr;
 
-struct HandlerUserdata {
+struct HandlerUserdata
+{
 	xrt_pose *pose;
 	int sensor;
 };
 
 // Impl classe
-VroomVRPN::VroomVRPN() {
+VroomVRPN::VroomVRPN()
+{
 	head = nullptr;
 	leftHand = nullptr;
 	rightHand = nullptr;
@@ -23,7 +25,8 @@ VroomVRPN::VroomVRPN() {
 	rightHandTrackerName = nullptr;
 }
 
-VroomVRPN::~VroomVRPN() {
+VroomVRPN::~VroomVRPN()
+{
 	if (head != nullptr)
 		delete head;
 	if (leftHand != nullptr)
@@ -47,13 +50,11 @@ VroomVRPN::mainLoop()
 }
 
 xrt_pose
-VroomVRPN::get_corrected_pose(xrt_pose pose) {
+VroomVRPN::get_corrected_pose(xrt_pose pose)
+{
 	auto new_pose = pose;
 
-	xrt_pose xform{
-		{0,0, 0, 1},
-		space_correction.pos
-	};
+	xrt_pose xform{{0, 0, 0, 1}, space_correction.pos};
 	math_quat_from_euler_angles(&space_correction.rot, &xform.orientation);
 
 	// math_pose_transform_point(&xform, &new_pose_2.position, &new_pose_2.position);
@@ -65,9 +66,18 @@ VroomVRPN::get_corrected_pose(xrt_pose pose) {
 	int mirrorCount = 0;
 
 	// Mirror along X, Y and Z
-	if (space_correction.mirrorX) { mirrorCount++; new_pose.orientation.x *= -1; }
-	if (space_correction.mirrorY) { mirrorCount++; new_pose.orientation.y *= -1; }
-	if (space_correction.mirrorZ) { mirrorCount++; new_pose.orientation.z *= -1; }
+	if (space_correction.mirrorX) {
+		mirrorCount++;
+		new_pose.orientation.x *= -1;
+	}
+	if (space_correction.mirrorY) {
+		mirrorCount++;
+		new_pose.orientation.y *= -1;
+	}
+	if (space_correction.mirrorZ) {
+		mirrorCount++;
+		new_pose.orientation.z *= -1;
+	}
 
 	// Go back to correct universe
 	if (mirrorCount % 2 != 0) {
@@ -81,9 +91,9 @@ VroomVRPN::get_corrected_pose(xrt_pose pose) {
 
 // Callbacks
 void
-handle_tracker(void* userdata, vrpn_TRACKERCB t)
+handle_tracker(void *userdata, vrpn_TRACKERCB t)
 {
-	auto* data = reinterpret_cast<HandlerUserdata*>(userdata);
+	auto *data = reinterpret_cast<HandlerUserdata *>(userdata);
 	xrt_pose *pose = data->pose;
 
 	// Not the sensor we're interested in.
@@ -101,7 +111,7 @@ handle_tracker(void* userdata, vrpn_TRACKERCB t)
 }
 
 void *
-vroom_vrpn_run(void* ptr)
+vroom_vrpn_run(void *ptr)
 {
 	running = true;
 
@@ -110,30 +120,23 @@ vroom_vrpn_run(void* ptr)
 	// TODO: optimize when the tracker is the same for two or more targets (such as with DTrack)
 
 	if (instance->headTrackerName != nullptr) {
-		auto userdata = new HandlerUserdata{
-			.pose = &instance->headPose,
-			.sensor = instance->headTrackerSensor
-		};
+		auto userdata = new HandlerUserdata{.pose = &instance->headPose, .sensor = instance->headTrackerSensor};
 
 		instance->head = new vrpn_Tracker_Remote(instance->headTrackerName);
 		instance->head->register_change_handler(userdata, handle_tracker);
 	}
 
 	if (instance->leftHandTrackerName != nullptr) {
-		auto userdata = new HandlerUserdata{
-		    .pose = &instance->leftHandPose,
-		    .sensor = instance->leftHandTrackerSensor
-		};
+		auto userdata =
+		    new HandlerUserdata{.pose = &instance->leftHandPose, .sensor = instance->leftHandTrackerSensor};
 
 		instance->leftHand = new vrpn_Tracker_Remote(instance->leftHandTrackerName);
 		instance->leftHand->register_change_handler(userdata, handle_tracker);
 	}
 
 	if (instance->rightHandTrackerName != nullptr) {
-		auto userdata = new HandlerUserdata{
-		    .pose = &instance->rightHandPose,
-		    .sensor = instance->rightHandTrackerSensor
-		};
+		auto userdata =
+		    new HandlerUserdata{.pose = &instance->rightHandPose, .sensor = instance->rightHandTrackerSensor};
 
 		instance->rightHand = new vrpn_Tracker_Remote(instance->rightHandTrackerName);
 		instance->rightHand->register_change_handler(userdata, handle_tracker);
@@ -156,18 +159,9 @@ vrpn_update_pose(const vroom_device *vroom, int body, xrt_pose *out)
 {
 	auto *vrpn = vroom->vrpn;
 	switch (body) {
-	case 0:
-		*out = vrpn->get_corrected_pose(vrpn->headPose);
-		return;
-	case 1:
-		*out = vrpn->get_corrected_pose(vrpn->leftHandPose);
-		return;
-	case 2:
-		*out = vrpn->get_corrected_pose(vrpn->rightHandPose);
-		return;
-	default:
-		return;
+	case 0: *out = vrpn->get_corrected_pose(vrpn->headPose); return;
+	case 1: *out = vrpn->get_corrected_pose(vrpn->leftHandPose); return;
+	case 2: *out = vrpn->get_corrected_pose(vrpn->rightHandPose); return;
+	default: return;
 	}
 }
-
-

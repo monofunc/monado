@@ -126,9 +126,9 @@ vroom_update_inputs(struct xrt_device *xdev)
 
 static xrt_result_t
 vroom_get_tracked_pose(struct xrt_device *xdev,
-                        enum xrt_input_name name,
-                        int64_t at_timestamp_ns,
-                        struct xrt_space_relation *out_relation)
+                       enum xrt_input_name name,
+                       int64_t at_timestamp_ns,
+                       struct xrt_space_relation *out_relation)
 {
 	struct vroom_device *vroom = vroom_device(xdev);
 
@@ -141,8 +141,7 @@ vroom_get_tracked_pose(struct xrt_device *xdev,
 	// auto dt = vroom->dtrack;
 	if (vroom->update_pose) {
 		vroom->update_pose(vroom, 0, &vroom->pose);
-	}
-	else {
+	} else {
 		CAVE_WARN(vroom, "no tracking for head");
 	}
 
@@ -153,20 +152,20 @@ vroom_get_tracked_pose(struct xrt_device *xdev,
 	math_quat_normalize(&vroom->pose.orientation);
 	out_relation->pose = vroom->pose;
 	out_relation->relation_flags = (enum xrt_space_relation_flags)(
-		XRT_SPACE_RELATION_ORIENTATION_VALID_BIT | XRT_SPACE_RELATION_POSITION_VALID_BIT |
-		XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT | XRT_SPACE_RELATION_POSITION_TRACKED_BIT);
+	    XRT_SPACE_RELATION_ORIENTATION_VALID_BIT | XRT_SPACE_RELATION_POSITION_VALID_BIT |
+	    XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT | XRT_SPACE_RELATION_POSITION_TRACKED_BIT);
 
 	return XRT_SUCCESS;
 }
 
 static xrt_result_t
 vroom_get_view_poses(struct xrt_device *xdev,
-                      const struct xrt_vec3 *default_eye_relation,
-                      int64_t at_timestamp_ns,
-                      uint32_t view_count,
-                      struct xrt_space_relation *out_head_relation,
-                      struct xrt_fov *out_fovs,
-                      struct xrt_pose *out_poses)
+                     const struct xrt_vec3 *default_eye_relation,
+                     int64_t at_timestamp_ns,
+                     uint32_t view_count,
+                     struct xrt_space_relation *out_head_relation,
+                     struct xrt_fov *out_fovs,
+                     struct xrt_pose *out_poses)
 {
 	struct vroom_device *vroom = vroom_device(xdev);
 	xrt_vec3 eye_trans{0};
@@ -225,9 +224,11 @@ vroom_get_view_poses(struct xrt_device *xdev,
 		struct xrt_vec2 dimensions = vroom->config->displays[i / views_per_display].dimensions;
 		struct xrt_pose transform = vroom->display_transforms[i / views_per_display];
 
-		struct xrt_vec3 transformed{pose->position.x + transform.position.x,
-		                            pose->position.y + transform.position.y,
-		                            pose->position.z + transform.position.z};
+		struct xrt_vec3 transformed
+		{
+			pose->position.x + transform.position.x, pose->position.y + transform.position.y,
+			    pose->position.z + transform.position.z
+		};
 
 		math_quat_rotate_vec3(&transform.orientation, &transformed, &transformed);
 
@@ -263,10 +264,9 @@ vroom_get_view_poses(struct xrt_device *xdev,
 	vroom->frame_count++;
 
 	out_head_relation->relation_flags =
-		(xrt_space_relation_flags)(XRT_SPACE_RELATION_ORIENTATION_VALID_BIT |
-		                           XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT |
-		                           XRT_SPACE_RELATION_POSITION_VALID_BIT |
-		                           XRT_SPACE_RELATION_POSITION_TRACKED_BIT);
+	    (xrt_space_relation_flags)(XRT_SPACE_RELATION_ORIENTATION_VALID_BIT |
+	                               XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT |
+	                               XRT_SPACE_RELATION_POSITION_VALID_BIT | XRT_SPACE_RELATION_POSITION_TRACKED_BIT);
 	out_head_relation->pose.position = vroom->pose.position;
 	out_head_relation->pose.orientation = vroom->pose.orientation;
 
@@ -275,11 +275,13 @@ vroom_get_view_poses(struct xrt_device *xdev,
 
 xrt_result_t
 vroom_get_visibility_mask(struct xrt_device *xdev,
-                           enum xrt_visibility_mask_type type,
-                           uint32_t view_index,
-                           struct xrt_visibility_mask **out_mask)
+                          enum xrt_visibility_mask_type type,
+                          uint32_t view_index,
+                          struct xrt_visibility_mask **out_mask)
 {
-	struct xrt_fov fov{};
+	struct xrt_fov fov
+	{
+	};
 
 	auto half_pi = (float)(2 * atan(1)); // 90°
 
@@ -357,7 +359,7 @@ vroom_create(void)
 {
 	// This indicates you won't be using Monado's built-in tracking algorithms.
 	enum u_device_alloc_flags flags =
-		(enum u_device_alloc_flags)(U_DEVICE_ALLOC_HMD | U_DEVICE_ALLOC_TRACKING_NONE);
+	    (enum u_device_alloc_flags)(U_DEVICE_ALLOC_HMD | U_DEVICE_ALLOC_TRACKING_NONE);
 
 	struct vroom_device *vroom = U_DEVICE_ALLOCATE(struct vroom_device, flags, 3, 0);
 
@@ -431,13 +433,13 @@ vroom_create(void)
 
 			// Transform
 			xrt_vec3 rot_rad{
-				(float)(display.rotation.x * M_PI / 180.f),
-				(float)(display.rotation.y * M_PI / 180.f),
-				(float)(display.rotation.z * M_PI / 180.f),
+			    (float)(display.rotation.x * M_PI / 180.f),
+			    (float)(display.rotation.y * M_PI / 180.f),
+			    (float)(display.rotation.z * M_PI / 180.f),
 			};
 
 			vroom->display_transforms[d].position = {-display.position.x, -display.position.y,
-			                                        -display.position.z};
+			                                         -display.position.z};
 			math_quat_from_euler_angles(&rot_rad, &vroom->display_transforms[d].orientation);
 
 
@@ -515,9 +517,9 @@ vroom_create(void)
 			vroom->vrpn->space_correction.pos = vrpnConf.space_correction.pos;
 
 			vroom->vrpn->space_correction.rot = {
-				(float)(vrpnConf.space_correction.rot.x * M_PI / 180.f),
-				(float)(vrpnConf.space_correction.rot.y * M_PI / 180.f),
-				(float)(vrpnConf.space_correction.rot.z * M_PI / 180.f),
+			    (float)(vrpnConf.space_correction.rot.x * M_PI / 180.f),
+			    (float)(vrpnConf.space_correction.rot.y * M_PI / 180.f),
+			    (float)(vrpnConf.space_correction.rot.z * M_PI / 180.f),
 			};
 
 			vroom->vrpn->space_correction.mirrorX = vrpnConf.space_correction.mirror.x;

@@ -32,6 +32,8 @@ struct joycon_controller
 struct joycon_controller *
 joycon_controller_create(struct vroom_device *sys, int jsl_type);
 
-bool joycon_controller_set_handle(struct joycon_controller *jc, int handle);
+bool
+joycon_controller_set_handle(struct joycon_controller *jc, int handle);
 
-bool joycon_controller_get_handle(struct joycon_controller *jc, int* out_handle);
+bool
+joycon_controller_get_handle(struct joycon_controller *jc, int *out_handle);

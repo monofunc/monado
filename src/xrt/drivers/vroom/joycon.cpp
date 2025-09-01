@@ -47,53 +47,53 @@ enum joycon_button_index
 
 // Input mapping -- Oculus Touch
 static struct xrt_binding_input_pair left_joycon_mapping[12] = {
-	{XRT_INPUT_TOUCH_Y_TOUCH, XRT_INPUT_JOY_CON_UP_CLICK},
-	{XRT_INPUT_TOUCH_Y_CLICK, XRT_INPUT_JOY_CON_RIGHT_CLICK},
-	{XRT_INPUT_TOUCH_X_TOUCH, XRT_INPUT_JOY_CON_LEFT_CLICK},
-	{XRT_INPUT_TOUCH_X_CLICK, XRT_INPUT_JOY_CON_DOWN_CLICK},
-	{XRT_INPUT_TOUCH_MENU_CLICK, XRT_INPUT_JOY_CON_CAPTURE_CLICK},
+    {XRT_INPUT_TOUCH_Y_TOUCH, XRT_INPUT_JOY_CON_UP_CLICK},
+    {XRT_INPUT_TOUCH_Y_CLICK, XRT_INPUT_JOY_CON_RIGHT_CLICK},
+    {XRT_INPUT_TOUCH_X_TOUCH, XRT_INPUT_JOY_CON_LEFT_CLICK},
+    {XRT_INPUT_TOUCH_X_CLICK, XRT_INPUT_JOY_CON_DOWN_CLICK},
+    {XRT_INPUT_TOUCH_MENU_CLICK, XRT_INPUT_JOY_CON_CAPTURE_CLICK},
 
-	{XRT_INPUT_TOUCH_TRIGGER_VALUE, XRT_INPUT_JOY_CON_ZL_CLICK},
-	{XRT_INPUT_TOUCH_TRIGGER_VALUE, XRT_INPUT_JOY_CON_L_CLICK},
-	{XRT_INPUT_TOUCH_SQUEEZE_VALUE, XRT_INPUT_JOY_CON_SR_CLICK},
-	{XRT_INPUT_TOUCH_THUMBSTICK_CLICK, XRT_INPUT_JOY_CON_THUMBSTICK_CLICK},
-	{XRT_INPUT_TOUCH_THUMBSTICK, XRT_INPUT_JOY_CON_THUMBSTICK},
-	{XRT_INPUT_TOUCH_GRIP_POSE, XRT_INPUT_JOY_CON_GRIP_POSE},
-	{XRT_INPUT_TOUCH_AIM_POSE, XRT_INPUT_JOY_CON_AIM_POSE},
+    {XRT_INPUT_TOUCH_TRIGGER_VALUE, XRT_INPUT_JOY_CON_ZL_CLICK},
+    {XRT_INPUT_TOUCH_TRIGGER_VALUE, XRT_INPUT_JOY_CON_L_CLICK},
+    {XRT_INPUT_TOUCH_SQUEEZE_VALUE, XRT_INPUT_JOY_CON_SR_CLICK},
+    {XRT_INPUT_TOUCH_THUMBSTICK_CLICK, XRT_INPUT_JOY_CON_THUMBSTICK_CLICK},
+    {XRT_INPUT_TOUCH_THUMBSTICK, XRT_INPUT_JOY_CON_THUMBSTICK},
+    {XRT_INPUT_TOUCH_GRIP_POSE, XRT_INPUT_JOY_CON_GRIP_POSE},
+    {XRT_INPUT_TOUCH_AIM_POSE, XRT_INPUT_JOY_CON_AIM_POSE},
 };
 static struct xrt_binding_profile left_joycon_profile[1] = {
-	{
-		.name = XRT_DEVICE_TOUCH_CONTROLLER,
-		.inputs = left_joycon_mapping,
-		.input_count = ARRAY_SIZE(left_joycon_mapping),
-		.outputs = nullptr,
-		.output_count = 0,
-	},
+    {
+        .name = XRT_DEVICE_TOUCH_CONTROLLER,
+        .inputs = left_joycon_mapping,
+        .input_count = ARRAY_SIZE(left_joycon_mapping),
+        .outputs = nullptr,
+        .output_count = 0,
+    },
 };
 
 static struct xrt_binding_input_pair right_joycon_mapping[12] = {
-	{XRT_INPUT_TOUCH_A_TOUCH, XRT_INPUT_JOY_CON_A_CLICK},
-	{XRT_INPUT_TOUCH_A_CLICK, XRT_INPUT_JOY_CON_B_CLICK},
-	{XRT_INPUT_TOUCH_B_TOUCH, XRT_INPUT_JOY_CON_X_CLICK},
-	{XRT_INPUT_TOUCH_B_CLICK, XRT_INPUT_JOY_CON_Y_CLICK},
-	{XRT_INPUT_TOUCH_SYSTEM_CLICK, XRT_INPUT_JOY_CON_HOME_CLICK},
+    {XRT_INPUT_TOUCH_A_TOUCH, XRT_INPUT_JOY_CON_A_CLICK},
+    {XRT_INPUT_TOUCH_A_CLICK, XRT_INPUT_JOY_CON_B_CLICK},
+    {XRT_INPUT_TOUCH_B_TOUCH, XRT_INPUT_JOY_CON_X_CLICK},
+    {XRT_INPUT_TOUCH_B_CLICK, XRT_INPUT_JOY_CON_Y_CLICK},
+    {XRT_INPUT_TOUCH_SYSTEM_CLICK, XRT_INPUT_JOY_CON_HOME_CLICK},
 
-	{XRT_INPUT_TOUCH_TRIGGER_VALUE, XRT_INPUT_JOY_CON_ZR_CLICK},
-	{XRT_INPUT_TOUCH_TRIGGER_VALUE, XRT_INPUT_JOY_CON_R_CLICK},
-	{XRT_INPUT_TOUCH_SQUEEZE_VALUE, XRT_INPUT_JOY_CON_SL_CLICK},
-	{XRT_INPUT_TOUCH_THUMBSTICK_CLICK, XRT_INPUT_JOY_CON_THUMBSTICK_CLICK},
-	{XRT_INPUT_TOUCH_THUMBSTICK, XRT_INPUT_JOY_CON_THUMBSTICK},
-	{XRT_INPUT_TOUCH_GRIP_POSE, XRT_INPUT_JOY_CON_GRIP_POSE},
-	{XRT_INPUT_TOUCH_AIM_POSE, XRT_INPUT_JOY_CON_AIM_POSE},
+    {XRT_INPUT_TOUCH_TRIGGER_VALUE, XRT_INPUT_JOY_CON_ZR_CLICK},
+    {XRT_INPUT_TOUCH_TRIGGER_VALUE, XRT_INPUT_JOY_CON_R_CLICK},
+    {XRT_INPUT_TOUCH_SQUEEZE_VALUE, XRT_INPUT_JOY_CON_SL_CLICK},
+    {XRT_INPUT_TOUCH_THUMBSTICK_CLICK, XRT_INPUT_JOY_CON_THUMBSTICK_CLICK},
+    {XRT_INPUT_TOUCH_THUMBSTICK, XRT_INPUT_JOY_CON_THUMBSTICK},
+    {XRT_INPUT_TOUCH_GRIP_POSE, XRT_INPUT_JOY_CON_GRIP_POSE},
+    {XRT_INPUT_TOUCH_AIM_POSE, XRT_INPUT_JOY_CON_AIM_POSE},
 };
 static struct xrt_binding_profile right_joycon_profile[1] = {
-	{
-		.name = XRT_DEVICE_TOUCH_CONTROLLER,
-		.inputs = right_joycon_mapping,
-		.input_count = ARRAY_SIZE(right_joycon_mapping),
-		.outputs = nullptr,
-		.output_count = 0,
-	},
+    {
+        .name = XRT_DEVICE_TOUCH_CONTROLLER,
+        .inputs = right_joycon_mapping,
+        .input_count = ARRAY_SIZE(right_joycon_mapping),
+        .outputs = nullptr,
+        .output_count = 0,
+    },
 };
 
 /// Casting helper function.
@@ -104,10 +104,7 @@ joycon_controller(struct xrt_device *xdev)
 }
 
 static void
-jc_update_input(struct joycon_controller *jc,
-                int index,
-                int64_t when_ns,
-                int val)
+jc_update_input(struct joycon_controller *jc, int index, int64_t when_ns, int val)
 {
 	jc->base.inputs[index].timestamp = when_ns;
 	jc->base.inputs[index].value.boolean = (val != 0);
@@ -183,7 +180,6 @@ joycon_controller_get_tracked_pose(struct xrt_device *xdev,
 	if (jc->update_pose) {
 		jc->update_pose(jc->sys, isLeft ? 1 : 2, &new_pose);
 	} else {
-
 	}
 
 	/* VRPN */
@@ -199,10 +195,9 @@ joycon_controller_get_tracked_pose(struct xrt_device *xdev,
 	out_relation->pose.position.y -= 1.3f;
 	out_relation->pose.position.z += 0.5f;
 
-	out_relation->relation_flags = (enum xrt_space_relation_flags)(XRT_SPACE_RELATION_ORIENTATION_VALID_BIT |
-	                                                               XRT_SPACE_RELATION_POSITION_VALID_BIT |
-	                                                               XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT |
-	                                                               XRT_SPACE_RELATION_POSITION_TRACKED_BIT);
+	out_relation->relation_flags = (enum xrt_space_relation_flags)(
+	    XRT_SPACE_RELATION_ORIENTATION_VALID_BIT | XRT_SPACE_RELATION_POSITION_VALID_BIT |
+	    XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT | XRT_SPACE_RELATION_POSITION_TRACKED_BIT);
 
 	return XRT_SUCCESS;
 }
@@ -240,7 +235,8 @@ joycon_controller_create(struct vroom_device *sys, int jsl_type)
 	// Identify controller
 	jc->base.name = XRT_DEVICE_TOUCH_CONTROLLER;
 	switch (jsl_type) {
-	case JS_TYPE_JOYCON_LEFT: jc->base.device_type = XRT_DEVICE_TYPE_LEFT_HAND_CONTROLLER;
+	case JS_TYPE_JOYCON_LEFT:
+		jc->base.device_type = XRT_DEVICE_TYPE_LEFT_HAND_CONTROLLER;
 
 		snprintf(jc->base.str, XRT_DEVICE_NAME_LEN, "Nintendo Joy-Con (L)");
 		snprintf(jc->base.serial, XRT_DEVICE_NAME_LEN, "HAC-015");
@@ -262,7 +258,8 @@ joycon_controller_create(struct vroom_device *sys, int jsl_type)
 		jc->base.binding_profiles = left_joycon_profile;
 		jc->base.binding_profile_count = ARRAY_SIZE(left_joycon_profile);
 		break;
-	case JS_TYPE_JOYCON_RIGHT: jc->base.device_type = XRT_DEVICE_TYPE_RIGHT_HAND_CONTROLLER;
+	case JS_TYPE_JOYCON_RIGHT:
+		jc->base.device_type = XRT_DEVICE_TYPE_RIGHT_HAND_CONTROLLER;
 
 		snprintf(jc->base.str, XRT_DEVICE_NAME_LEN, "Nintendo Joy-Con (R)");
 		snprintf(jc->base.serial, XRT_DEVICE_NAME_LEN, "HAC-016");
@@ -286,9 +283,8 @@ joycon_controller_create(struct vroom_device *sys, int jsl_type)
 		break;
 	default:
 		// It's not a JoyCon.
-		 JC_ERROR(jc, "Type %d is not a recognized Joy-Con type",
-		 	jsl_type);
-		u_device_free(&jc->base);  // Clean up allocated device
+		JC_ERROR(jc, "Type %d is not a recognized Joy-Con type", jsl_type);
+		u_device_free(&jc->base); // Clean up allocated device
 		return nullptr;
 	}
 
@@ -320,4 +316,3 @@ joycon_controller_get_handle(struct joycon_controller *jc, int *out_handle)
 	*out_handle = jc->handle;
 	return true;
 }
-

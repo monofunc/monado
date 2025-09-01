@@ -78,11 +78,11 @@ struct vroom_config
 	vroom_display *displays;
 
 	// Controllers
-	char* controller_type;
+	char *controller_type;
 
 	struct
 	{
-		char* system;
+		char *system;
 
 		dtrack_config dtrack;
 		vrpn_config vrpn;
@@ -97,7 +97,7 @@ vroom_config
 vroom_create_config();
 
 void
-vroom_save_config(const vroom_config* config, const char* filepath);
+vroom_save_config(const vroom_config *config, const char *filepath);
 
 
 #ifdef __cplusplus

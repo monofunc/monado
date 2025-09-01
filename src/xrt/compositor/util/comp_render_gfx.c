@@ -491,9 +491,9 @@ crg_clear_output(struct render_gfx *render, const struct comp_render_dispatch_da
 	int fb_count = render->stereo ? 2 : 1;
 
 	for (int fb = 0; fb < fb_count; ++fb) {
-		render_gfx_begin_target(     //
-		    render,                  //
-		    d->target.gfx.rtr,              //
+		render_gfx_begin_target( //
+		    render,              //
+		    d->target.gfx.rtr,   //
 		    &background_color_idle,
 		    fb); //
 
@@ -556,7 +556,7 @@ crg_distortion_common(struct render_gfx *render,
 
 
 	/*
-     * Do command writing here.
+	 * Do command writing here.
 	 */
 
 	// Prepare views.
@@ -572,16 +572,13 @@ crg_distortion_common(struct render_gfx *render,
 		if (v->target.eyes & XRT_EYE_LEFT) {
 			views_left[i] = v;
 		}
-		if (v->target.eyes & XRT_EYE_RIGHT){
+		if (v->target.eyes & XRT_EYE_RIGHT) {
 			views_right[i] = v;
 		}
 	}
 
 	// Left side
 	render_gfx_begin_target(render, d->target.gfx.rtr, &background_color_active, 0);
-
-
-
 
 
 
@@ -860,7 +857,7 @@ comp_render_gfx_layers(struct render_gfx *render,
 		    render,                        //
 		    d->views[view].squash.gfx.rtr, //
 		    color,
-		    view % 2);                        //
+		    view % 2); //
 
 		render_gfx_begin_view( //
 		    render,            //

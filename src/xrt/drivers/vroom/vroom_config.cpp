@@ -17,27 +17,40 @@
 
 // Helper macros
 
-#define js_setval(var, json, key, type, value) { \
-                            cJSON* obj = cJSON_GetObjectItem(json, key); \
-                            if (obj != nullptr) { var = (type)obj->value; } \
-                            }(void*)0
+#define js_setval(var, json, key, type, value)                                                                         \
+	{                                                                                                              \
+		cJSON *obj = cJSON_GetObjectItem(json, key);                                                           \
+		if (obj != nullptr) {                                                                                  \
+			var = (type)obj->value;                                                                        \
+		}                                                                                                      \
+	}                                                                                                              \
+	(void *)0
 
 #define js_f(var, json, key) js_setval(var, json, key, float, valuedouble)
 
 #define js_s(var, json, key) js_setval(var, json, key, uint16_t, valueint)
 #define js_i(var, json, key) js_setval(var, json, key, int, valueint)
 
-#define js_true(var, json, key)  { \
-                            cJSON* obj = cJSON_GetObjectItem(json, key); \
-                            if (obj != nullptr) { var = cJSON_IsTrue(obj); } \
-                            }(void*)0
+#define js_true(var, json, key)                                                                                        \
+	{                                                                                                              \
+		cJSON *obj = cJSON_GetObjectItem(json, key);                                                           \
+		if (obj != nullptr) {                                                                                  \
+			var = cJSON_IsTrue(obj);                                                                       \
+		}                                                                                                      \
+	}                                                                                                              \
+	(void *)0
 
-#define js_string(var, json, key)  { \
-                            cJSON* obj = cJSON_GetObjectItem(json, key); \
-                            if (obj != nullptr) {                        \
-                            var = (char*)malloc(strlen(obj->valuestring)+1);         \
-                            strcpy(var, obj->valuestring); } \
-                            else { var = nullptr; } } (void*)0
+#define js_string(var, json, key)                                                                                      \
+	{                                                                                                              \
+		cJSON *obj = cJSON_GetObjectItem(json, key);                                                           \
+		if (obj != nullptr) {                                                                                  \
+			var = (char *)malloc(strlen(obj->valuestring) + 1);                                            \
+			strcpy(var, obj->valuestring);                                                                 \
+		} else {                                                                                               \
+			var = nullptr;                                                                                 \
+		}                                                                                                      \
+	}                                                                                                              \
+	(void *)0
 
 vroom_config *
 vroom_load_config()
@@ -184,7 +197,7 @@ vroom_load_config()
 		// space correction
 		{
 			cJSON *spaceJson = cJSON_GetObjectItem(vrpnJson, "spaceCorrection");
-			auto& space = vrpn.space_correction;
+			auto &space = vrpn.space_correction;
 
 			{
 				xrt_vec3 &pos = space.pos;
@@ -210,13 +223,13 @@ vroom_load_config()
 				js_true(rs.z, rotJson, "z");
 			}
 		}
-
 	}
 
 	return cfg;
 }
 
-void set_charptr(char** dest, const char* src)
+void
+set_charptr(char **dest, const char *src)
 {
 	*dest = new char[strlen(src) + 1]{0};
 	strcpy(*dest, src);
@@ -235,7 +248,7 @@ vroom_create_config()
 
 	set_charptr(&config.controller_type, "joycon");
 
-	auto& display = config.displays[0];
+	auto &display = config.displays[0];
 	set_charptr(&display.name, "Face avant");
 
 	display.position = {0, 1, 0};
@@ -245,12 +258,12 @@ vroom_create_config()
 	display.screenSize = {1280, 720};
 	display.textureSize = {1024, 512};
 
-	auto& tracking = config.tracking;
+	auto &tracking = config.tracking;
 	set_charptr(&tracking.system, "dtrack");
 
 	tracking.dtrack.port = 5000;
-	tracking.dtrack.bodies.head  = 0;
-	tracking.dtrack.bodies.left  = 1;
+	tracking.dtrack.bodies.head = 0;
+	tracking.dtrack.bodies.left = 1;
 	tracking.dtrack.bodies.right = 2;
 
 	set_charptr(&tracking.vrpn.trackers.head.tracker, "Head@localhost");
@@ -270,47 +283,47 @@ vroom_create_config()
 }
 
 void
-vroom_save_config(const vroom_config* config, const char* filepath)
+vroom_save_config(const vroom_config *config, const char *filepath)
 {
 	// Construct JSON
-	cJSON* root = cJSON_CreateObject();
+	cJSON *root = cJSON_CreateObject();
 
 	// Stereo
 	cJSON_AddItemToObject(root, "stereo", cJSON_CreateBool(config->stereo));
 
 	// Displays
-	cJSON* displays = cJSON_CreateArray();
+	cJSON *displays = cJSON_CreateArray();
 	cJSON_AddItemToObject(root, "displays", displays);
 
 	for (size_t i = 0; i < config->display_count; i++) {
-		auto& display = config->displays[i];
-		cJSON* displayJson = cJSON_CreateObject();
+		auto &display = config->displays[i];
+		cJSON *displayJson = cJSON_CreateObject();
 
 		// Name
 		cJSON_AddItemToObject(displayJson, "__name", cJSON_CreateString(display.name));
 
 		// Position
-		cJSON* position = cJSON_CreateObject();
+		cJSON *position = cJSON_CreateObject();
 		cJSON_AddItemToObject(position, "x", cJSON_CreateNumber(display.position.x));
 		cJSON_AddItemToObject(position, "y", cJSON_CreateNumber(display.position.y));
 		cJSON_AddItemToObject(position, "z", cJSON_CreateNumber(display.position.z));
 		cJSON_AddItemToObject(displayJson, "position", position);
 
 		// Rotation
-		cJSON* rotation = cJSON_CreateObject();
+		cJSON *rotation = cJSON_CreateObject();
 		cJSON_AddItemToObject(rotation, "x", cJSON_CreateNumber(display.rotation.x));
 		cJSON_AddItemToObject(rotation, "y", cJSON_CreateNumber(display.rotation.y));
 		cJSON_AddItemToObject(rotation, "z", cJSON_CreateNumber(display.rotation.z));
 		cJSON_AddItemToObject(displayJson, "rotation", rotation);
 
 		// Dimensions
-		cJSON* dimensions = cJSON_CreateObject();
+		cJSON *dimensions = cJSON_CreateObject();
 		cJSON_AddItemToObject(dimensions, "width", cJSON_CreateNumber(display.dimensions.x));
 		cJSON_AddItemToObject(dimensions, "height", cJSON_CreateNumber(display.dimensions.y));
 		cJSON_AddItemToObject(displayJson, "dimensions", dimensions);
 
 		// Screen
-		cJSON* screen = cJSON_CreateObject();
+		cJSON *screen = cJSON_CreateObject();
 		cJSON_AddItemToObject(screen, "x", cJSON_CreateNumber(display.screenPosition.x));
 		cJSON_AddItemToObject(screen, "y", cJSON_CreateNumber(display.screenPosition.y));
 		cJSON_AddItemToObject(screen, "width", cJSON_CreateNumber(display.screenSize.x));
@@ -318,7 +331,7 @@ vroom_save_config(const vroom_config* config, const char* filepath)
 		cJSON_AddItemToObject(displayJson, "screen", screen);
 
 		// Texture
-		cJSON* texture = cJSON_CreateObject();
+		cJSON *texture = cJSON_CreateObject();
 		cJSON_AddItemToObject(texture, "width", cJSON_CreateNumber(display.textureSize.x));
 		cJSON_AddItemToObject(texture, "height", cJSON_CreateNumber(display.textureSize.y));
 		cJSON_AddItemToObject(displayJson, "textureSize", texture);
@@ -331,68 +344,68 @@ vroom_save_config(const vroom_config* config, const char* filepath)
 	cJSON_AddItemToObject(root, "controller", cJSON_CreateString(config->controller_type));
 
 	// Tracking
-	cJSON* tracking = cJSON_CreateObject();
+	cJSON *tracking = cJSON_CreateObject();
 	cJSON_AddItemToObject(root, "tracking", tracking);
 
 	cJSON_AddItemToObject(tracking, "system", cJSON_CreateString(config->tracking.system));
 
 	// DTrack
-	cJSON* dtrack = cJSON_CreateObject();
+	cJSON *dtrack = cJSON_CreateObject();
 	cJSON_AddItemToObject(tracking, "dtrack", dtrack);
 	cJSON_AddItemToObject(dtrack, "port", cJSON_CreateNumber(config->tracking.dtrack.port));
 
-	cJSON* bodies = cJSON_CreateObject();
+	cJSON *bodies = cJSON_CreateObject();
 	cJSON_AddItemToObject(bodies, "head", cJSON_CreateNumber(config->tracking.dtrack.bodies.head));
 	cJSON_AddItemToObject(bodies, "left", cJSON_CreateNumber(config->tracking.dtrack.bodies.left));
 	cJSON_AddItemToObject(bodies, "right", cJSON_CreateNumber(config->tracking.dtrack.bodies.right));
 	cJSON_AddItemToObject(dtrack, "bodies", bodies);
 
 	// VRPN
-	cJSON* vrpn = cJSON_CreateObject();
+	cJSON *vrpn = cJSON_CreateObject();
 	cJSON_AddItemToObject(tracking, "vrpn", vrpn);
 
 	// VRPN Trackers
-	cJSON* trackers = cJSON_CreateObject();
+	cJSON *trackers = cJSON_CreateObject();
 	cJSON_AddItemToObject(vrpn, "trackers", trackers);
 
-	cJSON* head = cJSON_CreateObject();
+	cJSON *head = cJSON_CreateObject();
 	cJSON_AddItemToObject(head, "tracker", cJSON_CreateString(config->tracking.vrpn.trackers.head.tracker));
 	cJSON_AddItemToObject(head, "sensor", cJSON_CreateNumber(config->tracking.vrpn.trackers.head.sensor));
 	cJSON_AddItemToObject(trackers, "head", head);
 
-	cJSON* left = cJSON_CreateObject();
+	cJSON *left = cJSON_CreateObject();
 	cJSON_AddItemToObject(left, "tracker", cJSON_CreateString(config->tracking.vrpn.trackers.left.tracker));
 	cJSON_AddItemToObject(left, "sensor", cJSON_CreateNumber(config->tracking.vrpn.trackers.left.sensor));
 	cJSON_AddItemToObject(trackers, "leftHand", left);
 
-	cJSON* right = cJSON_CreateObject();
+	cJSON *right = cJSON_CreateObject();
 	cJSON_AddItemToObject(right, "tracker", cJSON_CreateString(config->tracking.vrpn.trackers.right.tracker));
 	cJSON_AddItemToObject(right, "sensor", cJSON_CreateNumber(config->tracking.vrpn.trackers.right.sensor));
 	cJSON_AddItemToObject(trackers, "rightHand", right);
 
 	// Space Correction
-	cJSON* space = cJSON_CreateObject();
+	cJSON *space = cJSON_CreateObject();
 	cJSON_AddItemToObject(vrpn, "spaceCorrection", space);
 
-	cJSON* spacePos = cJSON_CreateObject();
+	cJSON *spacePos = cJSON_CreateObject();
 	cJSON_AddItemToObject(spacePos, "x", cJSON_CreateNumber(config->tracking.vrpn.space_correction.pos.x));
 	cJSON_AddItemToObject(spacePos, "y", cJSON_CreateNumber(config->tracking.vrpn.space_correction.pos.y));
 	cJSON_AddItemToObject(spacePos, "z", cJSON_CreateNumber(config->tracking.vrpn.space_correction.pos.z));
 	cJSON_AddItemToObject(space, "pos", spacePos);
 
-	cJSON* spaceRot = cJSON_CreateObject();
+	cJSON *spaceRot = cJSON_CreateObject();
 	cJSON_AddItemToObject(spaceRot, "x", cJSON_CreateNumber(config->tracking.vrpn.space_correction.rot.x));
 	cJSON_AddItemToObject(spaceRot, "y", cJSON_CreateNumber(config->tracking.vrpn.space_correction.rot.y));
 	cJSON_AddItemToObject(spaceRot, "z", cJSON_CreateNumber(config->tracking.vrpn.space_correction.rot.z));
 	cJSON_AddItemToObject(space, "rot", spaceRot);
 
-	cJSON* mirror = cJSON_CreateObject();
+	cJSON *mirror = cJSON_CreateObject();
 	cJSON_AddItemToObject(mirror, "x", cJSON_CreateBool(config->tracking.vrpn.space_correction.mirror.x));
 	cJSON_AddItemToObject(mirror, "y", cJSON_CreateBool(config->tracking.vrpn.space_correction.mirror.y));
 	cJSON_AddItemToObject(mirror, "z", cJSON_CreateBool(config->tracking.vrpn.space_correction.mirror.z));
 	cJSON_AddItemToObject(space, "mirror", mirror);
 
-	char* json_str = cJSON_Print(root);
+	char *json_str = cJSON_Print(root);
 	if (json_str) {
 		std::ofstream out(filepath);
 		if (out.is_open()) {

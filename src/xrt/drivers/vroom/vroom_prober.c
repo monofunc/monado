@@ -45,10 +45,10 @@ vroom_auto_prober_destroy(struct xrt_auto_prober *p)
 //! @public @memberof vroom_auto_prober
 static int
 vroom_auto_prober_autoprobe(struct xrt_auto_prober *xap,
-                             cJSON *attached_data,
-                             bool no_hmds,
-                             struct xrt_prober *xp,
-                             struct xrt_device **out_xdevs)
+                            cJSON *attached_data,
+                            bool no_hmds,
+                            struct xrt_prober *xp,
+                            struct xrt_device **out_xdevs)
 {
 	struct vroom_auto_prober *cap = vroom_auto_prober(xap);
 	(void)cap;

@@ -402,9 +402,8 @@ comp_render_gfx_add_target_view(struct comp_render_dispatch_data *data,
 	    data,                                                                  //
 	    squash_as_src_sample_view,                                             //
 	    squash_as_src_norm_rect,                                               //
-	    target_viewport_data,
-	    target_index,
-	    eyes);                                                 //
+	    target_viewport_data, target_index,
+	    eyes); //
 
 	// When writing into the target.
 	view->target.gfx.vertex_rot = *target_vertex_rot;
@@ -579,9 +578,8 @@ comp_render_cs_add_target_view(struct comp_render_dispatch_data *data,
 	    data,                                                                  //
 	    squash_as_src_sample_view,                                             //
 	    squash_as_src_norm_rect,                                               //
-	    target_viewport_data,
-	    target_index,
-	    eyes);                                                 //
+	    target_viewport_data, target_index,
+	    eyes); //
 	(void)view;
 }
 

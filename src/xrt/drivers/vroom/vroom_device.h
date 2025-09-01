@@ -60,11 +60,9 @@ struct vroom_device
 
 	/* Controllers */
 	struct dtrack_flystick_controller *flystick; ///< ART FlyStick 2 controller - inputs and tracking from DTRACK2
-	struct joycon_controller *joycon_left; ///< Nintendo Joy-Con (L) - inputs from the Joy-Con
-	struct joycon_controller *joycon_right; ///< Nintendo Joy-Con (R) - inputs from the Joy-Con
+	struct joycon_controller *joycon_left;       ///< Nintendo Joy-Con (L) - inputs from the Joy-Con
+	struct joycon_controller *joycon_right;      ///< Nintendo Joy-Con (R) - inputs from the Joy-Con
 };
 
-void vroom_setup_joycons(struct vroom_device *vroom);
-
-
-
+void
+vroom_setup_joycons(struct vroom_device *vroom);

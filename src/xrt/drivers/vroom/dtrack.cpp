@@ -64,14 +64,11 @@ dtrack_update_pose(const vroom_device *vroom, const int body, xrt_pose *out)
 
 	switch (body) {
 	// head
-	case 0: dtBody = dtConf.head;
-		break;
+	case 0: dtBody = dtConf.head; break;
 	// left hand
-	case 1: dtBody = dtConf.left;
-		break;
+	case 1: dtBody = dtConf.left; break;
 	// right hand
-	case 2: dtBody = dtConf.right;
-		break;
+	case 2: dtBody = dtConf.right; break;
 	default: return;
 	}
 

@@ -923,13 +923,13 @@ render_gfx_target_resources_init(struct render_gfx_target_resources *rtr,
 	VkResult ret;
 	rtr->r = r;
 
-	ret = create_framebuffer( //
-	    vk,                   //
-	    target,               // image_view
-	    rgrp->render_pass,    //
-	    extent.width,         //
-	    extent.height,        //
-	    &rtr->framebuffers[framebuffer]);   // out_external_framebuffer
+	ret = create_framebuffer(             //
+	    vk,                               //
+	    target,                           // image_view
+	    rgrp->render_pass,                //
+	    extent.width,                     //
+	    extent.height,                    //
+	    &rtr->framebuffers[framebuffer]); // out_external_framebuffer
 	VK_CHK_WITH_RET(ret, "create_framebuffer", false);
 	VK_NAME_FRAMEBUFFER(vk, rtr->framebuffers[framebuffer], "render_gfx_target_resources framebuffer");
 

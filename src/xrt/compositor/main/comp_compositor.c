@@ -208,13 +208,13 @@ compositor_predict_frame(struct xrt_compositor *xc,
 		comp_target_update_timings(c->targets[i]);
 		assert(comp_frame_is_invalid_locked(&c->frames[i].waited));
 
-		comp_target_calc_frame_pacing( //
-		       c->targets[i], //
-		       &frame_id, //
-		       &wake_up_time_ns, //
-		       &desired_present_time_ns, //
-		       &present_slop_ns, //
-		       &predicted_display_time_ns); //
+		comp_target_calc_frame_pacing(   //
+		    c->targets[i],               //
+		    &frame_id,                   //
+		    &wake_up_time_ns,            //
+		    &desired_present_time_ns,    //
+		    &present_slop_ns,            //
+		    &predicted_display_time_ns); //
 
 		c->frames[i].waited.id = frame_id;
 		c->frames[i].waited.desired_present_time_ns = desired_present_time_ns;
@@ -977,13 +977,13 @@ compositor_init_swapchain(struct comp_compositor *c)
 		assert(c->targets[i] != NULL);
 		assert(c->target_factory != NULL);
 
-		if (!comp_target_init_post_vulkan(c->targets[i],                   //
-						 c->settings.preferred.width, //
-						 c->settings.preferred.height)) {
+		if (!comp_target_init_post_vulkan(c->targets[i],               //
+		                                  c->settings.preferred.width, //
+		                                  c->settings.preferred.height)) {
 			COMP_ERROR(c, "Window init_swapchain failed!");
 			comp_target_destroy(&c->targets[i]);
 			success = false;
-						 }
+		}
 	}
 
 	return success;
