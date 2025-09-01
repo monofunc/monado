@@ -238,7 +238,9 @@ if(WIN32)
 endif()
 
 # JoyShockLibrary
-add_subdirectory(joyshocklibrary)
+if (NOT ANDROID)
+	add_subdirectory(joyshocklibrary)
+endif()
 
 # VRPN
 set(VRPN_BUILD_CLIENT_LIBRARY ON)
