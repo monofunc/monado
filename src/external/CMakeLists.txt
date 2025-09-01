@@ -223,18 +223,19 @@ target_include_directories(
 
 # Dtrack
 
-add_library(xrt-external-dtrack STATIC
+add_library(
+	xrt-external-dtrack STATIC
 	dtrack/src/DTrackData.cpp
 	dtrack/src/DTrackNet.cpp
 	dtrack/src/DTrackParse.cpp
 	dtrack/src/DTrackParser.cpp
-	dtrack/src/DTrackSDK.cpp)
+	dtrack/src/DTrackSDK.cpp
+	)
 target_include_directories(xrt-external-dtrack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dtrack/include)
 
 if(WIN32)
 	target_link_libraries(xrt-external-dtrack ws2_32)
 endif()
-
 
 # JoyShockLibrary
 add_subdirectory(joyshocklibrary)

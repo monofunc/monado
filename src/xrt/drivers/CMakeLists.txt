@@ -58,27 +58,37 @@ endif()
 
 if(XRT_BUILD_DRIVER_VROOM)
 	add_library(
-			drv_vroom STATIC
-			vroom/vroom_debug.cpp vroom/vroom_debug.h
-			vroom/vroom_device.cpp vroom/vroom_device.h
-			vroom/vroom_interface.h
-			vroom/vroom_prober.c
-			vroom/vroom_flystick.cpp vroom/vroom_flystick.h
-			vroom/dtrack.cpp vroom/dtrack.hpp
-			vroom/joycon.cpp vroom/joycon.h
-			vroom/vrpn.cpp vroom/vrpn.hpp
-			vroom/vroom_config.cpp vroom/vroom_config.hpp
-			"${CMAKE_SOURCE_DIR}/src/external/glad/src/gl.c"
-	)
+		drv_vroom STATIC
+		vroom/vroom_debug.cpp
+		vroom/vroom_debug.h
+		vroom/vroom_device.cpp
+		vroom/vroom_device.h
+		vroom/vroom_interface.h
+		vroom/vroom_prober.c
+		vroom/vroom_flystick.cpp
+		vroom/vroom_flystick.h
+		vroom/dtrack.cpp
+		vroom/dtrack.hpp
+		vroom/joycon.cpp
+		vroom/joycon.h
+		vroom/vrpn.cpp
+		vroom/vrpn.hpp
+		vroom/vroom_config.cpp
+		vroom/vroom_config.hpp
+		"${CMAKE_SOURCE_DIR}/src/external/glad/src/gl.c"
+		)
 
-	target_link_libraries(drv_vroom PRIVATE
+	target_link_libraries(
+		drv_vroom
+		PRIVATE
 			xrt-interfaces
 			aux_util
 			xrt-external-dtrack
 			xrt-external-imgui-sdl2
 			JoyShockLibrary
 			vrpn
-			xrt-external-cjson)
+			xrt-external-cjson
+		)
 	list(APPEND ENABLED_HEADSET_DRIVERS vroom)
 endif()
 
