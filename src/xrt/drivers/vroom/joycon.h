@@ -1,3 +1,5 @@
+// Copyright 2022-2025, INSA Rouen Normandie
+// SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief Nintendo Joy-Con controller interface

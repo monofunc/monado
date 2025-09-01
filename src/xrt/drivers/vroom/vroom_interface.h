@@ -1,3 +1,5 @@
+// Copyright 2022-2025, INSA Rouen Normandie
+// SPDX-License-Identifier: BSL-1.0
 // Copyright 2020-2021, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
