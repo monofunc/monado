@@ -638,8 +638,8 @@ comp_target_swapchain_create_images(struct comp_target *ct, const struct comp_ta
 {
 	struct comp_target_swapchain *cts = (struct comp_target_swapchain *)ct;
 	struct vk_bundle *vk = get_vk(cts);
-	VkBool32 supported;
-	VkResult ret;
+	VkBool32 supported = VK_FALSE;
+	VkResult ret = VK_SUCCESS;
 
 	int64_t now_ns = os_monotonic_get_ns();
 	// Some platforms really don't like the pacing_compositor code.
@@ -680,11 +680,10 @@ comp_target_swapchain_create_images(struct comp_target *ct, const struct comp_ta
 	}
 
 	// Can we create swapchains from the surface on this device and queue.
-	ret = vk->vkGetPhysicalDeviceSurfaceSupportKHR( //
-	    vk->physical_device,                        // physicalDevice
-	    vk->main_queue->family_index,               // queueFamilyIndex
-	    cts->surface.handle,                        // surface
-	    &supported);                                // pSupported
+	ret = comp_target_queue_family_supports_present( //
+	    ct,                                          // comp_target (base)
+	    vk->main_queue->family_index,                // queueFamilyIndex
+	    &supported);                                 // pSupported
 	if (ret != VK_SUCCESS) {
 		COMP_ERROR(ct->c, "vkGetPhysicalDeviceSurfaceSupportKHR: %s", vk_result_string(ret));
 		goto error_print_and_free;
@@ -868,7 +867,7 @@ comp_target_swapchain_acquire_next_image(struct comp_target *ct, uint32_t *out_i
 
 static VkResult
 comp_target_swapchain_present(struct comp_target *ct,
-                              VkQueue queue,
+                              struct vk_bundle_queue *present_queue,
                               uint32_t index,
                               uint64_t timeline_semaphore_value,
                               int64_t desired_present_time_ns,
@@ -923,9 +922,9 @@ comp_target_swapchain_present(struct comp_target *ct,
 
 
 	// Need to take the queue lock for present.
-	vk_queue_lock(vk->main_queue);
-	VkResult ret = vk->vkQueuePresentKHR(queue, &present_info);
-	vk_queue_unlock(vk->main_queue);
+	vk_queue_lock(present_queue);
+	VkResult ret = vk->vkQueuePresentKHR(present_queue->queue, &present_info);
+	vk_queue_unlock(present_queue);
 
 
 #ifdef VK_EXT_display_control
@@ -1062,6 +1061,26 @@ comp_target_swapchain_info_gpu(
 	u_pc_info_gpu(cts->upc, frame_id, gpu_start_ns, gpu_end_ns, when_ns);
 }
 
+static VkResult
+comp_target_swapchain_queue_family_supports_present(struct comp_target *ct,
+                                                    uint32_t queue_family_index,
+                                                    VkBool32 *out_supported)
+{
+	COMP_TRACE_MARKER();
+
+	struct comp_target_swapchain *cts = (struct comp_target_swapchain *)ct;
+	struct vk_bundle *vk = get_vk(cts);
+
+	VkResult ret = vk->vkGetPhysicalDeviceSurfaceSupportKHR( //
+	    vk->physical_device,                                 // physicalDevice
+	    queue_family_index,                                  // queueFamilyIndex
+	    cts->surface.handle,                                 // surface
+	    out_supported);                                      // pSupported
+
+	VK_CHK_AND_RET(ret, "queue_family_supports_present");
+	return VK_SUCCESS;
+}
+
 
 /*
  *
@@ -1138,6 +1157,7 @@ comp_target_swapchain_init_and_set_fnptrs(struct comp_target_swapchain *cts,
 	cts->base.mark_timing_point = comp_target_swapchain_mark_timing_point;
 	cts->base.update_timings = comp_target_swapchain_update_timings;
 	cts->base.info_gpu = comp_target_swapchain_info_gpu;
+	cts->base.queue_family_supports_present = comp_target_swapchain_queue_family_supports_present;
 
 	os_thread_helper_init(&cts->vblank.event_thread);
 }

@@ -587,7 +587,9 @@ render_resources_init(struct render_resources *r,
 	 * Command buffer pool, needs to go first.
 	 */
 
-	ret = vk_cmd_pool_init(vk, &r->distortion_pool, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
+	struct vk_bundle_queue *queue = render_resources_get_queue(r);
+
+	ret = vk_cmd_pool_init_for_queue(vk, &r->distortion_pool, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT, queue);
 	VK_CHK_WITH_RET(ret, "vk_cmd_pool_init", false);
 
 	VK_NAME_COMMAND_POOL(vk, r->distortion_pool.pool, "render_resources distortion command pool");
@@ -595,7 +597,7 @@ render_resources_init(struct render_resources *r,
 	VkCommandPoolCreateInfo command_pool_info = {
 	    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 	    .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-	    .queueFamilyIndex = vk->main_queue->family_index,
+	    .queueFamilyIndex = queue->family_index,
 	};
 
 	ret = vk->vkCreateCommandPool(vk->device, &command_pool_info, NULL, &r->cmd_pool);
@@ -657,7 +659,7 @@ render_resources_init(struct render_resources *r,
 		    r->mock.color.image);        // dst
 		VK_CHK_WITH_RET(ret, "prepare_mock_image_locked", false);
 
-		ret = vk_cmd_end_submit_wait_and_free_cmd_buffer_locked(vk, vk->main_queue, r->cmd_pool, cmd);
+		ret = vk_cmd_end_submit_wait_and_free_cmd_buffer_locked(vk, queue, r->cmd_pool, cmd);
 		VK_CHK_WITH_RET(ret, "vk_cmd_end_submit_wait_and_free_cmd_buffer_locked", false);
 
 		// No need to wait, submit waits on the fence.
@@ -822,6 +824,54 @@ render_resources_init(struct render_resources *r,
 	/*
 	 * Compute static.
 	 */
+
+	r->compute.present.acquire_cmd = VK_NULL_HANDLE;
+	r->compute.present.release_cmd = VK_NULL_HANDLE;
+
+	/*!
+	 * This section creates an additional gfx command pool/buffers, and an additional (timeline) semaphores
+	 * for sync between the compute and graphics/present queue.
+	 *
+	 * @see render_resources::compute::present for details.
+	 */
+	{
+		VkCommandPoolCreateInfo command_pool_info = {
+		    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		    .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+		    .queueFamilyIndex = vk->main_queue->family_index,
+		};
+
+		ret = vk->vkCreateCommandPool(vk->device, &command_pool_info, NULL, &r->compute.present.cmd_pool);
+		VK_CHK_WITH_RET(ret, "vkCreateCommandPool", false);
+
+		VK_NAME_COMMAND_POOL(vk, r->compute.present.cmd_pool, "render_resources::compute::present::cmd_pool");
+
+		const VkCommandBufferAllocateInfo cmd_buffer_info = {
+		    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		    .commandPool = r->compute.present.cmd_pool,
+		    .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		    .commandBufferCount = 2,
+		};
+		VkCommandBuffer gfx_cmds[2] = {0};
+
+		ret = vk->vkAllocateCommandBuffers( //
+		    vk->device,                     // device
+		    &cmd_buffer_info,               // pAllocateInfo
+		    gfx_cmds);                      // pCommandBuffers
+		VK_CHK_WITH_RET(ret, "vkAllocateCommandBuffers", false);
+
+		r->compute.present.acquire_cmd = gfx_cmds[0];
+		r->compute.present.release_cmd = gfx_cmds[1];
+
+		VK_NAME_COMMAND_BUFFER(vk, r->compute.present.acquire_cmd,
+		                       "render_resources::compute::present::acquire_cmd");
+
+		VK_NAME_COMMAND_BUFFER(vk, r->compute.present.release_cmd,
+		                       "render_resources::compute::present::release_cmd");
+
+		ret = render_resources_reset_semaphores(r);
+		VK_CHK_WITH_RET(ret, "render_resources::compute::present::semaphores", ret);
+	}
 
 	VkBufferUsageFlags ubo_usage_flags = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 	VkMemoryPropertyFlags memory_property_flags =
@@ -1138,6 +1188,10 @@ render_resources_fini(struct render_resources *r)
 
 	vk_cmd_pool_destroy(vk, &r->distortion_pool);
 	D(CommandPool, r->cmd_pool);
+	D(CommandPool, r->compute.present.cmd_pool);
+
+	D(Semaphore, r->compute.present.semaphores.compute_finished);
+	D(Semaphore, r->compute.present.semaphores.compute_acquired);
 
 	// Finally forget about the vk bundle. We do not own it!
 	r->vk = NULL;
@@ -1234,6 +1288,63 @@ render_resources_get_duration(struct render_resources *r, uint64_t *out_gpu_dura
 	return true;
 }
 
+struct vk_bundle_queue *
+render_resources_get_queue(struct render_resources *r)
+{
+	if (r->vk->compute_queue != NULL && //
+	    r->vk->compute_queue->queue != VK_NULL_HANDLE) {
+		return r->vk->compute_queue;
+	}
+	return r->vk->main_queue;
+}
+
+VkResult
+render_resources_reset_semaphores(struct render_resources *r)
+{
+	struct vk_bundle *vk = r->vk;
+
+	D(Semaphore, r->compute.present.semaphores.compute_finished);
+	D(Semaphore, r->compute.present.semaphores.compute_acquired);
+
+	r->compute.present.semaphores.compute_acquired = VK_NULL_HANDLE;
+	r->compute.present.semaphores.compute_finished = VK_NULL_HANDLE;
+	r->compute.present.semaphores.is_timeline = false;
+
+	VkSemaphoreCreateInfo sem_create_info = {
+	    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+	    .pNext = NULL,
+	    .flags = 0,
+	};
+#ifdef VK_KHR_timeline_semaphore
+	const VkSemaphoreTypeCreateInfo sem_type_create_info = {
+	    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+	    .pNext = NULL,
+	    .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+	    .initialValue = 0,
+	};
+	if (vk->has_KHR_timeline_semaphore) {
+		vk_append_to_pnext_chain((VkBaseInStructure *)&sem_create_info,
+		                         (VkBaseInStructure *)&sem_type_create_info);
+		r->compute.present.semaphores.is_timeline = true;
+	}
+#endif
+
+	VkResult ret =
+	    vk->vkCreateSemaphore(vk->device, &sem_create_info, NULL, &r->compute.present.semaphores.compute_acquired);
+	VK_CHK_WITH_RET(ret, "render_resources:: failed to create compute_acquired semaphore", false);
+
+	VK_NAME_SEMAPHORE(vk, r->compute.present.semaphores.compute_acquired,
+	                  "render_resources::compute::present::compute_acquired");
+
+	ret =
+	    vk->vkCreateSemaphore(vk->device, &sem_create_info, NULL, &r->compute.present.semaphores.compute_finished);
+	VK_CHK_WITH_RET(ret, "render_resources:: failed to create compute_finished semaphore", false);
+
+	VK_NAME_SEMAPHORE(vk, r->compute.present.semaphores.compute_finished,
+	                  "render_resources::compute::present::compute_finished");
+
+	return ret;
+}
 
 /*
  *

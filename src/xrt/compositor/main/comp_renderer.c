@@ -109,6 +109,8 @@ struct comp_renderer
 
 	struct comp_mirror_to_debug_gui mirror_to_debug_gui;
 
+	bool compute_queue_supports_present;
+
 	//! @}
 
 	//! @name Image-dependent members
@@ -152,6 +154,28 @@ struct comp_renderer
  * Functions.
  *
  */
+static inline struct vk_bundle_queue *
+renderer_get_queue(struct comp_renderer *r)
+{
+	return render_resources_get_queue(&r->c->nr);
+}
+
+static inline bool
+renderer_queue_supports_present(struct comp_renderer *r)
+{
+	return !r->settings->use_compute || r->compute_queue_supports_present;
+}
+
+static inline struct vk_bundle_queue *
+renderer_get_present_queue(struct comp_renderer *r)
+{
+	struct vk_bundle *vk = &r->c->base.vk;
+	if (r->settings->use_compute && r->compute_queue_supports_present) {
+		assert(vk->compute_queue != NULL);
+		return vk->compute_queue;
+	}
+	return vk->main_queue;
+}
 
 static void
 renderer_wait_queue_idle(struct comp_renderer *r)
@@ -159,9 +183,17 @@ renderer_wait_queue_idle(struct comp_renderer *r)
 	COMP_TRACE_MARKER();
 	struct vk_bundle *vk = &r->c->base.vk;
 
-	vk_queue_lock(vk->main_queue);
-	vk->vkQueueWaitIdle(vk->main_queue->queue);
-	vk_queue_unlock(vk->main_queue);
+	struct vk_bundle_queue *queue = renderer_get_queue(r);
+	vk_queue_lock(queue);
+	vk->vkQueueWaitIdle(queue->queue);
+	vk_queue_unlock(queue);
+
+	if (!renderer_queue_supports_present(r)) {
+		assert(queue != vk->main_queue);
+		vk_queue_lock(vk->main_queue);
+		vk->vkQueueWaitIdle(vk->main_queue->queue);
+		vk_queue_unlock(vk->main_queue);
+	}
 }
 
 static void
@@ -433,6 +465,8 @@ renderer_create_renderings_and_fences(struct comp_renderer *r)
 		snprintf(buf, ARRAY_SIZE(buf), "Comp Renderer %u", i);
 		VK_NAME_FENCE(vk, r->fences[i], buf);
 	}
+
+	render_resources_reset_semaphores(&r->c->nr);
 }
 
 static void
@@ -537,6 +571,21 @@ renderer_ensure_images_and_renderings(struct comp_renderer *r, bool force_recrea
 
 	comp_target_create_images(r->c->target, &info);
 
+	if (r->settings->use_compute) {
+		assert(r->c->base.vk.compute_queue != NULL);
+
+		struct vk_bundle *vk = &r->c->base.vk;
+		VkBool32 queue_supports_present = VK_FALSE;
+
+		const VkResult vk_res = comp_target_queue_family_supports_present(
+		    r->c->target, r->c->base.vk.compute_queue->family_index, &queue_supports_present);
+		VK_CHK_WITH_RET(vk_res, "failed to query if compute-only queue supports present", false);
+
+		r->compute_queue_supports_present = queue_supports_present;
+
+		COMP_INFO(c, "Compute queue has present caps: %s", queue_supports_present ? "true" : "false");
+	}
+
 	bool pre_rotate = false;
 	if (r->c->target->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
 	    r->c->target->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) {
@@ -618,7 +667,9 @@ renderer_wait_for_last_fence(struct comp_renderer *r)
 }
 
 static XRT_CHECK_RESULT VkResult
-renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineStageFlags pipeline_stage_flag)
+renderer_submit_queue_with_present_support(struct comp_renderer *r,
+                                           VkCommandBuffer cmd,
+                                           VkPipelineStageFlags pipeline_stage_flag)
 {
 	COMP_TRACE_MARKER();
 
@@ -707,6 +758,8 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 	    .pSignalSemaphores = signal_sems_ptr,
 	};
 
+	struct vk_bundle_queue *queue = renderer_get_queue(r);
+
 	// Everything prepared, now we are submitting.
 	comp_target_mark_submit_begin(ct, frame_id, os_monotonic_get_ns());
 
@@ -716,7 +769,7 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 	 * us avoid taking a lot of locks. The queue lock will be taken by
 	 * @ref vk_cmd_submit_locked tho.
 	 */
-	ret = vk_cmd_submit_locked(vk, vk->main_queue, 1, &comp_submit_info, r->fences[r->acquired_buffer]);
+	ret = vk_cmd_submit_locked(vk, queue, 1, &comp_submit_info, r->fences[r->acquired_buffer]);
 
 	// We have now completed the submit, even if we failed.
 	comp_target_mark_submit_end(ct, frame_id, os_monotonic_get_ns());
@@ -728,6 +781,187 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 	r->fenced_buffer = r->acquired_buffer;
 
 	return ret;
+}
+
+/*!
+ * @see struct render_resources::compute::present for details
+ */
+static XRT_CHECK_RESULT VkResult
+renderer_submit_queue_no_present_support(struct comp_renderer *r,
+                                         VkCommandBuffer compute_cmd,
+                                         VkPipelineStageFlags pipeline_stage_flag)
+{
+	COMP_TRACE_MARKER();
+
+	struct vk_bundle *vk = &r->c->base.vk;
+	struct comp_target *ct = r->c->target;
+
+	assert(r->c->frame.rendering.id >= 0);
+	const uint64_t frame_id = (uint64_t)r->c->frame.rendering.id;
+
+	// Wait for previous frame and reset fence
+	renderer_wait_for_last_fence(r);
+	assert(r->fenced_buffer < 0 && r->acquired_buffer >= 0);
+
+	VkResult ret = vk->vkResetFences(vk->device, 1, &r->fences[r->acquired_buffer]);
+	VK_CHK_AND_RET(ret, "vkResetFences");
+
+	const uint32_t present_complete_count = ct->semaphores.present_complete != VK_NULL_HANDLE;
+	const uint32_t render_complete_count = ct->semaphores.render_complete != VK_NULL_HANDLE;
+
+	void *next = NULL;
+#ifdef VK_KHR_timeline_semaphore
+	//! Timeline info for present (queue) release submit
+	VkTimelineSemaphoreSubmitInfoKHR present_release_timeline = {
+	    .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO_KHR,
+	};
+
+	if (ct->semaphores.render_complete_is_timeline && present_complete_count) {
+
+		assert(present_complete_count == 1);
+		present_release_timeline.waitSemaphoreValueCount = present_complete_count;
+		present_release_timeline.pWaitSemaphoreValues = &frame_id;
+
+		next = (VkBaseInStructure *)&present_release_timeline;
+	}
+
+	if (r->c->nr.compute.present.semaphores.is_timeline) {
+
+		present_release_timeline.signalSemaphoreValueCount = 1;
+		present_release_timeline.pSignalSemaphoreValues = &frame_id;
+
+		next = (VkBaseInStructure *)&present_release_timeline;
+	}
+
+#endif
+
+	const VkPipelineStageFlags cs_acquire_wait_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+	//! present (queue) release submit: wait for present_complete, signal compute_acquired
+	const VkSubmitInfo present_release_submit = {
+	    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+	    .pNext = next,
+	    .waitSemaphoreCount = present_complete_count,
+	    .pWaitSemaphores = present_complete_count ? &ct->semaphores.present_complete : NULL,
+	    .pWaitDstStageMask = &cs_acquire_wait_stage,
+	    .commandBufferCount = 1,
+	    .pCommandBuffers = &r->c->nr.compute.present.release_cmd,
+	    .signalSemaphoreCount = 1,
+	    .pSignalSemaphores = &r->c->nr.compute.present.semaphores.compute_acquired,
+	};
+
+	next = NULL;
+#ifdef VK_KHR_timeline_semaphore
+	//! Timeline info for compute submit
+	VkTimelineSemaphoreSubmitInfoKHR compute_timeline = {
+	    .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO_KHR,
+	};
+
+	if (r->c->nr.compute.present.semaphores.is_timeline) {
+
+		compute_timeline.waitSemaphoreValueCount = 1;
+		compute_timeline.pWaitSemaphoreValues = &frame_id;
+
+		next = (VkBaseInStructure *)&compute_timeline;
+	}
+
+	if (r->c->nr.compute.present.semaphores.is_timeline) {
+
+		compute_timeline.signalSemaphoreValueCount = 1;
+		compute_timeline.pSignalSemaphoreValues = &frame_id;
+
+		next = (VkBaseInStructure *)&compute_timeline;
+	}
+#endif
+
+	//! Compute submit: wait for compute_acquired, signal compute_finished
+	const VkSubmitInfo compute_submit = {
+	    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+	    .pNext = next,
+	    .waitSemaphoreCount = 1,
+	    .pWaitSemaphores = &r->c->nr.compute.present.semaphores.compute_acquired,
+	    .pWaitDstStageMask = &pipeline_stage_flag,
+	    .commandBufferCount = 1,
+	    .pCommandBuffers = &compute_cmd,
+	    .signalSemaphoreCount = 1,
+	    .pSignalSemaphores = &r->c->nr.compute.present.semaphores.compute_finished,
+	};
+
+	next = NULL;
+#ifdef VK_KHR_timeline_semaphore
+	//! Timeline info for present (queue) acquire submit
+	VkTimelineSemaphoreSubmitInfoKHR present_acquire_timeline = {
+	    .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO_KHR,
+	};
+
+	if (r->c->nr.compute.present.semaphores.is_timeline) {
+
+		present_acquire_timeline.waitSemaphoreValueCount = 1;
+		present_acquire_timeline.pWaitSemaphoreValues = &frame_id;
+
+		next = (VkBaseInStructure *)&present_acquire_timeline;
+	}
+
+	if (ct->semaphores.render_complete_is_timeline && render_complete_count) {
+
+		assert(render_complete_count == 1);
+		assert(!comp_frame_is_invalid_locked(&r->c->frame.rendering));
+		present_acquire_timeline.signalSemaphoreValueCount = render_complete_count;
+		present_acquire_timeline.pSignalSemaphoreValues = &frame_id;
+
+		next = (VkBaseInStructure *)&present_acquire_timeline;
+	}
+
+#endif
+
+	const VkPipelineStageFlags present_acquire_wait_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	//! Present (queue) acquire submit: wait for compute_finished, signal render_complete
+	const VkSubmitInfo present_acquire_submit = {
+	    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+	    .pNext = next,
+	    .waitSemaphoreCount = 1,
+	    .pWaitSemaphores = &r->c->nr.compute.present.semaphores.compute_finished,
+	    .pWaitDstStageMask = &present_acquire_wait_stage,
+	    .commandBufferCount = 1,
+	    .pCommandBuffers = &r->c->nr.compute.present.acquire_cmd,
+	    .signalSemaphoreCount = render_complete_count,
+	    .pSignalSemaphores = render_complete_count ? &ct->semaphores.render_complete : NULL,
+	};
+
+	// Everything prepared, now we are submitting.
+	comp_target_mark_submit_begin(ct, frame_id, os_monotonic_get_ns());
+
+	ret = vk_cmd_submit_locked(vk, vk->main_queue, 1, &present_release_submit, VK_NULL_HANDLE);
+	if (ret != VK_SUCCESS) {
+		goto out_mark_complete;
+	}
+
+	ret = vk_cmd_submit_locked(vk, vk->compute_queue, 1, &compute_submit, VK_NULL_HANDLE);
+	if (ret != VK_SUCCESS) {
+		goto out_mark_complete;
+	}
+
+	ret = vk_cmd_submit_locked(vk, vk->main_queue, 1, &present_acquire_submit, r->fences[r->acquired_buffer]);
+
+out_mark_complete:
+	// We have now completed the submit, even if we failed.
+	comp_target_mark_submit_end(ct, frame_id, os_monotonic_get_ns());
+
+	// Check after marking as submit complete.
+	VK_CHK_AND_RET(ret, "vk_cmd_submit_locked");
+
+	// This buffer now have a pending fence.
+	r->fenced_buffer = r->acquired_buffer;
+	return ret;
+}
+
+static inline XRT_CHECK_RESULT VkResult
+renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineStageFlags pipeline_stage_flag)
+{
+	if (renderer_queue_supports_present(r)) {
+		return renderer_submit_queue_with_present_support(r, cmd, pipeline_stage_flag);
+	} else {
+		return renderer_submit_queue_no_present_support(r, cmd, pipeline_stage_flag);
+	}
 }
 
 static void
@@ -792,13 +1026,13 @@ renderer_present_swapchain_image(struct comp_renderer *r, uint64_t desired_prese
 	assert(!comp_frame_is_invalid_locked(&r->c->frame.rendering));
 	uint64_t render_complete_signal_value = (uint64_t)r->c->frame.rendering.id;
 
-	ret = comp_target_present(           //
-	    r->c->target,                    //
-	    r->c->base.vk.main_queue->queue, //
-	    r->acquired_buffer,              //
-	    render_complete_signal_value,    //
-	    desired_present_time_ns,         //
-	    present_slop_ns);                //
+	ret = comp_target_present(         //
+	    r->c->target,                  //
+	    renderer_get_present_queue(r), //
+	    r->acquired_buffer,            //
+	    render_complete_signal_value,  //
+	    desired_present_time_ns,       //
+	    present_slop_ns);              //
 	r->acquired_buffer = -1;
 
 	if (ret == VK_ERROR_OUT_OF_DATE_KHR || ret == VK_SUBOPTIMAL_KHR) {
@@ -1092,7 +1326,7 @@ comp_renderer_draw(struct comp_renderer *r)
 
 	VkResult res = VK_SUCCESS;
 	if (use_compute) {
-		render_compute_init(&render_c, &c->nr);
+		render_compute_init(&render_c, &c->nr, r->compute_queue_supports_present);
 		res = dispatch_compute(r, &render_c, &frame_state, fov_source);
 	} else {
 		render_gfx_init(&render_g, &c->nr);

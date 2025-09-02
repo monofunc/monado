@@ -278,6 +278,168 @@ update_compute_descriptor_set_target(struct vk_bundle *vk,
 	    NULL);                             // pDescriptorCopies
 }
 
+static inline void
+image_barrier_present_to_compute(struct render_compute *render,
+                                 VkImage target_image,
+                                 const VkImageSubresourceRange *subresource_range)
+{
+	struct render_resources *r = render->r;
+	struct vk_bundle *vk = r->vk;
+
+	if (render->queue_supports_present) {
+
+		vk_cmd_image_barrier_gpu_locked( //
+		    vk,                          //
+		    r->cmd,                      //
+		    target_image,                //
+		    0,                           //
+		    VK_ACCESS_SHADER_WRITE_BIT,  //
+		    VK_IMAGE_LAYOUT_UNDEFINED,   //
+		    VK_IMAGE_LAYOUT_GENERAL,     //
+		    *subresource_range);         //
+
+	} else {
+
+		//! Release barrier: Present (graphics) queue releases ownership to compute queue
+		const VkImageMemoryBarrier present_release_barrier = {
+		    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		    .srcAccessMask = 0, // No access from present
+		    .dstAccessMask = 0,
+		    .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		    .newLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		    .srcQueueFamilyIndex = vk->main_queue->family_index,
+		    .dstQueueFamilyIndex = vk->compute_queue->family_index,
+		    .image = target_image,
+		    .subresourceRange = *subresource_range,
+		};
+
+		vk->vkCmdPipelineBarrier(                 //
+		    r->compute.present.release_cmd,       //
+		    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, //
+		    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, //
+		    0,                                    //
+		    0,                                    //
+		    NULL,                                 //
+		    0,                                    //
+		    NULL,                                 //
+		    1,                                    //
+		    &present_release_barrier);            //
+
+		//! Acquire barrier: Compute queue acquires ownership from present (graphics) queue
+		const VkImageMemoryBarrier compute_acquire_barrier = {
+		    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		    .srcAccessMask = 0,
+		    .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+		    .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		    .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+		    .srcQueueFamilyIndex = vk->main_queue->family_index,
+		    .dstQueueFamilyIndex = vk->compute_queue->family_index,
+		    .image = target_image,
+		    .subresourceRange = *subresource_range,
+		};
+
+		vk->vkCmdPipelineBarrier(                 //
+		    r->cmd,                               //
+		    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, //
+		    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, //
+		    0,                                    //
+		    0,                                    //
+		    NULL,                                 //
+		    0,                                    //
+		    NULL,                                 //
+		    1,                                    //
+		    &compute_acquire_barrier);            //
+	}
+}
+
+static inline void
+image_barrier_compute_to_present(struct render_compute *render,
+                                 VkImage target_image,
+                                 const VkImageSubresourceRange *subresource_range)
+{
+	struct render_resources *r = render->r;
+	struct vk_bundle *vk = r->vk;
+
+	if (render->queue_supports_present) {
+
+		const VkImageMemoryBarrier memoryBarrier = {
+		    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		    .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+		    .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+		    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+		    .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		    .image = target_image,
+		    .subresourceRange = *subresource_range,
+		};
+
+		vk->vkCmdPipelineBarrier(                 //
+		    r->cmd,                               //
+		    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, //
+		    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,    //
+		    0,                                    //
+		    0,                                    //
+		    NULL,                                 //
+		    0,                                    //
+		    NULL,                                 //
+		    1,                                    //
+		    &memoryBarrier);                      //
+
+	} else {
+
+		//! Release barrier: Compute queue releases ownership to present (graphics) queue
+		const VkImageMemoryBarrier compute_release_barrier = {
+		    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		    .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+		    .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+		    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+		    .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+		    .srcQueueFamilyIndex = vk->compute_queue->family_index,
+		    .dstQueueFamilyIndex = vk->main_queue->family_index,
+		    .image = target_image,
+		    .subresourceRange = *subresource_range,
+		};
+
+		vk->vkCmdPipelineBarrier(                 //
+		    r->cmd,                               //
+		    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, //
+		    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, //
+		    0,                                    //
+		    0,                                    //
+		    NULL,                                 //
+		    0,                                    //
+		    NULL,                                 //
+		    1,                                    //
+		    &compute_release_barrier);            //
+
+		// Acquire barrier: Present (graphics) queue acquires ownership from compute queue
+		const VkImageMemoryBarrier present_acquire_barrier = {
+		    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+		    .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+		    .dstAccessMask = 0,
+		    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+		    .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		    .srcQueueFamilyIndex = vk->compute_queue->family_index,
+		    .dstQueueFamilyIndex = vk->main_queue->family_index,
+		    .image = target_image,
+		    .subresourceRange = *subresource_range,
+		};
+
+		vk->vkCmdPipelineBarrier(                 //
+		    r->compute.present.acquire_cmd,       //
+		    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, //
+		    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, //
+		    0,                                    //
+		    0,                                    //
+		    NULL,                                 //
+		    0,                                    //
+		    NULL,                                 //
+		    1,                                    //
+		    &present_acquire_barrier);            //
+	}
+}
+
 static void
 dispatch_project_pipeline(struct render_compute *render,
                           VkSampler src_samplers[XRT_MAX_VIEWS],
@@ -308,7 +470,7 @@ dispatch_project_pipeline(struct render_compute *render,
 	 * Source, target and distortion images.
 	 */
 
-	VkImageSubresourceRange subresource_range = {
+	const VkImageSubresourceRange subresource_range = {
 	    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 	    .baseMipLevel = 0,
 	    .levelCount = VK_REMAINING_MIP_LEVELS,
@@ -316,15 +478,7 @@ dispatch_project_pipeline(struct render_compute *render,
 	    .layerCount = VK_REMAINING_ARRAY_LAYERS,
 	};
 
-	vk_cmd_image_barrier_gpu_locked( //
-	    vk,                          //
-	    r->cmd,                      //
-	    target_image,                //
-	    0,                           //
-	    VK_ACCESS_SHADER_WRITE_BIT,  //
-	    VK_IMAGE_LAYOUT_UNDEFINED,   //
-	    VK_IMAGE_LAYOUT_GENERAL,     //
-	    subresource_range);          //
+	image_barrier_present_to_compute(render, target_image, &subresource_range);
 
 	VkSampler sampler = r->samplers.clamp_to_edge;
 	VkSampler distortion_samplers[3 * XRT_MAX_VIEWS];
@@ -376,29 +530,7 @@ dispatch_project_pipeline(struct render_compute *render,
 	    h,             // groupCountY
 	    2);            // groupCountZ
 
-	VkImageMemoryBarrier memoryBarrier = {
-	    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-	    .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-	    .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
-	    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-	    .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-	    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-	    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-	    .image = target_image,
-	    .subresourceRange = subresource_range,
-	};
-
-	vk->vkCmdPipelineBarrier(                 //
-	    r->cmd,                               //
-	    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, //
-	    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,    //
-	    0,                                    //
-	    0,                                    //
-	    NULL,                                 //
-	    0,                                    //
-	    NULL,                                 //
-	    1,                                    //
-	    &memoryBarrier);                      //
+	image_barrier_compute_to_present(render, target_image, &subresource_range);
 }
 
 
@@ -409,7 +541,7 @@ dispatch_project_pipeline(struct render_compute *render,
  */
 
 bool
-render_compute_init(struct render_compute *render, struct render_resources *r)
+render_compute_init(struct render_compute *render, struct render_resources *r, bool queue_supports_present)
 {
 	VkResult ret;
 
@@ -417,6 +549,7 @@ render_compute_init(struct render_compute *render, struct render_resources *r)
 
 	struct vk_bundle *vk = r->vk;
 	render->r = r;
+	render->queue_supports_present = queue_supports_present;
 
 	for (uint32_t i = 0; i < RENDER_MAX_LAYER_RUNS_COUNT(r); i++) {
 		ret = vk_create_descriptor_set(             //
@@ -450,7 +583,7 @@ render_compute_begin(struct render_compute *render)
 	ret = vk->vkResetCommandPool(vk->device, render->r->cmd_pool, 0);
 	VK_CHK_WITH_RET(ret, "vkResetCommandPool", false);
 
-	VkCommandBufferBeginInfo begin_info = {
+	const VkCommandBufferBeginInfo begin_info = {
 	    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 	    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 	};
@@ -460,17 +593,55 @@ render_compute_begin(struct render_compute *render)
 	    &begin_info);               //
 	VK_CHK_WITH_RET(ret, "vkBeginCommandBuffer", false);
 
-	vk->vkCmdResetQueryPool(   //
-	    render->r->cmd,        //
-	    render->r->query_pool, //
-	    0,                     // firstQuery
-	    2);                    // queryCount
+	if (!render->queue_supports_present) {
+		ret = vk->vkResetCommandPool(vk->device, render->r->compute.present.cmd_pool, 0);
+		VK_CHK_WITH_RET(ret, "present_cmds::vkResetCommandPool", false);
 
-	vk->vkCmdWriteTimestamp(               //
-	    render->r->cmd,                    //
-	    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, // pipelineStage
-	    render->r->query_pool,             //
-	    0);                                // query
+		ret = vk->vkBeginCommandBuffer(             //
+		    render->r->compute.present.release_cmd, //
+		    &begin_info);                           //
+
+		ret = vk->vkBeginCommandBuffer(             //
+		    render->r->compute.present.acquire_cmd, //
+		    &begin_info);                           //
+		VK_CHK_WITH_RET(ret, "present_cmds::vkBeginCommandBuffer", false);
+	}
+
+	//! Reset query pool and add first timestamp.
+	if (render->queue_supports_present) {
+
+		vk->vkCmdResetQueryPool(   //
+		    render->r->cmd,        //
+		    render->r->query_pool, //
+		    0,                     // firstQuery
+		    2);                    // queryCount
+
+		vk->vkCmdWriteTimestamp(               //
+		    render->r->cmd,                    //
+		    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, // pipelineStage
+		    render->r->query_pool,             //
+		    0);                                // query
+
+	} else {
+
+		vk->vkCmdResetQueryPool(                    //
+		    render->r->compute.present.release_cmd, //
+		    render->r->query_pool,                  //
+		    0,                                      // firstQuery
+		    1);                                     // queryCount
+
+		vk->vkCmdResetQueryPool(                    //
+		    render->r->compute.present.acquire_cmd, //
+		    render->r->query_pool,                  //
+		    1,                                      // secondQuery
+		    1);                                     // queryCount
+
+		vk->vkCmdWriteTimestamp(                    //
+		    render->r->compute.present.release_cmd, //
+		    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,      // pipelineStage
+		    render->r->query_pool,                  //
+		    0);                                     // query
+	}
 
 	return true;
 }
@@ -481,14 +652,28 @@ render_compute_end(struct render_compute *render)
 	struct vk_bundle *vk = vk_from_render(render);
 	VkResult ret;
 
+	VkCommandBuffer cmd_to_timestamp = render->r->cmd;
+
+	if (!render->queue_supports_present) {
+		cmd_to_timestamp = render->r->compute.present.acquire_cmd;
+	}
+
 	vk->vkCmdWriteTimestamp(                  //
-	    render->r->cmd,                       //
+	    cmd_to_timestamp,                     //
 	    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // pipelineStage
 	    render->r->query_pool,                //
 	    1);                                   // query
 
 	ret = vk->vkEndCommandBuffer(render->r->cmd);
 	VK_CHK_WITH_RET(ret, "vkEndCommandBuffer", false);
+
+	if (!render->queue_supports_present) {
+		ret = vk->vkEndCommandBuffer(render->r->compute.present.release_cmd);
+		VK_CHK_WITH_RET(ret, "present_cmds::vkEndCommandBuffer", false);
+
+		ret = vk->vkEndCommandBuffer(render->r->compute.present.acquire_cmd);
+		VK_CHK_WITH_RET(ret, "present_cmds::vkEndCommandBuffer", false);
+	}
 
 	return true;
 }
@@ -724,7 +909,7 @@ render_compute_clear(struct render_compute *render,
 	 * Source, target and distortion images.
 	 */
 
-	VkImageSubresourceRange subresource_range = {
+	const VkImageSubresourceRange subresource_range = {
 	    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 	    .baseMipLevel = 0,
 	    .levelCount = VK_REMAINING_MIP_LEVELS,
@@ -732,15 +917,7 @@ render_compute_clear(struct render_compute *render,
 	    .layerCount = VK_REMAINING_ARRAY_LAYERS,
 	};
 
-	vk_cmd_image_barrier_gpu_locked( //
-	    vk,                          //
-	    r->cmd,                      //
-	    target_image,                //
-	    0,                           //
-	    VK_ACCESS_SHADER_WRITE_BIT,  //
-	    VK_IMAGE_LAYOUT_UNDEFINED,   //
-	    VK_IMAGE_LAYOUT_GENERAL,     //
-	    subresource_range);          //
+	image_barrier_present_to_compute(render, target_image, &subresource_range);
 
 	VkSampler sampler = r->samplers.mock;
 	VkSampler src_samplers[XRT_MAX_VIEWS];
@@ -796,27 +973,5 @@ render_compute_clear(struct render_compute *render,
 	    h,             // groupCountY
 	    2);            // groupCountZ
 
-	VkImageMemoryBarrier memoryBarrier = {
-	    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-	    .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-	    .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT,
-	    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-	    .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-	    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-	    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-	    .image = target_image,
-	    .subresourceRange = subresource_range,
-	};
-
-	vk->vkCmdPipelineBarrier(                 //
-	    r->cmd,                               //
-	    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, //
-	    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,    //
-	    0,                                    //
-	    0,                                    //
-	    NULL,                                 //
-	    0,                                    //
-	    NULL,                                 //
-	    1,                                    //
-	    &memoryBarrier);                      //
+	image_barrier_compute_to_present(render, target_image, &subresource_range);
 }

@@ -311,6 +311,7 @@ vk_print_queues_info(const struct vk_bundle *vk, enum u_logging_level log_level)
 
 	P("Selected Queues/Families:");
 	print_queue(dg, "main_", vk->main_queue);
+	print_queue(dg, "compute_", vk->compute_queue);
 #if defined(VK_KHR_video_encode_queue)
 	print_queue(dg, "encode_", vk->encode_queue);
 #endif

@@ -33,7 +33,7 @@
 extern "C" {
 #endif
 
-#define VK_BUNDLE_MAX_QUEUES 2
+#define VK_BUNDLE_MAX_QUEUES 3
 
 /*
  *
@@ -94,7 +94,26 @@ struct vk_bundle
 	 */
 	struct vk_bundle_queue queues[VK_BUNDLE_MAX_QUEUES];
 
+	//! Queue used for graphics and/or presentation ops/commands (@see vk_bundle::compute_queue)
 	struct vk_bundle_queue *main_queue;
+
+	/*!
+	 * Only valid and used by the compute pipeline when enabled.
+	 *
+	 * Depending on the device/configuration:
+	 *   - may not support presentation ops, use @ref vk_bundle::graphics_queue in this case
+	 *
+	 *   - may not be a dedicated compute-queue if non are available
+	 *
+	 *   - may be equal to @ref vk_bundle::graphics_queue, in this case
+	 *     the device only has a single queue family with an instance count of one,
+	 *     supporting graphics & compute + present.
+	 *
+	 *  for example, nvidia drivers on linux, no compute-only queue families support
+	 *  presentation ops for wayland surfaces
+	 */
+	struct vk_bundle_queue *compute_queue;
+
 #if defined(VK_KHR_video_encode_queue)
 	struct vk_bundle_queue *encode_queue;
 #endif

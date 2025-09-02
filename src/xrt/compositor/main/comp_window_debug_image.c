@@ -194,7 +194,7 @@ target_acquire(struct comp_target *ct, uint32_t *out_index)
 
 static VkResult
 target_present(struct comp_target *ct,
-               VkQueue queue,
+               struct vk_bundle_queue *present_queue,
                uint32_t index,
                uint64_t timeline_semaphore_value,
                int64_t desired_present_time_ns,
