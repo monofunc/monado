@@ -326,6 +326,8 @@ u_device_allocate(enum u_device_alloc_flags flags, size_t size, size_t input_cou
 		snprintf(xdev->tracking_origin->name, XRT_TRACKING_NAME_LEN, "%s", "No tracking");
 	}
 
+	xrt_device_init(xdev);
+
 	return xdev;
 }
 

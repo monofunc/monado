@@ -698,6 +698,17 @@ struct xrt_device
 };
 
 /*!
+ * Initializes the common fields of a @ref xrt_device
+ *
+ * @public @memberof xrt_device
+ */
+static inline void
+xrt_device_init(struct xrt_device *xdev)
+{
+	xrt_signal_init(&xdev->events.destroy);
+}
+
+/*!
  * Helper function for @ref xrt_device::update_inputs.
  *
  * @copydoc xrt_device::update_inputs
