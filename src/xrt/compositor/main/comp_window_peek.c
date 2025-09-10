@@ -418,6 +418,7 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 		return;
 	}
 
+	struct comp_target_semaphores *semaphores = &w->base.base.semaphores;
 	VkPipelineStageFlags submit_flags = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
 	// Waits for command to finish.
@@ -425,12 +426,12 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 	    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 	    .pNext = NULL,
 	    .waitSemaphoreCount = 1,
-	    .pWaitSemaphores = &w->base.base.semaphores.present_complete,
+	    .pWaitSemaphores = &semaphores->acquired[semaphores->frame_index],
 	    .pWaitDstStageMask = &submit_flags,
 	    .commandBufferCount = 1,
 	    .pCommandBuffers = &w->cmd,
 	    .signalSemaphoreCount = 1,
-	    .pSignalSemaphores = &w->base.base.semaphores.render_complete,
+	    .pSignalSemaphores = &semaphores->submitted[current],
 	};
 
 	// Done writing commands, submit to queue.
@@ -449,7 +450,7 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 	    .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 	    .pNext = NULL,
 	    .waitSemaphoreCount = 1,
-	    .pWaitSemaphores = &w->base.base.semaphores.render_complete,
+	    .pWaitSemaphores = &semaphores->submitted[current],
 	    .swapchainCount = 1,
 	    .pSwapchains = &w->base.swapchain.handle,
 	    .pImageIndices = &current,

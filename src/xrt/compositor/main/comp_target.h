@@ -22,7 +22,6 @@
 extern "C" {
 #endif
 
-
 /*!
  * For marking timepoints on a frame's lifetime, not a async event.
  *
@@ -100,21 +99,42 @@ struct comp_target_create_images_info
 struct comp_target_semaphores
 {
 	/*!
-	 * Optional semaphore the target should signal when present is complete.
+	 * Index of the current frame for the acquired semaphore and frame fence.
+	 * Goes from 0 to COMP_TARGET_FRAMES_IN_FLIGHT - 1
 	 */
-	VkSemaphore present_complete;
+	uint32_t frame_index;
 
 	/*!
-	 * Semaphore the renderer (consuming this target)
-	 * should signal when rendering is complete.
+	 * Maximum number of frames in flight, set by XRT_COMPOSITOR_FRAMES_IN_FLIGHT.
+	 * Defaults to 2, max of swapchain image count.
 	 */
-	VkSemaphore render_complete;
+	uint32_t frames_in_flight;
 
 	/*!
-	 * If true, @ref render_complete is a timeline
-	 * semaphore instead of a binary semaphore.
+	 * Binary semaphores for swapchain image acquisition.
+	 * Count is `frames_in_flight`.
 	 */
-	bool render_complete_is_timeline;
+	VkSemaphore *acquired;
+
+	/*!
+	 * Fences for submitting work to a VkQueue.
+	 * Count is `frames_in_flight`.
+	 */
+	VkFence *frames;
+
+	/*!
+	 * Binary semaphores for presenting the image
+	 * `submitted_count` is the number of images in the swapchain
+	 */
+	VkSemaphore *submitted;
+	uint32_t submitted_count;
+
+	/*!
+	 * Timeline semaphore for render queue submission. Depends of the availability of VK_KHR_timeline_semaphore.
+	 * Count is the same as `submitted_count`.
+	 */
+	VkSemaphore *timeline;
+	bool use_timeline_semaphore;
 };
 
 /*!

@@ -47,6 +47,7 @@
  */
 DEBUG_GET_ONCE_NUM_OPTION(preferred_at_least_image_count, "XRT_COMPOSITOR_PREFERRED_IMAGE_COUNT", 2)
 DEBUG_GET_ONCE_BOOL_OPTION(use_present_wait, "XRT_COMPOSITOR_USE_PRESENT_WAIT", false)
+DEBUG_GET_ONCE_NUM_OPTION(frames_in_flight, "XRT_COMPOSITOR_FRAMES_IN_FLIGHT", 2)
 
 static inline struct vk_bundle *
 get_vk(struct comp_target_swapchain *cts)
@@ -585,16 +586,40 @@ static void
 target_fini_semaphores(struct comp_target_swapchain *cts)
 {
 	struct vk_bundle *vk = get_vk(cts);
+	struct comp_target_semaphores *semaphores = &cts->base.semaphores;
 
-	if (cts->base.semaphores.present_complete != VK_NULL_HANDLE) {
-		vk->vkDestroySemaphore(vk->device, cts->base.semaphores.present_complete, NULL);
-		cts->base.semaphores.present_complete = VK_NULL_HANDLE;
+	for (uint32_t i = 0; i < semaphores->frames_in_flight; ++i) {
+		if (semaphores->acquired[i] != VK_NULL_HANDLE) {
+			vk->vkDestroySemaphore(vk->device, semaphores->acquired[i], NULL);
+			semaphores->acquired[i] = VK_NULL_HANDLE;
+		}
+
+		if (semaphores->frames[i] != VK_NULL_HANDLE) {
+			vk->vkDestroyFence(vk->device, semaphores->frames[i], NULL);
+			semaphores->frames[i] = VK_NULL_HANDLE;
+		}
 	}
 
-	if (cts->base.semaphores.render_complete != VK_NULL_HANDLE) {
-		vk->vkDestroySemaphore(vk->device, cts->base.semaphores.render_complete, NULL);
-		cts->base.semaphores.render_complete = VK_NULL_HANDLE;
+	free(semaphores->acquired);
+	free(semaphores->frames);
+
+	for (uint32_t i = 0; i < semaphores->submitted_count; i++) {
+		if (semaphores->submitted[i] != VK_NULL_HANDLE) {
+			vk->vkDestroySemaphore(vk->device, semaphores->submitted[i], NULL);
+			semaphores->submitted[i] = VK_NULL_HANDLE;
+		}
+#ifdef VK_KHR_timeline_semaphore
+		if (semaphores->timeline[i] != VK_NULL_HANDLE) {
+			vk->vkDestroySemaphore(vk->device, semaphores->timeline[i], NULL);
+			semaphores->timeline[i] = VK_NULL_HANDLE;
+		}
+#endif
 	}
+
+	free(semaphores->submitted);
+#ifdef VK_KHR_timeline_semaphore
+	free(semaphores->timeline);
+#endif
 }
 
 static void
@@ -605,25 +630,78 @@ target_init_semaphores(struct comp_target_swapchain *cts)
 
 	target_fini_semaphores(cts);
 
-	VkSemaphoreCreateInfo info = {
+	struct comp_target_semaphores *semaphores = &cts->base.semaphores;
+
+	semaphores->frames_in_flight = debug_get_num_option_frames_in_flight();
+	if (semaphores->frames_in_flight > cts->base.image_count) {
+		COMP_WARN(cts->base.c, "frames in flight count too high, adjusting to %u", cts->base.image_count);
+		semaphores->frames_in_flight = cts->base.image_count;
+	}
+
+	semaphores->acquired = calloc(semaphores->frames_in_flight, sizeof(*semaphores->acquired));
+	if (semaphores->acquired == NULL) {
+		COMP_ERROR(cts->base.c, "failed to allocate acquired VkSemaphore array");
+		return;
+	}
+
+	semaphores->frames = calloc(semaphores->frames_in_flight, sizeof(*semaphores->frames));
+	if (semaphores->frames == NULL) {
+		COMP_ERROR(cts->base.c, "failed to allocate frames VkFence array");
+		return;
+	}
+
+	const VkSemaphoreCreateInfo sem_info = {
 	    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
 	};
 
-	ret = vk->vkCreateSemaphore(vk->device, &info, NULL, &cts->base.semaphores.present_complete);
-	if (ret != VK_SUCCESS) {
-		COMP_ERROR(cts->base.c, "vkCreateSemaphore: %s", vk_result_string(ret));
+	const VkFenceCreateInfo fence_info = {
+	    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+	    .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+	};
+
+
+	for (uint32_t i = 0; i < semaphores->frames_in_flight; ++i) {
+		ret = vk->vkCreateSemaphore(vk->device, &sem_info, NULL, &semaphores->acquired[i]);
+		if (ret != VK_SUCCESS) {
+			COMP_ERROR(cts->base.c, "vkCreateSemaphore: %s", vk_result_string(ret));
+			return;
+		}
+
+		VK_NAME_SEMAPHORE(vk, semaphores->acquired[i], "comp_target_semaphores acquired");
+
+		ret = vk->vkCreateFence(vk->device, &fence_info, NULL, &semaphores->frames[i]);
+		if (ret != VK_SUCCESS) {
+			COMP_ERROR(cts->base.c, "vkCreateFence: %s", vk_result_string(ret));
+			return;
+		}
+
+		VK_NAME_FENCE(vk, semaphores->frames[i], "comp_target_semaphores frames");
 	}
 
-	VK_NAME_SEMAPHORE(vk, cts->base.semaphores.present_complete,
-	                  "comp_target_swapchain semaphore present complete");
-
-	cts->base.semaphores.render_complete_is_timeline = false;
-	ret = vk->vkCreateSemaphore(vk->device, &info, NULL, &cts->base.semaphores.render_complete);
-	if (ret != VK_SUCCESS) {
-		COMP_ERROR(cts->base.c, "vkCreateSemaphore: %s", vk_result_string(ret));
+	semaphores->submitted_count = cts->base.image_count;
+	semaphores->submitted = calloc(semaphores->submitted_count, sizeof(*semaphores->submitted));
+	if (semaphores->submitted == NULL) {
+		COMP_ERROR(cts->base.c, "failed to allocate submitted VkSemaphore array");
+		return;
 	}
 
-	VK_NAME_SEMAPHORE(vk, cts->base.semaphores.render_complete, "comp_target_swapchain semaphore render complete");
+#ifdef VK_KHR_timeline_semaphore
+	semaphores->timeline = calloc(semaphores->submitted_count, sizeof(*semaphores->timeline));
+	if (semaphores->timeline == NULL) {
+		COMP_ERROR(cts->base.c, "failed to allocate timeline VkSemaphore array");
+		return;
+	}
+#endif
+
+	for (uint32_t i = 0; i < semaphores->submitted_count; i++) {
+		ret = vk->vkCreateSemaphore(vk->device, &sem_info, NULL, &semaphores->submitted[i]);
+		if (ret != VK_SUCCESS) {
+			COMP_ERROR(cts->base.c, "vkCreateSemaphore: %s", vk_result_string(ret));
+			return;
+		}
+
+		VK_NAME_SEMAPHORE(vk, semaphores->submitted[i], "comp_target_semaphores submitted");
+	}
 }
 
 
@@ -655,8 +733,6 @@ comp_target_swapchain_create_images(struct comp_target *ct, const struct comp_ta
 
 	// Free old image views.
 	destroy_image_views(cts);
-
-	target_init_semaphores(cts);
 
 	VkSwapchainKHR old_swapchain_handle = cts->swapchain.handle;
 
@@ -799,7 +875,6 @@ comp_target_swapchain_create_images(struct comp_target *ct, const struct comp_ta
 
 	VK_NAME_SWAPCHAIN(vk, cts->swapchain.handle, "comp_target_swapchain swapchain");
 
-
 	/*
 	 * Set target info.
 	 */
@@ -811,6 +886,8 @@ comp_target_swapchain_create_images(struct comp_target *ct, const struct comp_ta
 	cts->base.surface_transform = surface_caps.currentTransform;
 
 	create_image_views(cts);
+
+	target_init_semaphores(cts);
 
 #ifdef VK_EXT_display_control
 	if (!check_surface_counter_caps(ct, vk, cts)) {
@@ -857,13 +934,30 @@ comp_target_swapchain_acquire_next_image(struct comp_target *ct, uint32_t *out_i
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
 
-	return vk->vkAcquireNextImageKHR(          //
-	    vk->device,                            // device
-	    cts->swapchain.handle,                 // swapchain
-	    UINT64_MAX,                            // timeout
-	    cts->base.semaphores.present_complete, // semaphore
-	    VK_NULL_HANDLE,                        // fence
-	    out_index);                            // pImageIndex
+	struct comp_target_semaphores *semaphores = &cts->base.semaphores;
+
+	const VkFence frame = semaphores->frames[semaphores->frame_index];
+	VkResult ret = vk->vkWaitForFences(vk->device, 1, &frame, VK_TRUE, UINT64_MAX);
+	if (ret != VK_SUCCESS) {
+		COMP_ERROR(ct->c, "vkWaitForFences: %s", vk_result_string(ret));
+		return ret;
+	}
+
+	ret = vk->vkResetFences(vk->device, 1, &frame);
+	if (ret != VK_SUCCESS) {
+		COMP_ERROR(ct->c, "vkResetFences: %s", vk_result_string(ret));
+		return ret;
+	}
+
+	VkSemaphore acquire = semaphores->acquired[semaphores->frame_index];
+
+	return vk->vkAcquireNextImageKHR( //
+	    vk->device,                   // device
+	    cts->swapchain.handle,        // swapchain
+	    UINT64_MAX,                   // timeout
+	    acquire,                      // semaphore
+	    VK_NULL_HANDLE,               // fence
+	    out_index);                   // pImageIndex
 }
 
 static VkResult
@@ -880,11 +974,13 @@ comp_target_swapchain_present(struct comp_target *ct,
 	assert(cts->current_frame_id > 0);
 	assert(cts->current_frame_id <= UINT32_MAX);
 
+	struct comp_target_semaphores *semaphores = &ct->semaphores;
+
 	VkPresentInfoKHR present_info = {
 	    .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 	    .pNext = NULL,
 	    .waitSemaphoreCount = 1,
-	    .pWaitSemaphores = &cts->base.semaphores.render_complete,
+	    .pWaitSemaphores = &semaphores->submitted[index],
 	    .swapchainCount = 1,
 	    .pSwapchains = &cts->swapchain.handle,
 	    .pImageIndices = &index,
@@ -927,6 +1023,8 @@ comp_target_swapchain_present(struct comp_target *ct,
 	VkResult ret = vk->vkQueuePresentKHR(queue, &present_info);
 	os_mutex_unlock(&vk->queue_mutex);
 
+	// Pick the next semaphore to wait on for swapchain acquisition.
+	semaphores->frame_index = (semaphores->frame_index + 1) % semaphores->frames_in_flight;
 
 #ifdef VK_EXT_display_control
 	if (cts->vblank.has_started) {
