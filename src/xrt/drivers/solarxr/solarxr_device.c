@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include "solarxr_interface.h"
+#include "feeder.h"
 #include "protocol.h"
 #include "solarxr_ipc_message.h"
 #include "solarxr_ipc_socket.h"
@@ -41,6 +42,7 @@ struct solarxr_generic_tracker
 struct solarxr_device
 {
 	struct xrt_device base;
+	struct feeder feeder;
 	struct os_thread thread;
 	struct solarxr_ipc_socket socket;
 	struct os_mutex mutex;
@@ -305,7 +307,7 @@ solarxr_device_handle_trackers(struct solarxr_device *const device,
 	for (uint32_t i = 0; i < trackers_len; ++i) {
 		struct solarxr_tracker_data data;
 		if (!read_solarxr_tracker_data(&data, buffer.data, buffer.length, &trackers[i])) {
-			U_LOG_IFL_W(debug_get_log_option_solarxr_log(), "read_solarxr_device_data() failed");
+			U_LOG_IFL_E(debug_get_log_option_solarxr_log(), "read_solarxr_device_data() failed");
 			continue;
 		}
 
@@ -557,7 +559,7 @@ solarxr_network_thread(void *const ptr)
 		struct solarxr_message_bundle bundle;
 		if (!read_solarxr_message_bundle(&bundle, buffer.data, buffer.length,
 		                                 (const solarxr_message_bundle_t *)buffer.data)) {
-			U_LOG_IFL_W(debug_get_log_option_solarxr_log(), "read_solarxr_message_bundle() failed");
+			U_LOG_IFL_E(debug_get_log_option_solarxr_log(), "read_solarxr_message_bundle() failed");
 			continue;
 		}
 
@@ -568,7 +570,7 @@ solarxr_network_thread(void *const ptr)
 			struct solarxr_rpc_message_header header;
 			if (!read_solarxr_rpc_message_header(&header, buffer.data, buffer.length,
 			                                     &bundle.rpc_msgs.data[i])) {
-				U_LOG_IFL_W(debug_get_log_option_solarxr_log(),
+				U_LOG_IFL_E(debug_get_log_option_solarxr_log(),
 				            "read_solarxr_rpc_message_header() failed");
 				continue;
 			}
@@ -624,6 +626,8 @@ solarxr_network_thread(void *const ptr)
 			continue;
 		}
 
+		feeder_send_feedback(&device->feeder);
+
 		os_mutex_lock(&device->mutex);
 
 		FLATBUFFERS_VECTOR(solarxr_bone_t) bones = {0};
@@ -631,7 +635,7 @@ solarxr_network_thread(void *const ptr)
 			struct solarxr_data_feed_message_header header;
 			if (!read_solarxr_data_feed_message_header(&header, buffer.data, buffer.length,
 			                                           &bundle.data_feed_msgs.data[0])) {
-				U_LOG_IFL_W(debug_get_log_option_solarxr_log(),
+				U_LOG_IFL_E(debug_get_log_option_solarxr_log(),
 				            "read_solarxr_data_feed_message_header() failed");
 				continue;
 			}
@@ -646,7 +650,7 @@ solarxr_network_thread(void *const ptr)
 					if (!read_solarxr_device_data(
 					        &device_data, buffer.data, buffer.length,
 					        &header.message.data_feed_update.devices.data[j])) {
-						U_LOG_IFL_W(debug_get_log_option_solarxr_log(),
+						U_LOG_IFL_E(debug_get_log_option_solarxr_log(),
 						            "read_solarxr_device_data() failed");
 						continue;
 					}
@@ -672,7 +676,7 @@ solarxr_network_thread(void *const ptr)
 			for (size_t i = 0; i < bones.length; ++i) {
 				struct solarxr_bone bone;
 				if (!read_solarxr_bone(&bone, buffer.data, buffer.length, &bones.data[i])) {
-					U_LOG_IFL_W(debug_get_log_option_solarxr_log(), "read_solarxr_bone() failed");
+					U_LOG_IFL_E(debug_get_log_option_solarxr_log(), "read_solarxr_bone() failed");
 					continue;
 				}
 
@@ -760,6 +764,8 @@ solarxr_device_destroy(struct xrt_device *xdev)
 		os_thread_destroy(&device->thread);
 	}
 
+	feeder_fini(&device->feeder);
+
 	for (size_t i = 0; i < ARRAY_SIZE(device->trackers); ++i) {
 		m_relation_history_destroy(&device->trackers[i]);
 	}
@@ -826,11 +832,12 @@ solarxr_device_create_xdevs(struct xrt_tracking_origin *const tracking_origin,
 		return 0;
 	}
 
-	if (out_xdevs_cap > 1 + MAX_GENERIC_TRACKERS) {
-		out_xdevs_cap = 1 + MAX_GENERIC_TRACKERS;
+	struct solarxr_device *device;
+	if (out_xdevs_cap > 1 + ARRAY_SIZE(device->trackers)) {
+		out_xdevs_cap = 1 + ARRAY_SIZE(device->trackers);
 	}
 
-	struct solarxr_device *const device = U_DEVICE_ALLOCATE(struct solarxr_device, U_DEVICE_ALLOC_NO_FLAGS, 2, 0);
+	device = U_DEVICE_ALLOCATE(struct solarxr_device, U_DEVICE_ALLOC_NO_FLAGS, 2, 0);
 	device->base.name = XRT_DEVICE_FB_BODY_TRACKING;
 	device->base.device_type = XRT_DEVICE_TYPE_BODY_TRACKER;
 	strncpy(device->base.str, "SolarXR IPC Connection", sizeof(device->base.str) - 1);
@@ -861,10 +868,11 @@ solarxr_device_create_xdevs(struct xrt_tracking_origin *const tracking_origin,
 	memset(device->tracker_ids, 0xff, sizeof(device->tracker_ids));
 
 	uint32_t trackers_len = 0;
-	struct solarxr_generic_tracker *trackers[MAX_GENERIC_TRACKERS];
+	struct solarxr_generic_tracker *trackers[ARRAY_SIZE(device->trackers)];
 
 	// `solarxr_device_destroy()` asserts unless both have attempted initialization
-	if (os_mutex_init(&device->mutex) != 0) {
+	if (((int)!feeder_init(&device->feeder, debug_get_log_option_solarxr_log()) | os_mutex_init(&device->mutex)) !=
+	    0) {
 		goto fail;
 	}
 
@@ -1150,54 +1158,71 @@ solarxr_device_create_xdevs(struct xrt_tracking_origin *const tracking_origin,
 			goto fail;
 		}
 
-		uint32_t tracker_descs_len = 0;
-		const solarxr_tracker_data_t *tracker_descs[ARRAY_SIZE(device->trackers)];
+		uint32_t tracker_datas_len = 0;
+		struct solarxr_tracker_data tracker_datas[ARRAY_SIZE(device->trackers)];
 		if (debug_get_bool_option_solarxr_raw_trackers()) {
-			for (uint32_t i = 0; i < header.message.data_feed_update.devices.length; ++i) {
+			const flatbuffers_vector_solarxr_device_data_t devices =
+			    header.message.data_feed_update.devices;
+			for (const solarxr_device_data_t *device = devices.data, *const devices_end =
+			                                                             &device[devices.length];
+			     device < devices_end; ++device) {
 				struct solarxr_device_data device_data;
-				if (!read_solarxr_device_data(&device_data, buffer.data, buffer.length,
-				                              &header.message.data_feed_update.devices.data[i])) {
-					U_LOG_IFL_W(debug_get_log_option_solarxr_log(),
+				if (!read_solarxr_device_data(&device_data, buffer.data, buffer.length, device)) {
+					U_LOG_IFL_E(debug_get_log_option_solarxr_log(),
 					            "read_solarxr_device_data() failed");
 					continue;
 				}
-
-				uint32_t length = device_data.trackers.length;
-				if (length >= ARRAY_SIZE(tracker_descs) - tracker_descs_len) {
-					length = ARRAY_SIZE(tracker_descs) - tracker_descs_len;
-					header.message.data_feed_update.devices.length = i; // early exit
-				}
-
-				for (uint32_t j = 0; j < length; ++j) {
-					tracker_descs[tracker_descs_len++] = &device_data.trackers.data[j];
+				for (const solarxr_tracker_data_t *tracker = device_data.trackers.data,
+				                                  *const end = &tracker[device_data.trackers.length];
+				     tracker < end; ++tracker) {
+					if (tracker_datas_len >= ARRAY_SIZE(tracker_datas)) {
+						device = devices_end - 1; // break outer
+						break;
+					}
+					if (!read_solarxr_tracker_data(&tracker_datas[tracker_datas_len], buffer.data,
+					                               buffer.length, tracker)) {
+						U_LOG_IFL_E(debug_get_log_option_solarxr_log(),
+						            "read_solarxr_tracker_data() failed");
+						continue;
+					}
+					++tracker_datas_len;
 				}
 			}
 		} else {
-			tracker_descs_len =
-			    MIN(header.message.data_feed_update.synthetic_trackers.length, ARRAY_SIZE(tracker_descs));
-			for (uint32_t i = 0; i < tracker_descs_len; ++i) {
-				tracker_descs[i] = &header.message.data_feed_update.synthetic_trackers.data[i];
+			const flatbuffers_vector_solarxr_tracker_data_t synthetic_trackers =
+			    header.message.data_feed_update.synthetic_trackers;
+			for (const solarxr_tracker_data_t *tracker = synthetic_trackers.data,
+			                                  *const end = &tracker[synthetic_trackers.length];
+			     tracker < end; ++tracker) {
+				if (tracker_datas_len >= ARRAY_SIZE(tracker_datas)) {
+					break;
+				}
+				if (!read_solarxr_tracker_data(&tracker_datas[tracker_datas_len], buffer.data,
+				                               buffer.length, tracker)) {
+					U_LOG_IFL_E(debug_get_log_option_solarxr_log(),
+					            "read_solarxr_tracker_data() failed");
+					continue;
+				}
+				if (tracker_datas[tracker_datas_len].tracker_id.has_device_id) {
+					continue; // filter out loopback feeder devices
+				}
+				++tracker_datas_len;
 			}
 		}
 
 		U_LOG_IFL_I(debug_get_log_option_solarxr_log(), "Enumerated %" PRIu32 " SolarXR %s trackers",
-		            tracker_descs_len, debug_get_bool_option_solarxr_raw_trackers() ? "physical" : "synthetic");
+		            tracker_datas_len, debug_get_bool_option_solarxr_raw_trackers() ? "physical" : "synthetic");
 
-		if (tracker_descs_len > out_xdevs_cap - 1) {
-			U_LOG_IFL_W(debug_get_log_option_solarxr_log(),
+		if (tracker_datas_len > out_xdevs_cap - 1) {
+			U_LOG_IFL_E(debug_get_log_option_solarxr_log(),
 			            "Not enough xdev slots! Omitting %" PRIu32 " trackers",
-			            tracker_descs_len - (out_xdevs_cap - 1));
-			tracker_descs_len = out_xdevs_cap - 1;
+			            tracker_datas_len - (out_xdevs_cap - 1));
+			tracker_datas_len = out_xdevs_cap - 1;
 		}
 
-		for (uint32_t i = 0; i < tracker_descs_len; ++i) {
-			struct solarxr_tracker_data data;
-			if (!read_solarxr_tracker_data(&data, buffer.data, buffer.length, tracker_descs[i])) {
-				U_LOG_IFL_W(debug_get_log_option_solarxr_log(), "read_solarxr_device_data() failed");
-				continue;
-			}
-
-			const wchar_t id = solarxr_tracker_id_to_wchar(data.tracker_id);
+		for (const struct solarxr_tracker_data *data = tracker_datas, *const end = &data[tracker_datas_len];
+		     data < end; ++data) {
+			const wchar_t id = solarxr_tracker_id_to_wchar(data->tracker_id);
 
 			struct solarxr_generic_tracker *const tracker =
 			    U_DEVICE_ALLOCATE(struct solarxr_generic_tracker, U_DEVICE_ALLOC_NO_FLAGS, 1, 0);
@@ -1219,27 +1244,27 @@ solarxr_device_create_xdevs(struct xrt_tracking_origin *const tracking_origin,
 			tracker->base.inputs[0].name = XRT_INPUT_GENERIC_TRACKER_POSE;
 			tracker->role = SOLARXR_BODY_PART_NONE;
 
-			device->tracker_ids[i] = id;
-			m_relation_history_create(&device->trackers[i]);
-			tracker->parent = device;
-			tracker->index = i;
-			tracker->history = device->trackers[i];
-			device->tracker_refs[i] = tracker;
-
 			assert(trackers_len < ARRAY_SIZE(trackers));
+			device->tracker_ids[trackers_len] = id;
+			m_relation_history_create(&device->trackers[trackers_len]);
+			tracker->parent = device;
+			tracker->index = trackers_len;
+			tracker->history = device->trackers[trackers_len];
+			device->tracker_refs[trackers_len] = tracker;
+
 			trackers[trackers_len++] = tracker;
 
-			if (!data.has_info) {
+			if (!data->has_info) {
 				continue;
 			}
 
-			if (data.info.body_part < ARRAY_SIZE(device->bones)) {
-				tracker->role = data.info.body_part;
+			if (data->info.body_part < ARRAY_SIZE(device->bones)) {
+				tracker->role = data->info.body_part;
 			}
 
-			if (data.info.display_name.length != 0) {
+			if (data->info.display_name.length != 0) {
 				snprintf(tracker->base.str, sizeof(tracker->base.str), "SolarXR Tracker \"%.*s\"",
-				         (unsigned)data.info.display_name.length, data.info.display_name.data);
+				         (unsigned)data->info.display_name.length, data->info.display_name.data);
 			}
 		}
 	}
@@ -1263,4 +1288,32 @@ fail:
 
 	solarxr_device_destroy(&device->base);
 	return 0;
+}
+
+bool
+solarxr_device_add_feeder_device(struct xrt_device *const device, struct xrt_device *const xdev)
+{
+	struct solarxr_device *const solarxr = solarxr_device(device);
+	if (solarxr == NULL || solarxr_device(xdev) != NULL || solarxr_generic_tracker(xdev) != NULL) {
+		return false;
+	}
+	return feeder_add_device(&solarxr->feeder, xdev);
+}
+
+void
+solarxr_device_remove_feeder_device(struct xrt_device *const device, struct xrt_device *const xdev)
+{
+	struct solarxr_device *const solarxr = solarxr_device(device);
+	if (solarxr != NULL) {
+		feeder_remove_device(&solarxr->feeder, xdev);
+	}
+}
+
+void
+solarxr_device_clear_feeder_devices(struct xrt_device *const device)
+{
+	struct solarxr_device *const solarxr = solarxr_device(device);
+	if (solarxr != NULL) {
+		feeder_clear_devices(&solarxr->feeder);
+	}
 }

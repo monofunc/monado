@@ -573,6 +573,8 @@ endif()
 if(XRT_BUILD_DRIVER_SOLARXR)
 	add_library(
 		drv_solarxr STATIC
+		solarxr/feeder.c
+		solarxr/feeder.h
 		solarxr/protocol.c
 		solarxr/protocol.h
 		solarxr/solarxr_device.c

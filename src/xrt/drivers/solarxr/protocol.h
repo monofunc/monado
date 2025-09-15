@@ -89,10 +89,12 @@ struct solarxr_tracker_id
 	uint8_t tracker_num;
 };
 
+typedef FLATBUFFERS_VECTOR(char) flatbuffers_vector_char_t;
+
 struct solarxr_tracker_info
 { // table solarxr_protocol.data_feed.tracker.TrackerInfo
 	enum solarxr_body_part body_part;
-	FLATBUFFERS_VECTOR(char) display_name;
+	flatbuffers_vector_char_t display_name;
 };
 
 typedef struct
@@ -120,10 +122,12 @@ typedef struct
 	flatbuffers_uoffset_t offset;
 } solarxr_device_data_t;
 
+typedef FLATBUFFERS_VECTOR(solarxr_tracker_data_t) flatbuffers_vector_solarxr_tracker_data_t;
+
 struct solarxr_device_data
 { // table solarxr_protocol.data_feed.device_data.DeviceData
 	uint8_t id;
-	FLATBUFFERS_VECTOR(solarxr_tracker_data_t) trackers; // solarxr_protocol.data_feed.tracker.TrackerData[]
+	flatbuffers_vector_solarxr_tracker_data_t trackers; // solarxr_protocol.data_feed.tracker.TrackerData[]
 };
 
 typedef struct
@@ -139,12 +143,15 @@ struct solarxr_bone
 	struct xrt_vec3 head_position_g;
 };
 
+typedef FLATBUFFERS_VECTOR(solarxr_device_data_t) flatbuffers_vector_solarxr_device_data_t;
+typedef FLATBUFFERS_VECTOR(solarxr_bone_t) flatbuffers_vector_solarxr_bone_t;
+
 struct solarxr_data_feed_update
-{                                                          // table solarxr_protocol.data_feed.DataFeedUpdate
-	FLATBUFFERS_VECTOR(solarxr_device_data_t) devices; // solarxr_protocol.data_feed.device_data.DeviceData[]
-	FLATBUFFERS_VECTOR(solarxr_tracker_data_t)
-	synthetic_trackers;                       // solarxr_protocol.data_feed.tracker.TrackerData[]
-	FLATBUFFERS_VECTOR(solarxr_bone_t) bones; // solarxr_protocol.data_feed.Bone[]
+{                                                         // table solarxr_protocol.data_feed.DataFeedUpdate
+	flatbuffers_vector_solarxr_device_data_t devices; // solarxr_protocol.data_feed.device_data.DeviceData[]
+	flatbuffers_vector_solarxr_tracker_data_t
+	    synthetic_trackers;                  // solarxr_protocol.data_feed.tracker.TrackerData[]
+	flatbuffers_vector_solarxr_bone_t bones; // solarxr_protocol.data_feed.Bone[]
 };
 
 enum solarxr_data_feed_message_type
@@ -214,11 +221,14 @@ typedef struct
 	flatbuffers_uoffset_t offset;
 } solarxr_message_bundle_t;
 
+typedef FLATBUFFERS_VECTOR(solarxr_data_feed_message_header_t) flatbuffers_vector_solarxr_data_feed_message_header_t;
+typedef FLATBUFFERS_VECTOR(solarxr_rpc_message_header_t) flatbuffers_vector_solarxr_rpc_message_header_t;
+
 struct solarxr_message_bundle
 { // table solarxr_protocol.MessageBundle
-	FLATBUFFERS_VECTOR(solarxr_data_feed_message_header_t)
-	data_feed_msgs;                                            // solarxr_protocol.data_feed.DataFeedMessageHeader[]
-	FLATBUFFERS_VECTOR(solarxr_rpc_message_header_t) rpc_msgs; // solarxr_protocol.rpc.RpcMessageHeader[]
+	flatbuffers_vector_solarxr_data_feed_message_header_t
+	    data_feed_msgs;                                       // solarxr_protocol.data_feed.DataFeedMessageHeader[]
+	flatbuffers_vector_solarxr_rpc_message_header_t rpc_msgs; // solarxr_protocol.rpc.RpcMessageHeader[]
 };
 
 bool
