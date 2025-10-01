@@ -151,8 +151,11 @@ compositor_begin_session(struct xrt_compositor *xc, const struct xrt_begin_sessi
 
 			return XRT_ERROR_VULKAN;
 		}
-		comp_target_set_title(c->target, WINDOW_TITLE);
-		comp_renderer_add_debug_vars(c->r);
+
+		for (int i = 0; i < c->target_count; ++i) {
+			comp_target_set_title(c->targets[i], WINDOW_TITLE);
+			comp_renderer_add_debug_vars(c->r[i]);
+		}
 	}
 	// clang-format on
 
@@ -168,11 +171,13 @@ compositor_end_session(struct xrt_compositor *xc)
 	if (c->deferred_surface) {
 		// Make sure we don't have anything to destroy.
 		comp_swapchain_shared_garbage_collect(&c->base.cscs);
-		comp_renderer_destroy(&c->r);
+		for (int i = 0; i < c->target_count; ++i)
+			comp_renderer_destroy(&c->r[i]);
 #ifdef XRT_FEATURE_WINDOW_PEEK
 		comp_window_peek_destroy(&c->peek);
 #endif
-		comp_target_destroy(&c->target);
+		for (int i = 0; i < c->target_count; ++i)
+			comp_target_destroy(&c->targets[i]);
 	}
 
 	return XRT_SUCCESS;
@@ -192,27 +197,30 @@ compositor_predict_frame(struct xrt_compositor *xc,
 
 	COMP_SPEW(c, "PREDICT_FRAME");
 
-	comp_target_update_timings(c->target);
-
-	assert(comp_frame_is_invalid_locked(&c->frame.waited));
-
 	int64_t frame_id = -1;
 	int64_t wake_up_time_ns = 0;
 	int64_t present_slop_ns = 0;
 	int64_t desired_present_time_ns = 0;
 	int64_t predicted_display_time_ns = 0;
-	comp_target_calc_frame_pacing(   //
-	    c->target,                   //
-	    &frame_id,                   //
-	    &wake_up_time_ns,            //
-	    &desired_present_time_ns,    //
-	    &present_slop_ns,            //
-	    &predicted_display_time_ns); //
 
-	c->frame.waited.id = frame_id;
-	c->frame.waited.desired_present_time_ns = desired_present_time_ns;
-	c->frame.waited.present_slop_ns = present_slop_ns;
-	c->frame.waited.predicted_display_time_ns = predicted_display_time_ns;
+
+	for (int i = 0; i < c->target_count; ++i) {
+		comp_target_update_timings(c->targets[i]);
+		assert(comp_frame_is_invalid_locked(&c->frames[i].waited));
+
+		comp_target_calc_frame_pacing(   //
+		    c->targets[i],               //
+		    &frame_id,                   //
+		    &wake_up_time_ns,            //
+		    &desired_present_time_ns,    //
+		    &present_slop_ns,            //
+		    &predicted_display_time_ns); //
+
+		c->frames[i].waited.id = frame_id;
+		c->frames[i].waited.desired_present_time_ns = desired_present_time_ns;
+		c->frames[i].waited.present_slop_ns = present_slop_ns;
+		c->frames[i].waited.predicted_display_time_ns = predicted_display_time_ns;
+	}
 
 	*out_frame_id = frame_id;
 	*out_wake_time_ns = wake_up_time_ns;
@@ -237,7 +245,8 @@ compositor_mark_frame(struct xrt_compositor *xc,
 
 	switch (point) {
 	case XRT_COMPOSITOR_FRAME_POINT_WOKE:
-		comp_target_mark_wake_up(c->target, frame_id, when_ns);
+		for (int i = 0; i < c->target_count; ++i)
+			comp_target_mark_wake_up(c->targets[i], frame_id, when_ns);
 		return XRT_SUCCESS;
 	default: assert(false);
 	}
@@ -304,9 +313,11 @@ compositor_layer_commit(struct xrt_compositor *xc, xrt_graphics_sync_handle_t sy
 	u_graphics_sync_unref(&sync_handle);
 
 	// Do the drawing
-	xrt_result_t xret = comp_renderer_draw(c->r);
-	if (xret != XRT_SUCCESS) {
-		return xret;
+	for (int i = 0; i < c->target_count; ++i) {
+		xrt_result_t xret = comp_renderer_draw(c->r[i]);
+		if (xret != XRT_SUCCESS) {
+			return xret;
+		}
 	}
 
 	u_frame_times_widget_push_sample(&c->compositor_frame_times, os_monotonic_get_ns());
@@ -333,8 +344,8 @@ compositor_get_display_refresh_rate(struct xrt_compositor *xc, float *out_displa
 #else
 	struct comp_compositor *c = comp_compositor(xc);
 
-	if (c->target && c->target->get_current_refresh_rate) {
-		return comp_target_get_current_refresh_rate(c->target, out_display_refresh_rate_hz);
+	if (c->targets[0] && c->targets[0]->get_current_refresh_rate) {
+		return comp_target_get_current_refresh_rate(c->targets[0], out_display_refresh_rate_hz);
 	} else {
 		*out_display_refresh_rate_hz = (float)(1. / time_ns_to_s(c->frame_interval_ns));
 	}
@@ -365,8 +376,8 @@ compositor_request_display_refresh_rate(struct xrt_compositor *xc, float display
 	dlclose(android_handle);
 #else
 	struct comp_compositor *c = comp_compositor(xc);
-	if (c->target && c->target->request_refresh_rate) {
-		xrt_result_t result = comp_target_request_refresh_rate(c->target, display_refresh_rate_hz);
+	if (c->targets[0] && c->targets[0]->request_refresh_rate) {
+		xrt_result_t result = comp_target_request_refresh_rate(c->targets[0], display_refresh_rate_hz);
 		// Assume refresh rate change is immediate
 		if (result == XRT_SUCCESS)
 			c->frame_interval_ns = U_TIME_1S_IN_NS / display_refresh_rate_hz;
@@ -402,14 +413,16 @@ compositor_destroy(struct xrt_compositor *xc)
 	// Must be destroyed before Vulkan.
 	comp_swapchain_shared_destroy(&c->base.cscs, vk);
 
-	comp_renderer_destroy(&c->r);
+	for (int i = 0; i < c->target_count; ++i)
+		comp_renderer_destroy(&c->r[i]);
 
 #ifdef XRT_FEATURE_WINDOW_PEEK
 	comp_window_peek_destroy(&c->peek);
 #endif
 
 	// Does NULL checking.
-	comp_target_destroy(&c->target);
+	for (int i = 0; i < c->target_count; ++i)
+		comp_target_destroy(&c->targets[i]);
 
 	// Only depends on vk_bundle and shaders.
 	render_resources_fini(&c->nr);
@@ -818,21 +831,25 @@ compositor_try_window(struct comp_compositor *c, const struct comp_target_factor
 {
 	COMP_TRACE_MARKER();
 
-	struct comp_target *ct = NULL;
+	for (int i = 0; i < c->target_count; ++i) {
+		struct comp_target *ct = NULL;
 
-	if (!ctf->create_target(ctf, c, &ct)) {
-		return false;
+		if (!ctf->create_target(ctf, c, &ct)) {
+			return false;
+		}
+
+		ct->index = i;
+
+		if (!comp_target_init_pre_vulkan(ct)) {
+			ct->destroy(ct);
+			return false;
+		}
+
+		COMP_DEBUG(c, "Target backend %s initialized!", ct->name);
+
+		c->target_factory = ctf;
+		c->targets[i] = ct;
 	}
-
-	if (!comp_target_init_pre_vulkan(ct)) {
-		ct->destroy(ct);
-		return false;
-	}
-
-	COMP_DEBUG(c, "Target backend %s initialized!", ct->name);
-
-	c->target_factory = ctf;
-	c->target = ct;
 
 	return true;
 }
@@ -940,11 +957,13 @@ compositor_init_window_post_vulkan(struct comp_compositor *c)
 
 	assert(c->target_factory != NULL);
 
-	if (c->target != NULL) {
-		return true;
+	bool success = true;
+
+	for (int i = 0; i < c->target_count; ++i) {
+		success = success && c->targets[i] != NULL;
 	}
 
-	return compositor_try_window(c, c->target_factory);
+	return success || compositor_try_window(c, c->target_factory);
 }
 
 static bool
@@ -952,20 +971,22 @@ compositor_init_swapchain(struct comp_compositor *c)
 {
 	COMP_TRACE_MARKER();
 
-	assert(c->target != NULL);
-	assert(c->target_factory != NULL);
+	bool success = true;
 
-	if (comp_target_init_post_vulkan(c->target,                   //
-	                                 c->settings.preferred.width, //
-	                                 c->settings.preferred.height)) {
-		return true;
+	for (int i = 0; i < c->target_count; ++i) {
+		assert(c->targets[i] != NULL);
+		assert(c->target_factory != NULL);
+
+		if (!comp_target_init_post_vulkan(c->targets[i],               //
+		                                  c->settings.preferred.width, //
+		                                  c->settings.preferred.height)) {
+			COMP_ERROR(c, "Window init_swapchain failed!");
+			comp_target_destroy(&c->targets[i]);
+			success = false;
+		}
 	}
 
-	COMP_ERROR(c, "Window init_swapchain failed!");
-
-	comp_target_destroy(&c->target);
-
-	return false;
+	return success;
 }
 
 static bool
@@ -991,7 +1012,14 @@ compositor_init_renderer(struct comp_compositor *c)
 {
 	COMP_TRACE_MARKER();
 
-	c->r = comp_renderer_create(c, c->view_extents);
+
+	for (int i = 0; i < c->target_count; ++i) {
+		c->r[i] = comp_renderer_create(c, c->view_extents, i);
+		if (c->r[i] == NULL) {
+			COMP_ERROR(c, "Failed to create renderer");
+			return false;
+		}
+	}
 
 #ifdef XRT_FEATURE_WINDOW_PEEK
 	c->peek = comp_window_peek_create(c);
@@ -999,7 +1027,7 @@ compositor_init_renderer(struct comp_compositor *c)
 	c->peek = NULL;
 #endif
 
-	return c->r != NULL;
+	return true;
 }
 
 xrt_result_t
@@ -1023,8 +1051,11 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 	iface->get_display_refresh_rate = compositor_get_display_refresh_rate;
 	iface->request_display_refresh_rate = compositor_request_display_refresh_rate;
 	iface->destroy = compositor_destroy;
-	c->frame.waited.id = -1;
-	c->frame.rendering.id = -1;
+	for (int i = 0; i < XRT_MAX_VIEWS; ++i) {
+		c->frames[i].waited.id = -1;
+		c->frames[i].rendering.id = -1;
+	}
+	c->target_count = xdev->hmd->screen_count;
 	c->xdev = xdev;
 
 	xrt_result_t xret = XRT_SUCCESS;
@@ -1090,7 +1121,9 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 			xret = XRT_ERROR_VULKAN;
 			goto error;
 		}
-		comp_target_set_title(c->target, WINDOW_TITLE);
+		for (int i = 0; i < c->target_count; ++i){
+			comp_target_set_title(c->targets[i], WINDOW_TITLE);
+		}
 	}
 	// clang-format on
 
@@ -1193,8 +1226,8 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 		sys_info->refresh_rates_hz[i] = metrics.refresh_rates[i];
 	}
 #else
-	if (c->target && c->target->get_refresh_rates) {
-		comp_target_get_refresh_rates(c->target, &sys_info->refresh_rate_count, sys_info->refresh_rates_hz);
+	if (c->targets[0] && c->targets[0]->get_refresh_rates) {
+		comp_target_get_refresh_rates(c->targets[0], &sys_info->refresh_rate_count, sys_info->refresh_rates_hz);
 	} else {
 		//! @todo: Query all supported refresh rates of the current mode
 		sys_info->refresh_rate_count = 1;
@@ -1204,7 +1237,8 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 
 	// Needs to be delayed until after compositor's u_var has been setup.
 	if (!c->deferred_surface) {
-		comp_renderer_add_debug_vars(c->r);
+		for (int i = 0; i < c->target_count; ++i)
+			comp_renderer_add_debug_vars(c->r[i]);
 	}
 
 	// Standard app pacer.

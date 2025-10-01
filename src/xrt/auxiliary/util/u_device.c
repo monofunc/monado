@@ -146,6 +146,7 @@ u_extents_2d_split_side_by_side(struct xrt_device *xdev, const struct u_extents_
 	xdev->hmd->views[0].viewport.w_pixels = eye_w_pixels;
 	xdev->hmd->views[0].viewport.h_pixels = eye_h_pixels;
 	xdev->hmd->views[0].rot = u_device_rotation_ident;
+	xdev->hmd->views[0].eyes = XRT_EYE_LEFT;
 
 	// Right
 	xdev->hmd->views[1].display.w_pixels = eye_w_pixels;
@@ -155,6 +156,7 @@ u_extents_2d_split_side_by_side(struct xrt_device *xdev, const struct u_extents_
 	xdev->hmd->views[1].viewport.w_pixels = eye_w_pixels;
 	xdev->hmd->views[1].viewport.h_pixels = eye_h_pixels;
 	xdev->hmd->views[1].rot = u_device_rotation_ident;
+	xdev->hmd->views[1].eyes = XRT_EYE_LEFT;
 	return true;
 }
 
@@ -248,6 +250,7 @@ u_device_setup_split_side_by_side(struct xrt_device *xdev, const struct u_device
 		xdev->hmd->views[i].viewport.w_pixels = w_pixels;
 		xdev->hmd->views[i].viewport.h_pixels = h_pixels;
 		xdev->hmd->views[i].rot = u_device_rotation_ident;
+		xdev->hmd->views[i].eyes = XRT_EYE_LEFT;
 	}
 
 	{

@@ -488,12 +488,17 @@ do_quad_layer(struct render_gfx *render,
 static void
 crg_clear_output(struct render_gfx *render, const struct comp_render_dispatch_data *d)
 {
-	render_gfx_begin_target(     //
-	    render,                  //
-	    d->target.gfx.rtr,       //
-	    &background_color_idle); //
+	int fb_count = render->stereo ? 2 : 1;
 
-	render_gfx_end_target(render);
+	for (int fb = 0; fb < fb_count; ++fb) {
+		render_gfx_begin_target( //
+		    render,              //
+		    d->target.gfx.rtr,   //
+		    &background_color_idle,
+		    fb); //
+
+		render_gfx_end_target(render);
+	}
 }
 
 /*
@@ -554,30 +559,68 @@ crg_distortion_common(struct render_gfx *render,
 	 * Do command writing here.
 	 */
 
-	render_gfx_begin_target(       //
-	    render,                    //
-	    d->target.gfx.rtr,         //
-	    &background_color_active); //
+	// Prepare views.
+	const struct comp_render_view_data *views_left[XRT_MAX_VIEWS] = {NULL};
+	const struct comp_render_view_data *views_right[XRT_MAX_VIEWS] = {NULL};
 
-	for (uint32_t i = 0; i < d->target.view_count; i++) {
-		// Convenience.
-		const struct render_viewport_data *viewport_data = &d->views[i].target.viewport_data;
 
-		render_gfx_begin_view( //
-		    render,            //
-		    i,                 // view_index
-		    viewport_data);    //
+	for (int i = 0; i < render->r->view_count; ++i) {
+		const struct comp_render_view_data *v = &d->views[i];
+		if (v->target.index != render->index)
+			continue;
 
-		render_gfx_mesh_draw(      //
-		    render,                //
-		    i,                     // mesh_index
-		    ms.descriptor_sets[i], //
-		    do_timewarp);          //
+		if (v->target.eyes & XRT_EYE_LEFT) {
+			views_left[i] = v;
+		}
+		if (v->target.eyes & XRT_EYE_RIGHT) {
+			views_right[i] = v;
+		}
+	}
+
+	// Left side
+	render_gfx_begin_target(render, d->target.gfx.rtr, &background_color_active, 0);
+
+
+
+	for (uint32_t view_idx = 0; view_idx < render->r->view_count; ++view_idx) {
+		const struct comp_render_view_data *v = views_left[view_idx];
+		if (v == NULL)
+			continue;
+
+		const struct render_viewport_data *viewport_data = &v->target.viewport_data;
+
+		render_gfx_begin_view(render, view_idx, viewport_data);
+
+		render_gfx_mesh_draw(render, view_idx, ms.descriptor_sets[view_idx], do_timewarp);
 
 		render_gfx_end_view(render);
 	}
 
 	render_gfx_end_target(render);
+
+	// Right side
+
+	if (render->stereo) {
+		render_gfx_begin_target(render, d->target.gfx.rtr, &background_color_active, 1);
+
+
+		for (uint32_t view_idx = 0; view_idx < render->r->view_count; ++view_idx) {
+			const struct comp_render_view_data *v = views_right[view_idx];
+			if (v == NULL)
+				continue;
+
+			const struct render_viewport_data *viewport_data = &v->target.viewport_data;
+
+			render_gfx_begin_view(render, view_idx, viewport_data);
+
+			render_gfx_mesh_draw(render, view_idx, ms.descriptor_sets[view_idx], do_timewarp);
+
+			render_gfx_end_view(render);
+		}
+
+		render_gfx_end_target(render);
+	}
+
 
 	return;
 
@@ -813,7 +856,8 @@ comp_render_gfx_layers(struct render_gfx *render,
 		render_gfx_begin_target(           //
 		    render,                        //
 		    d->views[view].squash.gfx.rtr, //
-		    color);                        //
+		    color,
+		    view % 2); //
 
 		render_gfx_begin_view( //
 		    render,            //

@@ -186,7 +186,7 @@ if(XRT_HAVE_OPENGL)
 			)
 		target_include_directories(
 			xrt-external-imgui-sdl2 SYSTEM
-			PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui
+			PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/imgui/imgui
 			)
 		target_compile_definitions(xrt-external-imgui-sdl2 PUBLIC CIMGUI_USE_SDL2)
 		target_link_libraries(
@@ -220,3 +220,29 @@ add_library(xrt-external-vdf INTERFACE)
 target_include_directories(
 	xrt-external-vdf SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/valve-file-vdf
 	)
+
+# Dtrack
+
+add_library(
+	xrt-external-dtrack STATIC
+	dtrack/src/DTrackData.cpp
+	dtrack/src/DTrackNet.cpp
+	dtrack/src/DTrackParse.cpp
+	dtrack/src/DTrackParser.cpp
+	dtrack/src/DTrackSDK.cpp
+	)
+target_include_directories(xrt-external-dtrack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dtrack/include)
+
+if(WIN32)
+	target_link_libraries(xrt-external-dtrack ws2_32)
+endif()
+
+# JoyShockLibrary
+if(NOT ANDROID)
+	add_subdirectory(joyshocklibrary)
+endif()
+
+# VRPN
+set(VRPN_BUILD_CLIENT_LIBRARY ON)
+add_subdirectory(vrpn)
+target_include_directories(vrpn PUBLIC vrpn)

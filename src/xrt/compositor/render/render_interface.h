@@ -687,6 +687,9 @@ struct render_viewport_data
 {
 	uint32_t x, y;
 	uint32_t w, h;
+
+	uint32_t target_index;
+	enum xrt_eye_flags eyes;
 };
 
 
@@ -792,8 +795,8 @@ struct render_gfx_target_resources
 	// The extent of the framebuffer.
 	VkExtent2D extent;
 
-	//! Framebuffer for this target, depends on given VkImageView.
-	VkFramebuffer framebuffer;
+	//! Framebuffers for this target, depends on given VkImageView.
+	VkFramebuffer framebuffers[2];
 };
 
 /*!
@@ -806,7 +809,8 @@ render_gfx_target_resources_init(struct render_gfx_target_resources *rtr,
                                  struct render_resources *r,
                                  struct render_gfx_render_pass *rgrp,
                                  VkImageView target,
-                                 VkExtent2D extent);
+                                 VkExtent2D extent,
+                                 uint32_t framebuffer);
 
 /*!
  * Frees all resources held by the target, does not free the struct itself.
@@ -849,11 +853,16 @@ struct render_gfx
 	//! Resources that we are based on.
 	struct render_resources *r;
 
+	//! Target index.
+	uint32_t index;
+
 	//! Shared buffer that we sub-allocate UBOs from.
 	struct render_sub_alloc_tracker ubo_tracker;
 
 	//! The current target we are rendering to, can change during command building.
 	struct render_gfx_target_resources *rtr;
+
+	bool stereo;
 };
 
 /*!
@@ -1062,7 +1071,8 @@ render_gfx_layer_quad_alloc_and_write(struct render_gfx *render,
 bool
 render_gfx_begin_target(struct render_gfx *render,
                         struct render_gfx_target_resources *rtr,
-                        const VkClearColorValue *color);
+                        const VkClearColorValue *color,
+                        uint32_t framebuffer);
 
 /*!
  * @pre successful @ref render_gfx_begin_target call,

@@ -107,6 +107,8 @@ struct comp_renderer
 	struct comp_compositor *c;
 	struct comp_settings *settings;
 
+	uint32_t index;
+
 	struct comp_mirror_to_debug_gui mirror_to_debug_gui;
 
 	//! @}
@@ -172,8 +174,8 @@ calc_viewport_data(struct comp_renderer *r,
 	struct comp_compositor *c = r->c;
 
 	bool pre_rotate = false;
-	if (r->c->target->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
-	    r->c->target->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) {
+	if (r->c->targets[r->index]->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
+	    r->c->targets[r->index]->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) {
 		COMP_SPEW(c, "Swapping width and height, since we are pre rotating");
 		pre_rotate = true;
 	}
@@ -181,8 +183,8 @@ calc_viewport_data(struct comp_renderer *r,
 	int w_i32 = pre_rotate ? r->c->xdev->hmd->screens[0].h_pixels : r->c->xdev->hmd->screens[0].w_pixels;
 	int h_i32 = pre_rotate ? r->c->xdev->hmd->screens[0].w_pixels : r->c->xdev->hmd->screens[0].h_pixels;
 
-	float scale_x = (float)r->c->target->width / (float)w_i32;
-	float scale_y = (float)r->c->target->height / (float)h_i32;
+	float scale_x = (float)r->c->targets[r->index]->width / (float)w_i32;
+	float scale_y = (float)r->c->targets[r->index]->height / (float)h_i32;
 
 	for (uint32_t i = 0; i < view_count; ++i) {
 		struct xrt_view *v = &r->c->xdev->hmd->views[i];
@@ -201,6 +203,9 @@ calc_viewport_data(struct comp_renderer *r,
 			    .h = (uint32_t)(v->viewport.h_pixels * scale_y),
 			};
 		}
+
+		out_viewport_data[i].target_index = v->target_index;
+		out_viewport_data[i].eyes = v->eyes;
 	}
 }
 
@@ -208,8 +213,8 @@ static void
 calc_vertex_rot_data(struct comp_renderer *r, struct xrt_matrix_2x2 out_vertex_rots[XRT_MAX_VIEWS], size_t view_count)
 {
 	bool pre_rotate = false;
-	if (r->c->target->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
-	    r->c->target->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) {
+	if (r->c->targets[r->index]->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
+	    r->c->targets[r->index]->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) {
 		COMP_SPEW(r->c, "Swapping width and height, since we are pre rotating");
 		pre_rotate = true;
 	}
@@ -258,14 +263,14 @@ calc_pose_data(struct comp_renderer *r,
 	struct xrt_fov xdev_fovs[XRT_MAX_VIEWS] = XRT_STRUCT_INIT;
 	struct xrt_pose xdev_poses[XRT_MAX_VIEWS] = XRT_STRUCT_INIT;
 
-	xrt_result_t xret = xrt_device_get_view_poses(       //
-	    r->c->xdev,                                      //
-	    &default_eye_relation,                           //
-	    r->c->frame.rendering.predicted_display_time_ns, // at_timestamp_ns
-	    view_count,                                      //
-	    &head_relation,                                  // out_head_relation
-	    xdev_fovs,                                       // out_fovs
-	    xdev_poses);                                     // out_poses
+	xrt_result_t xret = xrt_device_get_view_poses(                  //
+	    r->c->xdev,                                                 //
+	    &default_eye_relation,                                      //
+	    r->c->frames[r->index].rendering.predicted_display_time_ns, // at_timestamp_ns
+	    view_count,                                                 //
+	    &head_relation,                                             // out_head_relation
+	    xdev_fovs,                                                  // out_fovs
+	    xdev_poses);                                                // out_poses
 	if (xret != XRT_SUCCESS) {
 		struct u_pp_sink_stack_only sink;
 		u_pp_delegate_t dg = u_pp_sink_stack_only_init(&sink);
@@ -317,15 +322,18 @@ renderer_build_rendering_target_resources(struct comp_renderer *r,
 
 	struct comp_compositor *c = r->c;
 
-	VkImageView image_view = r->c->target->images[index].view;
-	VkExtent2D extent = {r->c->target->width, r->c->target->height};
+	for (int i = 0; i < 2; ++i) {
+		VkImageView image_view = r->c->targets[r->index]->images[index].views[i];
+		VkExtent2D extent = {r->c->targets[r->index]->width, r->c->targets[r->index]->height};
 
-	render_gfx_target_resources_init( //
-	    rtr,                          //
-	    &c->nr,                       //
-	    &r->target_render_pass,       //
-	    image_view,                   //
-	    extent);                      //
+		render_gfx_target_resources_init( //
+		    rtr,                          //
+		    &c->nr,                       //
+		    &r->target_render_pass,       //
+		    image_view,                   //
+		    extent,
+		    i); //
+	}
 }
 
 /*!
@@ -349,12 +357,12 @@ renderer_create_renderings_and_fences(struct comp_renderer *r)
 	if (!use_compute) {
 		r->rtr_array = U_TYPED_ARRAY_CALLOC(struct render_gfx_target_resources, r->buffer_count);
 
-		render_gfx_render_pass_init(     //
-		    &r->target_render_pass,      // rgrp
-		    &r->c->nr,                   // struct render_resources
-		    r->c->target->format,        //
-		    VK_ATTACHMENT_LOAD_OP_CLEAR, // load_op
-		    r->c->target->final_layout); // final_layout
+		render_gfx_render_pass_init(                //
+		    &r->target_render_pass,                 // rgrp
+		    &r->c->nr,                              // struct render_resources
+		    r->c->targets[r->index]->format,        //
+		    VK_ATTACHMENT_LOAD_OP_CLEAR,            // load_op
+		    r->c->targets[r->index]->final_layout); // final_layout
 
 		for (uint32_t i = 0; i < r->buffer_count; ++i) {
 			renderer_build_rendering_target_resources(r, &r->rtr_array[i], i);
@@ -431,7 +439,7 @@ static bool
 renderer_ensure_images_and_renderings(struct comp_renderer *r, bool force_recreate)
 {
 	struct comp_compositor *c = r->c;
-	struct comp_target *target = c->target;
+	struct comp_target *target = c->targets[r->index];
 
 	if (!comp_target_check_ready(target)) {
 		// Not ready, so can't render anything.
@@ -468,27 +476,26 @@ renderer_ensure_images_and_renderings(struct comp_renderer *r, bool force_recrea
 		image_usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	}
 
-	struct comp_target_create_images_info info = {
-	    .extent =
-	        {
-	            .width = r->c->settings.preferred.width,
-	            .height = r->c->settings.preferred.height,
-	        },
-	    .image_usage = image_usage,
-	    .color_space = r->settings->color_space,
-	    .present_mode = r->settings->present_mode,
-	};
+	struct comp_target_create_images_info info = {.extent =
+	                                                  {
+	                                                      .width = r->c->settings.preferred.width,
+	                                                      .height = r->c->settings.preferred.height,
+	                                                  },
+	                                              .image_usage = image_usage,
+	                                              .color_space = r->settings->color_space,
+	                                              .present_mode = r->settings->present_mode,
+	                                              .stereo = r->settings->stereo};
 
 	static_assert(ARRAY_SIZE(info.formats) == ARRAY_SIZE(r->c->settings.formats), "Miss-match format array sizes");
 	for (uint32_t i = 0; i < r->c->settings.format_count; i++) {
 		info.formats[info.format_count++] = r->c->settings.formats[i];
 	}
 
-	comp_target_create_images(r->c->target, &info);
+	comp_target_create_images(r->c->targets[r->index], &info);
 
 	bool pre_rotate = false;
-	if (r->c->target->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
-	    r->c->target->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) {
+	if (r->c->targets[r->index]->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
+	    r->c->targets[r->index]->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) {
 		pre_rotate = true;
 	}
 
@@ -496,7 +503,7 @@ renderer_ensure_images_and_renderings(struct comp_renderer *r, bool force_recrea
 	if (!render_distortion_images_ensure(&r->c->nr, &r->c->base.vk, r->c->xdev, pre_rotate))
 		return false;
 
-	r->buffer_count = r->c->target->image_count;
+	r->buffer_count = r->c->targets[r->index]->image_count;
 
 	renderer_create_renderings_and_fences(r);
 
@@ -572,7 +579,7 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 	COMP_TRACE_MARKER();
 
 	struct vk_bundle *vk = &r->c->base.vk;
-	int64_t frame_id = r->c->frame.rendering.id;
+	int64_t frame_id = r->c->frames[r->index].rendering.id;
 	VkResult ret;
 
 	assert(frame_id >= 0);
@@ -596,7 +603,7 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 	 */
 
 	// Convenience.
-	struct comp_target *ct = r->c->target;
+	struct comp_target *ct = r->c->targets[r->index];
 #define WAIT_SEMAPHORE_COUNT 1
 
 	VkSemaphore wait_sems[WAIT_SEMAPHORE_COUNT] = {ct->semaphores.present_complete};
@@ -625,7 +632,7 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 	const void *next = NULL;
 
 #ifdef VK_KHR_timeline_semaphore
-	assert(!comp_frame_is_invalid_locked(&r->c->frame.rendering));
+	assert(!comp_frame_is_invalid_locked(&r->c->frames[r->index].rendering));
 	uint64_t render_complete_signal_values[SIGNAL_SEMAPHRE_COUNT] = {(uint64_t)frame_id};
 
 	VkTimelineSemaphoreSubmitInfoKHR timeline_info = {
@@ -693,7 +700,7 @@ renderer_acquire_swapchain_image(struct comp_renderer *r)
 		// Not ready yet.
 		return;
 	}
-	ret = comp_target_acquire(r->c->target, &buffer_index);
+	ret = comp_target_acquire(r->c->targets[r->index], &buffer_index);
 
 	if ((ret == VK_ERROR_OUT_OF_DATE_KHR) || (ret == VK_SUBOPTIMAL_KHR)) {
 		COMP_DEBUG(r->c, "Received %s.", vk_result_string(ret));
@@ -707,7 +714,7 @@ renderer_acquire_swapchain_image(struct comp_renderer *r)
 		}
 
 		/* Acquire image again to silence validation error */
-		ret = comp_target_acquire(r->c->target, &buffer_index);
+		ret = comp_target_acquire(r->c->targets[r->index], &buffer_index);
 		if (ret != VK_SUCCESS) {
 			COMP_ERROR(r->c, "comp_target_acquire: %s", vk_result_string(ret));
 		}
@@ -721,7 +728,7 @@ renderer_acquire_swapchain_image(struct comp_renderer *r)
 static void
 renderer_resize(struct comp_renderer *r)
 {
-	if (!comp_target_check_ready(r->c->target)) {
+	if (!comp_target_check_ready(r->c->targets[r->index])) {
 		// Can't create images right now.
 		// Just close any existing renderings.
 		renderer_close_renderings_and_fences(r);
@@ -738,11 +745,11 @@ renderer_present_swapchain_image(struct comp_renderer *r, uint64_t desired_prese
 
 	VkResult ret;
 
-	assert(!comp_frame_is_invalid_locked(&r->c->frame.rendering));
-	uint64_t render_complete_signal_value = (uint64_t)r->c->frame.rendering.id;
+	assert(!comp_frame_is_invalid_locked(&r->c->frames[r->index].rendering));
+	uint64_t render_complete_signal_value = (uint64_t)r->c->frames[r->index].rendering.id;
 
 	ret = comp_target_present(          //
-	    r->c->target,                   //
+	    r->c->targets[r->index],        //
 	    r->c->base.vk.main_queue.queue, //
 	    r->acquired_buffer,             //
 	    render_complete_signal_value,   //
@@ -764,20 +771,20 @@ renderer_wait_for_present(struct comp_renderer *r, uint64_t desired_present_time
 {
 	struct comp_compositor *c = r->c;
 
-	if (!comp_target_check_ready(c->target)) {
+	if (!comp_target_check_ready(c->targets[r->index])) {
 		return;
 	}
 
 	// For estimating frame misses.
 	uint64_t before_ns = os_monotonic_get_ns();
 
-	if (c->target->wait_for_present_supported) {
+	if (c->targets[r->index]->wait_for_present_supported) {
 		// reasonable timeout
 		time_duration_ns timeout_ns = c->frame_interval_ns * 2.5f;
 
 		// @note we don't actually care about the return value, just swallow errors, anything *critical* that
 		// may be returned will be handled quite soon by later calls
-		VkResult result = comp_target_wait_for_present(c->target, timeout_ns);
+		VkResult result = comp_target_wait_for_present(c->targets[r->index], timeout_ns);
 		(void)result;
 
 		assert(result != VK_ERROR_EXTENSION_NOT_PRESENT);
@@ -935,8 +942,8 @@ dispatch_compute(struct comp_renderer *r,
 	    render->r->view_count); //
 
 	// Target Vulkan resources..
-	VkImage target_image = r->c->target->images[r->acquired_buffer].handle;
-	VkImageView target_storage_view = r->c->target->images[r->acquired_buffer].view;
+	VkImage target_image = r->c->targets[r->index]->images[r->acquired_buffer].handle;
+	VkImageView target_storage_view = r->c->targets[r->index]->images[r->acquired_buffer].views[0];
 
 	// Target view information.
 	struct render_viewport_data target_viewport_datas[XRT_MAX_VIEWS];
@@ -974,28 +981,28 @@ comp_renderer_draw(struct comp_renderer *r)
 {
 	COMP_TRACE_MARKER();
 
-	struct comp_target *ct = r->c->target;
+	struct comp_target *ct = r->c->targets[r->index];
 	struct comp_compositor *c = r->c;
 
 	// Check that we don't have any bad data.
-	assert(!comp_frame_is_invalid_locked(&c->frame.waited));
-	assert(comp_frame_is_invalid_locked(&c->frame.rendering));
+	assert(!comp_frame_is_invalid_locked(&c->frames[r->index].waited));
+	assert(comp_frame_is_invalid_locked(&c->frames[r->index].rendering));
 
 	// Move waited frame to rendering frame, clear waited.
-	comp_frame_move_and_clear_locked(&c->frame.rendering, &c->frame.waited);
+	comp_frame_move_and_clear_locked(&c->frames[r->index].rendering, &c->frames[r->index].waited);
 
 	// Tell the target we are starting to render, for frame timing.
-	comp_target_mark_begin(ct, c->frame.rendering.id, os_monotonic_get_ns());
+	comp_target_mark_begin(ct, c->frames[r->index].rendering.id, os_monotonic_get_ns());
 
 	// Are we ready to render? No - skip rendering.
-	if (!comp_target_check_ready(r->c->target)) {
+	if (!comp_target_check_ready(r->c->targets[r->index])) {
 		// Need to emulate rendering for the timing.
 		//! @todo This should be discard.
-		comp_target_mark_submit_begin(ct, c->frame.rendering.id, os_monotonic_get_ns());
-		comp_target_mark_submit_end(ct, c->frame.rendering.id, os_monotonic_get_ns());
+		comp_target_mark_submit_begin(ct, c->frames[r->index].rendering.id, os_monotonic_get_ns());
+		comp_target_mark_submit_end(ct, c->frames[r->index].rendering.id, os_monotonic_get_ns());
 
 		// Clear the rendering frame.
-		comp_frame_clear_locked(&c->frame.rendering);
+		comp_frame_clear_locked(&c->frames[r->index].rendering);
 		return XRT_SUCCESS;
 	}
 
@@ -1040,6 +1047,8 @@ comp_renderer_draw(struct comp_renderer *r)
 		res = dispatch_compute(r, &render_c, &frame_state, fov_source);
 	} else {
 		render_gfx_init(&render_g, &c->nr);
+		render_g.index = r->index;
+		render_g.stereo = r->settings->stereo;
 		res = dispatch_graphics(r, &render_g, &frame_state, fov_source);
 	}
 	if (res != VK_SUCCESS) {
@@ -1071,23 +1080,23 @@ comp_renderer_draw(struct comp_renderer *r)
 		} break;
 		case COMP_WINDOW_PEEK_EYE_BOTH:
 			/* TODO: display the undistorted image */
-			comp_window_peek_blit(c->peek, c->target->images[r->acquired_buffer].handle, c->target->width,
-			                      c->target->height);
+			comp_window_peek_blit(c->peek, c->targets[r->index]->images[r->acquired_buffer].handle,
+			                      c->targets[r->index]->width, c->targets[r->index]->height);
 			break;
 		}
 	}
 #endif
 
-	renderer_present_swapchain_image(r, c->frame.rendering.desired_present_time_ns,
-	                                 c->frame.rendering.present_slop_ns);
+	renderer_present_swapchain_image(r, c->frames[r->index].rendering.desired_present_time_ns,
+	                                 c->frames[r->index].rendering.present_slop_ns);
 
 	// Save for timestamps below.
-	uint64_t frame_id = c->frame.rendering.id;
-	uint64_t desired_present_time_ns = c->frame.rendering.desired_present_time_ns;
-	uint64_t predicted_display_time_ns = c->frame.rendering.predicted_display_time_ns;
+	uint64_t frame_id = c->frames[r->index].rendering.id;
+	uint64_t desired_present_time_ns = c->frames[r->index].rendering.desired_present_time_ns;
+	uint64_t predicted_display_time_ns = c->frames[r->index].rendering.predicted_display_time_ns;
 
 	// Clear the rendered frame.
-	comp_frame_clear_locked(&c->frame.rendering);
+	comp_frame_clear_locked(&c->frames[r->index].rendering);
 
 	xrt_result_t xret = XRT_SUCCESS;
 	comp_mirror_fixup_ui_state(&r->mirror_to_debug_gui, c);
@@ -1163,10 +1172,11 @@ comp_renderer_draw(struct comp_renderer *r)
 }
 
 struct comp_renderer *
-comp_renderer_create(struct comp_compositor *c, VkExtent2D scratch_extent)
+comp_renderer_create(struct comp_compositor *c, VkExtent2D scratch_extent, uint32_t target_index)
 {
 	struct comp_renderer *r = U_TYPED_CALLOC(struct comp_renderer);
 
+	r->index = target_index;
 	renderer_init(r, c, scratch_extent);
 
 	return r;

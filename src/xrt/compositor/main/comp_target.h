@@ -62,7 +62,7 @@ enum comp_target_display_timing_usage
 struct comp_target_image
 {
 	VkImage handle;
-	VkImageView view;
+	VkImageView views[2];
 };
 
 /*!
@@ -90,6 +90,9 @@ struct comp_target_create_images_info
 
 	// Preferred present_mode, can be ignored by the target.
 	VkPresentModeKHR present_mode;
+
+	// Whether the target is stereoscopic or not.
+	bool stereo;
 };
 
 /*!
@@ -136,6 +139,9 @@ struct comp_target
 
 	//! Name of the backing system.
 	const char *name;
+
+	//! Target index in owning compositor.
+	uint32_t index;
 
 	//! Current dimensions of the target.
 	uint32_t width, height;

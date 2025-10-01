@@ -143,6 +143,8 @@ chl_frame_state_gfx_default_pipeline(struct chl_frame_state *frame_state,
 	    target_viewport_datas,      //
 	    vertex_rots);               //
 
+
+
 	// Start the compute pipeline.
 	render_gfx_begin(render);
 

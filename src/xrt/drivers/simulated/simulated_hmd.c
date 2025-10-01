@@ -208,7 +208,9 @@ simulated_hmd_create(enum simulated_movement movement, const struct xrt_pose *ce
 	hmd->log_level = simulated_log_level();
 	hmd->movement = movement;
 
+	hmd->base.hmd->stereo = false;
 	hmd->base.hmd->view_count = debug_get_num_option_view_count();
+	hmd->base.hmd->screen_count = 1;
 	// Print name.
 	snprintf(hmd->base.str, XRT_DEVICE_NAME_LEN, "Simulated HMD");
 	snprintf(hmd->base.serial, XRT_DEVICE_NAME_LEN, "Simulated HMD");

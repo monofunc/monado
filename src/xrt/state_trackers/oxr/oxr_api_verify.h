@@ -241,9 +241,9 @@ struct oxr_subaction_paths;
 
 #define OXR_VERIFY_VIEW_INDEX(log, index)                                                                              \
 	do {                                                                                                           \
-		if (index > 2) {                                                                                       \
+		if (index > 4) {                                                                                       \
 			return oxr_error(log, XR_ERROR_VALIDATION_FAILURE,                                             \
-			                 "Invalid view index %d, only 2 views supported", index);                      \
+			                 "Invalid view index %d, only 4 views supported", index);                      \
 		}                                                                                                      \
 	} while (false)
 
