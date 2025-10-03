@@ -34,6 +34,7 @@ DEBUG_GET_ONCE_BOOL_OPTION(xcb_fullscreen, "XRT_COMPOSITOR_XCB_FULLSCREEN", fals
 DEBUG_GET_ONCE_NUM_OPTION(xcb_display, "XRT_COMPOSITOR_XCB_DISPLAY", -1)
 DEBUG_GET_ONCE_NUM_OPTION(default_framerate, "XRT_COMPOSITOR_DEFAULT_FRAMERATE", 60)
 DEBUG_GET_ONCE_BOOL_OPTION(compute, "XRT_COMPOSITOR_COMPUTE", USE_COMPUTE_DEFAULT)
+DEBUG_GET_ONCE_BOOL_OPTION(force_main_queue_for_present, "XRT_COMPOSITOR_FORCE_MAIN_QUEUE_FOR_PRESENT", false)
 // clang-format on
 
 static inline void
@@ -69,6 +70,7 @@ comp_settings_init(struct comp_settings *s, struct xrt_device *xdev)
 	}
 
 	s->use_compute = debug_get_bool_option_compute();
+	s->use_main_queue_for_present = debug_get_bool_option_force_main_queue_for_present();
 
 	if (s->use_compute) {
 		// Tested working with a PSVR2 and a patched Mesa. Native format of the PSVR2. 10-bit formats should be

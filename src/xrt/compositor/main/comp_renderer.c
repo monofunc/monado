@@ -574,16 +574,24 @@ renderer_ensure_images_and_renderings(struct comp_renderer *r, bool force_recrea
 	if (r->settings->use_compute) {
 		assert(r->c->base.vk.compute_queue != NULL);
 
-		struct vk_bundle *vk = &r->c->base.vk;
-		VkBool32 queue_supports_present = VK_FALSE;
+		if (r->settings->use_main_queue_for_present) {
+			r->compute_queue_supports_present = false;
 
-		const VkResult vk_res = comp_target_queue_family_supports_present(
-		    r->c->target, r->c->base.vk.compute_queue->family_index, &queue_supports_present);
-		VK_CHK_WITH_RET(vk_res, "failed to query if compute-only queue supports present", false);
+		} else {
+			struct vk_bundle *vk = &r->c->base.vk;
+			VkBool32 queue_supports_present = VK_FALSE;
 
-		r->compute_queue_supports_present = queue_supports_present;
+			const VkResult vk_res = comp_target_queue_family_supports_present(
+			    r->c->target, r->c->base.vk.compute_queue->family_index, &queue_supports_present);
+			VK_CHK_WITH_RET(vk_res, "failed to query if compute-only queue supports present", false);
 
-		COMP_INFO(c, "Compute queue has present caps: %s", queue_supports_present ? "true" : "false");
+			r->compute_queue_supports_present = queue_supports_present;
+
+			COMP_INFO(c, "Compute queue has present caps: %s", queue_supports_present ? "true" : "false");
+		}
+
+		COMP_INFO(c, "Using compute queue for present ops: %s",
+		          r->compute_queue_supports_present ? "true" : "false");
 	}
 
 	bool pre_rotate = false;
