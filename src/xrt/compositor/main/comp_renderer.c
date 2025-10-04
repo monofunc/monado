@@ -117,9 +117,6 @@ struct comp_renderer
 	//! Index of the current buffer/image
 	int32_t acquired_buffer;
 
-	//! Which buffer was last submitted and has a fence pending.
-	int32_t fenced_buffer;
-
 	/*!
 	 * The render pass used to render to the target, it depends on the
 	 * target's format so will be recreated each time the target changes.
@@ -132,11 +129,6 @@ struct comp_renderer
 	 * needed to render to that target and its views.
 	 */
 	struct render_gfx_target_resources *rtr_array;
-
-	/*!
-	 * Array of fences equal in size to the number of comp_target images.
-	 */
-	VkFence *fences;
 
 	/*!
 	 * The number of renderings/fences we've created: set from comp_target when we use that data.
@@ -333,17 +325,14 @@ renderer_build_rendering_target_resources(struct comp_renderer *r,
  * Update r->buffer_count before calling.
  */
 static void
-renderer_create_renderings_and_fences(struct comp_renderer *r)
+renderer_create_renderings(struct comp_renderer *r)
 {
-	assert(r->fences == NULL);
 	if (r->buffer_count == 0) {
 		COMP_ERROR(r->c, "Requested 0 command buffers.");
 		return;
 	}
 
 	COMP_DEBUG(r->c, "Allocating %d Command Buffers.", r->buffer_count);
-
-	struct vk_bundle *vk = &r->c->base.vk;
 
 	bool use_compute = r->settings->use_compute;
 	if (!use_compute) {
@@ -360,34 +349,11 @@ renderer_create_renderings_and_fences(struct comp_renderer *r)
 			renderer_build_rendering_target_resources(r, &r->rtr_array[i], i);
 		}
 	}
-
-	r->fences = U_TYPED_ARRAY_CALLOC(VkFence, r->buffer_count);
-
-	for (uint32_t i = 0; i < r->buffer_count; i++) {
-		VkFenceCreateInfo fence_info = {
-		    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-		    .flags = VK_FENCE_CREATE_SIGNALED_BIT,
-		};
-
-		VkResult ret = vk->vkCreateFence( //
-		    vk->device,                   //
-		    &fence_info,                  //
-		    NULL,                         //
-		    &r->fences[i]);               //
-		if (ret != VK_SUCCESS) {
-			COMP_ERROR(r->c, "vkCreateFence: %s", vk_result_string(ret));
-		}
-
-		char buf[] = "Comp Renderer X_XXXX_XXXX";
-		snprintf(buf, ARRAY_SIZE(buf), "Comp Renderer %u", i);
-		VK_NAME_FENCE(vk, r->fences[i], buf);
-	}
 }
 
 static void
-renderer_close_renderings_and_fences(struct comp_renderer *r)
+renderer_close_renderings(struct comp_renderer *r)
 {
-	struct vk_bundle *vk = &r->c->base.vk;
 	// Renderings
 	if (r->buffer_count > 0 && r->rtr_array != NULL) {
 		for (uint32_t i = 0; i < r->buffer_count; i++) {
@@ -401,19 +367,8 @@ renderer_close_renderings_and_fences(struct comp_renderer *r)
 		r->rtr_array = NULL;
 	}
 
-	// Fences
-	if (r->buffer_count > 0 && r->fences != NULL) {
-		for (uint32_t i = 0; i < r->buffer_count; i++) {
-			vk->vkDestroyFence(vk->device, r->fences[i], NULL);
-			r->fences[i] = VK_NULL_HANDLE;
-		}
-		free(r->fences);
-		r->fences = NULL;
-	}
-
 	r->buffer_count = 0;
 	r->acquired_buffer = -1;
-	r->fenced_buffer = -1;
 }
 
 /*!
@@ -455,7 +410,7 @@ renderer_ensure_images_and_renderings(struct comp_renderer *r, bool force_recrea
 	renderer_wait_queue_idle(r);
 
 	// Make we sure we destroy all dependent things before creating new images.
-	renderer_close_renderings_and_fences(r);
+	renderer_close_renderings(r);
 
 	VkImageUsageFlags image_usage = 0;
 	if (r->settings->use_compute) {
@@ -498,7 +453,7 @@ renderer_ensure_images_and_renderings(struct comp_renderer *r, bool force_recrea
 
 	r->buffer_count = r->c->target->image_count;
 
-	renderer_create_renderings_and_fences(r);
+	renderer_create_renderings(r);
 
 	assert(r->buffer_count != 0);
 
@@ -515,7 +470,6 @@ renderer_init(struct comp_renderer *r, struct comp_compositor *c, VkExtent2D scr
 	r->settings = &c->settings;
 
 	r->acquired_buffer = -1;
-	r->fenced_buffer = -1;
 	r->rtr_array = NULL;
 
 	// Setup the scratch images.
@@ -546,26 +500,6 @@ renderer_init(struct comp_renderer *r, struct comp_compositor *c, VkExtent2D scr
 	}
 }
 
-static void
-renderer_wait_for_last_fence(struct comp_renderer *r)
-{
-	COMP_TRACE_MARKER();
-
-	if (r->fenced_buffer < 0) {
-		return;
-	}
-
-	struct vk_bundle *vk = &r->c->base.vk;
-	VkResult ret;
-
-	ret = vk->vkWaitForFences(vk->device, 1, &r->fences[r->fenced_buffer], VK_TRUE, UINT64_MAX);
-	if (ret != VK_SUCCESS) {
-		COMP_ERROR(r->c, "vkWaitForFences: %s", vk_result_string(ret));
-	}
-
-	r->fenced_buffer = -1;
-}
-
 static XRT_CHECK_RESULT VkResult
 renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineStageFlags pipeline_stage_flag)
 {
@@ -577,29 +511,16 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 
 	assert(frame_id >= 0);
 
-
-	/*
-	 * Wait for previous frame's work to complete.
-	 */
-
-	// Wait for the last fence, if any.
-	renderer_wait_for_last_fence(r);
-	assert(r->fenced_buffer < 0);
-
-	assert(r->acquired_buffer >= 0);
-	ret = vk->vkResetFences(vk->device, 1, &r->fences[r->acquired_buffer]);
-	VK_CHK_AND_RET(ret, "vkResetFences");
-
-
 	/*
 	 * Regular semaphore setup.
 	 */
 
 	// Convenience.
 	struct comp_target *ct = r->c->target;
+	const struct comp_target_semaphores *semaphores = &ct->semaphores;
 #define WAIT_SEMAPHORE_COUNT 1
-
-	VkSemaphore wait_sems[WAIT_SEMAPHORE_COUNT] = {ct->semaphores.present_complete};
+	// Wait for the swapchain image to be acquired
+	VkSemaphore wait_sems[WAIT_SEMAPHORE_COUNT] = {semaphores->acquired[semaphores->frame_index]};
 	VkPipelineStageFlags stage_flags[WAIT_SEMAPHORE_COUNT] = {pipeline_stage_flag};
 
 	VkSemaphore *wait_sems_ptr = NULL;
@@ -611,14 +532,15 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 		wait_sem_count = WAIT_SEMAPHORE_COUNT;
 	}
 
-#define SIGNAL_SEMAPHRE_COUNT 1
-	VkSemaphore signal_sems[SIGNAL_SEMAPHRE_COUNT] = {ct->semaphores.render_complete};
+#define SIGNAL_SEMAPHRE_COUNT 2
+	// Signal the swapchain submitted image to be ready for present
+	VkSemaphore signal_sems[SIGNAL_SEMAPHRE_COUNT] = {semaphores->submitted[r->acquired_buffer]};
 
 	uint32_t signal_sem_count = 0;
 	VkSemaphore *signal_sems_ptr = NULL;
 	if (signal_sems[0] != VK_NULL_HANDLE) {
 		signal_sems_ptr = signal_sems;
-		signal_sem_count = SIGNAL_SEMAPHRE_COUNT;
+		signal_sem_count = 1;
 	}
 
 	// Next pointer for VkSubmitInfo
@@ -632,7 +554,10 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 	    .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO_KHR,
 	};
 
-	if (ct->semaphores.render_complete_is_timeline) {
+	if (ct->semaphores.use_timeline_semaphore) {
+		signal_sems[1] = semaphores->timeline[r->acquired_buffer];
+		signal_sem_count++;
+
 		timeline_info = (VkTimelineSemaphoreSubmitInfoKHR){
 		    .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO_KHR,
 		    .signalSemaphoreValueCount = signal_sem_count,
@@ -642,7 +567,6 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 		CHAIN(timeline_info, next);
 	}
 #endif
-
 
 	VkSubmitInfo comp_submit_info = {
 	    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -665,16 +589,14 @@ renderer_submit_queue(struct comp_renderer *r, VkCommandBuffer cmd, VkPipelineSt
 	 * us avoid taking a lot of locks. The queue lock will be taken by
 	 * @ref vk_cmd_submit_locked tho.
 	 */
-	ret = vk_cmd_submit_locked(vk, &vk->main_queue, 1, &comp_submit_info, r->fences[r->acquired_buffer]);
+	ret = vk_cmd_submit_locked(vk, &vk->main_queue, 1, &comp_submit_info,
+	                           semaphores->frames[semaphores->frame_index]);
 
 	// We have now completed the submit, even if we failed.
 	comp_target_mark_submit_end(ct, frame_id, os_monotonic_get_ns());
 
 	// Check after marking as submit complete.
 	VK_CHK_AND_RET(ret, "vk_cmd_submit_locked");
-
-	// This buffer now have a pending fence.
-	r->fenced_buffer = r->acquired_buffer;
 
 	return ret;
 }
@@ -724,7 +646,7 @@ renderer_resize(struct comp_renderer *r)
 	if (!comp_target_check_ready(r->c->target)) {
 		// Can't create images right now.
 		// Just close any existing renderings.
-		renderer_close_renderings_and_fences(r);
+		renderer_close_renderings(r);
 		return;
 	}
 	// Force recreate.
@@ -818,7 +740,7 @@ renderer_fini(struct comp_renderer *r)
 	struct vk_bundle *vk = &r->c->base.vk;
 
 	// Command buffers
-	renderer_close_renderings_and_fences(r);
+	renderer_close_renderings(r);
 
 	// Do before layer render just in case it holds any references.
 	comp_mirror_fini(&r->mirror_to_debug_gui, vk);
