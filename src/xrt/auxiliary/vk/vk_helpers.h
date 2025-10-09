@@ -16,6 +16,7 @@
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Moshi Turner <moshiturner@protonmail.com>
  * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup aux_vk
  */
 
@@ -153,6 +154,7 @@ struct vk_bundle
 	} external;
 
 	// beginning of GENERATED instance extension code - do not modify - used by scripts
+	bool has_KHR_device_group_creation;
 	bool has_KHR_external_memory_capabilities;
 	bool has_EXT_display_surface_counter;
 	bool has_EXT_swapchain_colorspace;
@@ -161,6 +163,8 @@ struct vk_bundle
 
 	// beginning of GENERATED device extension code - do not modify - used by scripts
 	bool has_KHR_8bit_storage;
+	bool has_KHR_buffer_device_address;
+	bool has_KHR_device_group;
 	bool has_KHR_external_fence_fd;
 	bool has_KHR_external_memory;
 	bool has_KHR_external_semaphore_fd;
@@ -214,6 +218,12 @@ struct vk_bundle
 
 		//! Was KHR_video_maintenance1 requested, available, and enabled?
 		bool video_maintenance_1;
+
+		//! Were device groups requested, available and enabled? (at least one group found)
+		bool use_device_group;
+
+		//! Were buffer device address feature requested, available and enabled?
+		bool buffer_device_address;
 	} features;
 
 	//! Is the GPU a tegra device.
@@ -223,6 +233,9 @@ struct vk_bundle
 	VkDebugReportCallbackEXT debug_report_cb;
 
 	VkPhysicalDeviceMemoryProperties device_memory_props;
+#ifdef VK_KHR_device_group_creation
+	VkPhysicalDeviceGroupPropertiesKHR device_group_properties;
+#endif
 
 	// Loader functions
 	PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
@@ -239,6 +252,10 @@ struct vk_bundle
 	PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallbackEXT;
 
 	PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
+#if defined(VK_KHR_device_group_creation)
+	PFN_vkEnumeratePhysicalDeviceGroupsKHR vkEnumeratePhysicalDeviceGroups;
+#endif // defined(VK_KHR_device_group_creation)
+
 	PFN_vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties;
 	PFN_vkGetPhysicalDeviceProperties2KHR vkGetPhysicalDeviceProperties2;
 	PFN_vkGetPhysicalDeviceFeatures2KHR vkGetPhysicalDeviceFeatures2;
@@ -1049,13 +1066,38 @@ void
 vk_fill_in_has_instance_extensions(struct vk_bundle *vk, struct u_string_list *ext_list);
 
 /*!
+ * Used to physical device (group) selection as arguments for:
+ *     @ref vk_select_physical_device
+ *     @ref vk_create_device
+ *
+ * @ingroup aux_vk
+ */
+struct vk_physical_device_indices
+{
+	//! Index of physical device groups, only relevant when VK_KHR_device_group(_creation) is enabled/supported, can
+	//! be -1
+	int32_t device_group_index;
+
+	//! Index of physical devices (or devices with-in @ref device_group_index), can be -1
+	int32_t device_index;
+};
+
+#ifndef VK_PHYSICAL_DEVICE_INDICES_INIT
+// clang-format off
+#define VK_PHYSICAL_DEVICE_INDICES_INIT (struct vk_physical_device_indices){-1, -1}
+// clang-format on
+#endif
+
+/*!
  * Setup the physical device, this is called by vk_create_device but has uses
  * for outside of that.
  *
  * @ingroup aux_vk
  */
 VkResult
-vk_select_physical_device(struct vk_bundle *vk, int forced_index);
+vk_select_physical_device(struct vk_bundle *vk,
+                          bool use_device_group,
+                          const struct vk_physical_device_indices *forced_phys_device);
 
 /*!
  * Used to enable device features as a argument @ref vk_create_device.
@@ -1073,6 +1115,7 @@ struct vk_device_features
 	bool storage_buffer_8bit_access;
 	bool present_wait;
 	bool video_maintenance_1;
+	bool buffer_device_address;
 };
 
 /*!
@@ -1082,12 +1125,13 @@ struct vk_device_features
  */
 XRT_CHECK_RESULT VkResult
 vk_create_device(struct vk_bundle *vk,
-                 int forced_index,
                  bool only_compute,
+                 bool use_device_group,
                  VkQueueGlobalPriorityEXT global_priority,
                  struct u_string_list *required_device_ext_list,
                  struct u_string_list *optional_device_ext_list,
-                 const struct vk_device_features *optional_device_features);
+                 const struct vk_device_features *optional_device_features,
+                 const struct vk_physical_device_indices *force_phys_device);
 
 /*!
  * @brief Initialize mutexes in the @ref vk_bundle.
@@ -1160,8 +1204,11 @@ vk_init_from_given(struct vk_bundle *vk,
  * @ingroup aux_vk
  */
 bool
-vk_get_memory_type(struct vk_bundle *vk, uint32_t type_bits, VkMemoryPropertyFlags memory_props, uint32_t *out_type_id);
-
+vk_get_memory_type(struct vk_bundle *vk,
+                   uint32_t type_bits,
+                   VkMemoryPropertyFlags memory_props,
+                   VkMemoryHeapFlags required_heap_flags,
+                   uint32_t *out_type_id);
 /*!
  * Allocate memory for an image and bind it to that image.
  *

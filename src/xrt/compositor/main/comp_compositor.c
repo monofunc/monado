@@ -8,6 +8,8 @@
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
  * @author Moshi Turner <moshiturner@protonmail.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup comp_main
  *
  *
@@ -509,6 +511,9 @@ static const char *optional_instance_extensions[] = {
 #if defined VK_EXT_debug_utils && !defined NDEBUG
     VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 #endif
+#ifdef VK_KHR_device_group_creation
+    VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME,
+#endif
 };
 
 // Note: Keep synchronized with comp_vk_glue - we should have everything they
@@ -605,6 +610,12 @@ static const char *optional_device_extensions[] = {
 #endif
 #ifdef VK_KHR_synchronization2
     VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+#endif
+#ifdef VK_KHR_buffer_device_address
+    VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+#endif
+#ifdef VK_KHR_device_group
+    VK_KHR_DEVICE_GROUP_EXTENSION_NAME,
 #endif
 };
 
@@ -703,9 +714,12 @@ compositor_init_vulkan(struct comp_compositor *c)
 	    .optional_device_extensions = optional_device_extension_list,
 	    .log_level = c->settings.log_level,
 	    .only_compute_queue = c->settings.use_compute,
-	    .selected_gpu_index = c->settings.selected_gpu_index,
+	    .timeline_semaphore = true,     // Flag is optional, not a hard requirement.
+	    .use_device_group = false,      // Not required
+	    .buffer_device_address = false, // Not required
+	    .selected_gpu_group_index = -1, // Not required
+	    .selected_gpu_index = c->settings.selected_gpu_indices.device_index,
 	    .client_gpu_index = c->settings.client_gpu_index,
-	    .timeline_semaphore = true, // Flag is optional, not a hard requirement.
 	};
 
 	struct comp_vulkan_results vk_res = {0};
@@ -732,7 +746,7 @@ compositor_init_vulkan(struct comp_compositor *c)
 	c->settings.client_gpu_deviceUUID = vk_res.client_gpu_deviceUUID;
 	c->settings.selected_gpu_deviceUUID = vk_res.selected_gpu_deviceUUID;
 	c->settings.client_gpu_index = vk_res.client_gpu_index;
-	c->settings.selected_gpu_index = vk_res.selected_gpu_index;
+	c->settings.selected_gpu_indices.device_index = vk_res.selected_gpu_index;
 	c->settings.client_gpu_deviceLUID = vk_res.client_gpu_deviceLUID;
 	c->settings.client_gpu_deviceLUID_valid = vk_res.client_gpu_deviceLUID_valid;
 

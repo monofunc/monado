@@ -1,10 +1,11 @@
-// Copyright 2022-2024, Collabora, Ltd.
+// Copyright 2022-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief Basic Vulkan compositor tests.
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
  * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  */
 
 
@@ -117,17 +118,22 @@ TEST_CASE("client_compositor", "[.][needgpu]")
 
 	unique_string_list optional_device_extension_list{u_string_list_create()};
 
-	comp_vulkan_arguments args{VK_MAKE_VERSION(1, 0, 0),
-	                           vkGetInstanceProcAddr,
-	                           required_instance_ext_list.get(),
-	                           optional_instance_ext_list.get(),
-	                           required_device_extension_list.get(),
-	                           optional_device_extension_list.get(),
-	                           U_LOGGING_TRACE,
-	                           false /* only_compute_queue */,
-	                           true /*timeline_semaphore*/,
-	                           -1,
-	                           -1};
+	comp_vulkan_arguments args{
+	    VK_MAKE_VERSION(1, 0, 0),
+	    vkGetInstanceProcAddr,
+	    required_instance_ext_list.get(),
+	    optional_instance_ext_list.get(),
+	    required_device_extension_list.get(),
+	    optional_device_extension_list.get(),
+	    U_LOGGING_TRACE,
+	    false /* only_compute_queue */,
+	    true /*timeline_semaphore*/,
+	    false /* use_device_group */,
+	    false /* buffer_device_address */,
+	    -1,
+	    -1,
+	    -1,
+	};
 	vk_bundle vk_bundle_storage{};
 	vk_bundle *vk = &vk_bundle_storage;
 	comp_vulkan_results results{};

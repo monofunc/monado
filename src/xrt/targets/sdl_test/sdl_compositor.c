@@ -1,4 +1,4 @@
-// Copyright 2019-2023, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -9,6 +9,8 @@
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup sdl_test
  */
 
@@ -130,6 +132,12 @@ static const char *optional_device_extensions[] = {
 #ifdef VK_EXT_robustness2
     VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
 #endif
+#ifdef VK_KHR_buffer_device_address
+    VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+#endif
+#ifdef VK_KHR_device_group
+    VK_KHR_DEVICE_GROUP_EXTENSION_NAME,
+#endif
 };
 
 static VkResult
@@ -137,6 +145,10 @@ select_instances_extensions(struct sdl_compositor *c, struct u_string_list *requ
 {
 #ifdef VK_EXT_display_surface_counter
 	u_string_list_append(optional, VK_EXT_DISPLAY_SURFACE_COUNTER_EXTENSION_NAME);
+#endif
+
+#ifdef VK_KHR_device_group_creation
+	u_string_list_append(optional, VK_KHR_DEVICE_GROUP_CREATION_EXTENSION_NAME);
 #endif
 
 	return VK_SUCCESS;
@@ -177,10 +189,13 @@ compositor_init_vulkan(struct sdl_compositor *c, enum u_logging_level log_level)
 	    .required_device_extensions = required_device_extension_list,
 	    .optional_device_extensions = optional_device_extension_list,
 	    .log_level = log_level,
-	    .only_compute_queue = false, // Regular GFX
-	    .selected_gpu_index = -1,    // Auto
-	    .client_gpu_index = -1,      // Auto
-	    .timeline_semaphore = true,  // Flag is optional, not a hard requirement.
+	    .only_compute_queue = false,    // Regular GFX
+	    .timeline_semaphore = true,     // Flag is optional, not a hard requirement.
+	    .use_device_group = false,      // Not required
+	    .buffer_device_address = false, // Not required
+	    .selected_gpu_group_index = -1, // Not required
+	    .selected_gpu_index = -1,       // Auto
+	    .client_gpu_index = -1,         // Auto
 	};
 
 	struct comp_vulkan_results vk_res = {0};

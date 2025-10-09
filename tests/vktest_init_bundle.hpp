@@ -1,4 +1,4 @@
-// Copyright 2019-2022, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -7,6 +7,8 @@
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  */
 #pragma once
 
@@ -130,17 +132,22 @@ vktest_init_bundle(struct vk_bundle *vk)
 	    u_string_list_create_from_array(optional_device_extensions, ARRAY_SIZE(optional_device_extensions))};
 
 	U_ZERO(vk);
-	comp_vulkan_arguments args{VK_MAKE_VERSION(1, 0, 0),
-	                           vkGetInstanceProcAddr,
-	                           required_instance_ext_list.get(),
-	                           optional_instance_ext_list.get(),
-	                           required_device_extension_list.get(),
-	                           optional_device_extension_list.get(),
-	                           U_LOGGING_TRACE,
-	                           false /* only_compute_queue */,
-	                           true /*timeline_semaphore*/,
-	                           -1,
-	                           -1};
+	comp_vulkan_arguments args{
+	    VK_MAKE_VERSION(1, 0, 0),
+	    vkGetInstanceProcAddr,
+	    required_instance_ext_list.get(),
+	    optional_instance_ext_list.get(),
+	    required_device_extension_list.get(),
+	    optional_device_extension_list.get(),
+	    U_LOGGING_TRACE,
+	    false /* only_compute_queue */,
+	    true /*timeline_semaphore*/,
+	    false /* use_device_group */,
+	    false /* buffer_device_address */,
+	    -1,
+	    -1,
+	    -1,
+	};
 	comp_vulkan_results results{};
 	bool success = comp_vulkan_init_bundle(vk, &args, &results);
 

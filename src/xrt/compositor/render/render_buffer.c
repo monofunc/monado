@@ -1,10 +1,12 @@
-// Copyright 2019-2023, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Buffer functions.
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Jakob Bornecrantz <jakob@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup comp_render
  */
 
@@ -62,6 +64,7 @@ create_buffer(struct vk_bundle *vk,
 	    vk,                      //
 	    mem_reqs.memoryTypeBits, //
 	    memory_property_flags,   //
+	    0,                       //
 	    &memory_type_index);     //
 	if (!bret) {
 		VK_ERROR(vk, "vk_get_memory_type failed: 'false'\n\tFailed to find a matching memory type.");

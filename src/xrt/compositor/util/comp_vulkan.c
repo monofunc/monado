@@ -1,4 +1,4 @@
-// Copyright 2019-2023, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -7,6 +7,8 @@
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
+ * @author Elise Doucet <elise.doucet@univ-lille.fr>
  * @ingroup comp_util
  */
 
@@ -283,6 +285,7 @@ create_device(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_args)
 	    .synchronization_2 = true,
 	    .present_wait = true,
 	    .video_maintenance_1 = true,
+	    .buffer_device_address = vk_args->buffer_device_address,
 	};
 
 	ret = vk_init_mutex(vk);
@@ -291,16 +294,23 @@ create_device(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_args)
 		return ret;
 	}
 
+	const struct vk_physical_device_indices selected_gpu_indices = {
+	    .device_group_index = vk_args->selected_gpu_group_index,
+	    .device_index = vk_args->selected_gpu_index,
+
+	};
+
 	// No other way then to try to see if realtime is available.
 	for (size_t i = 0; i < ARRAY_SIZE(prios); i++) {
 		ret = vk_create_device(                  //
 		    vk,                                  //
-		    vk_args->selected_gpu_index,         //
 		    only_compute_queue,                  // compute_only
+		    vk_args->use_device_group,           // device groups
 		    prios[i],                            // global_priority
 		    vk_args->required_device_extensions, //
 		    vk_args->optional_device_extensions, //
-		    &device_features);                   // optional_device_features
+		    &device_features,                    // optional_device_features
+		    &selected_gpu_indices);              // optional selected physical device (group)
 
 		// All ok!
 		if (ret == VK_SUCCESS) {
