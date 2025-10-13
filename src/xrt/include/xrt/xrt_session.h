@@ -80,6 +80,7 @@ struct xrt_session_event_state_change
 	enum xrt_session_event_type type;
 	bool visible;
 	bool focused;
+	int64_t timestamp_ns;
 };
 
 /*!

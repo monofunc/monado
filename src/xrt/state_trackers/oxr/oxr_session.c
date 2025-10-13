@@ -339,10 +339,18 @@ oxr_session_begin(struct oxr_logger *log, struct oxr_session *sess, const XrSess
 		sess->compositor_visible = true;
 		sess->compositor_focused = true;
 
+		int64_t now = os_monotonic_get_ns();
+		XrTime now_xr = time_state_monotonic_to_ts_ns(sess->sys->inst->timekeeping, now);
+		if (now_xr <= 0) {
+			// shouldn't happen but be sure to log if it does
+			U_LOG_W("Time keeping oddity: XR_SESSION_STATE_SYNCHRONIZED state reached at XrTime %" PRIi64,
+			        now_xr);
+		}
+
 		// Transition into focused.
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, 0);
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, 0);
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_FOCUSED, 0);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, now_xr);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, now_xr);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_FOCUSED, now_xr);
 	}
 	XrResult ret = oxr_frame_sync_begin_session(&sess->frame_sync);
 	if (ret != XR_SUCCESS) {
@@ -400,9 +408,16 @@ oxr_session_end(struct oxr_logger *log, struct oxr_session *sess)
 		sess->compositor_focused = false;
 	}
 
-	oxr_session_change_state(log, sess, XR_SESSION_STATE_IDLE, 0);
+	int64_t now = os_monotonic_get_ns();
+	XrTime now_xr = time_state_monotonic_to_ts_ns(sess->sys->inst->timekeeping, now);
+	if (now_xr <= 0) {
+		// shouldn't happen but be sure to log if it does
+		U_LOG_W("Time keeping oddity: ending session at XrTime %" PRIi64, now_xr);
+	}
+
+	oxr_session_change_state(log, sess, XR_SESSION_STATE_IDLE, now_xr);
 	if (sess->exiting) {
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_EXITING, 0);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_EXITING, now_xr);
 	} else {
 #ifndef XRT_OS_ANDROID
 		// @todo In multi-clients scenario with a session being reused, changing session
@@ -428,20 +443,27 @@ oxr_session_end(struct oxr_logger *log, struct oxr_session *sess)
 XrResult
 oxr_session_request_exit(struct oxr_logger *log, struct oxr_session *sess)
 {
+	int64_t now = os_monotonic_get_ns();
+	XrTime now_xr = time_state_monotonic_to_ts_ns(sess->sys->inst->timekeeping, now);
+	if (now_xr <= 0) {
+		// shouldn't happen but be sure to log if it does
+		U_LOG_W("Time keeping oddity: Requesting exit at XrTime %" PRIi64, now_xr);
+	}
+
 	if (sess->state == XR_SESSION_STATE_FOCUSED) {
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, 0);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, now_xr);
 	}
 	if (sess->state == XR_SESSION_STATE_VISIBLE) {
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, 0);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, now_xr);
 	}
 	if (!sess->has_ended_once && sess->state != XR_SESSION_STATE_SYNCHRONIZED) {
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, 0);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, now_xr);
 		// Fake the synchronization.
 		sess->has_ended_once = true;
 	}
 
 	//! @todo start fading out the app.
-	oxr_session_change_state(log, sess, XR_SESSION_STATE_STOPPING, 0);
+	oxr_session_change_state(log, sess, XR_SESSION_STATE_STOPPING, now_xr);
 	sess->exiting = true;
 	return oxr_session_success_result(sess);
 }
@@ -477,22 +499,29 @@ oxr_session_poll(struct oxr_logger *log, struct oxr_session *sess)
 		return oxr_error(log, XR_ERROR_RUNTIME_FAILURE, "xrt_session is null");
 	}
 
+	int64_t now = os_monotonic_get_ns();
+	XrTime now_xr = time_state_monotonic_to_ts_ns(sess->sys->inst->timekeeping, now);
+	if (now_xr <= 0) {
+		// shouldn't happen but be sure to log if it does
+		U_LOG_W("Time keeping oddity: Polling session events at XrTime %" PRIi64, now_xr);
+	}
+
 #ifdef XRT_OS_ANDROID
 	// Most recent Android activity lifecycle event was OnPause: move toward stopping
 	if (sess->sys->inst->activity_state == XRT_ANDROID_LIVECYCLE_EVENT_ON_PAUSE) {
 		if (sess->state == XR_SESSION_STATE_FOCUSED) {
 			U_LOG_I("Activity paused: changing session state FOCUSED->VISIBLE");
-			oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, 0);
+			oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, now_xr);
 		}
 
 		if (sess->state == XR_SESSION_STATE_VISIBLE) {
 			U_LOG_I("Activity paused: changing session state VISIBLE->SYNCHRONIZED");
-			oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, 0);
+			oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, now_xr);
 		}
 
 		if (sess->state == XR_SESSION_STATE_SYNCHRONIZED) {
 			U_LOG_I("Activity paused: changing session state SYNCHRONIZED->STOPPING");
-			oxr_session_change_state(log, sess, XR_SESSION_STATE_STOPPING, 0);
+			oxr_session_change_state(log, sess, XR_SESSION_STATE_STOPPING, now_xr);
 		}
 		// TODO return here to avoid polling other events?
 		// see https://gitlab.freedesktop.org/monado/monado/-/issues/419
@@ -502,7 +531,7 @@ oxr_session_poll(struct oxr_logger *log, struct oxr_session *sess)
 	if (sess->sys->inst->activity_state == XRT_ANDROID_LIVECYCLE_EVENT_ON_RESUME) {
 		if (sess->state == XR_SESSION_STATE_IDLE) {
 			U_LOG_I("Activity resumed: changing session state IDLE->READY");
-			oxr_session_change_state(log, sess, XR_SESSION_STATE_READY, 0);
+			oxr_session_change_state(log, sess, XR_SESSION_STATE_READY, now_xr);
 		}
 	}
 #endif // XRT_OS_ANDROID
@@ -522,6 +551,11 @@ oxr_session_poll(struct oxr_logger *log, struct oxr_session *sess)
 		case XRT_SESSION_EVENT_STATE_CHANGE:
 			sess->compositor_visible = xse.state.visible;
 			sess->compositor_focused = xse.state.focused;
+
+			// Do not use xse.state.timestamp_ns, server side focused / visible state does not correspond
+			// 1:1 to the cycle we tell the app. In particular the compositor may have become focused /
+			// visible much earlier than what we tell the app when it became so.
+
 			break;
 		case XRT_SESSION_EVENT_OVERLAY_CHANGE:
 #ifdef OXR_HAVE_EXTX_overlay
@@ -583,19 +617,19 @@ oxr_session_poll(struct oxr_logger *log, struct oxr_session *sess)
 	}
 
 	if (sess->state == XR_SESSION_STATE_SYNCHRONIZED && sess->compositor_visible) {
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, 0);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, now_xr);
 	}
 
 	if (sess->state == XR_SESSION_STATE_VISIBLE && sess->compositor_focused) {
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_FOCUSED, 0);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_FOCUSED, now_xr);
 	}
 
 	if (sess->state == XR_SESSION_STATE_FOCUSED && !sess->compositor_focused) {
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, 0);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, now_xr);
 	}
 
 	if (sess->state == XR_SESSION_STATE_VISIBLE && !sess->compositor_visible) {
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, 0);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, now_xr);
 	}
 
 	return XR_SUCCESS;
@@ -1133,7 +1167,7 @@ oxr_create_xrt_session_and_native_compositor(struct oxr_logger *log,
 		                 "Failed to create xrt_session and xrt_compositor_native! '%i'", xret);
 	}
 	if (sess->sys->xsysc->xmcc != NULL) {
-		xrt_syscomp_set_state(sess->sys->xsysc, &sess->xcn->base, true, true);
+		xrt_syscomp_set_state(sess->sys->xsysc, &sess->xcn->base, true, true, os_monotonic_get_ns());
 		xrt_syscomp_set_z_order(sess->sys->xsysc, &sess->xcn->base, 0);
 	}
 	return XR_SUCCESS;
@@ -1164,8 +1198,12 @@ oxr_session_create_impl(struct oxr_logger *log,
 			                 "xrGetOpenGL[ES]GraphicsRequirementsKHR");
 		}
 
-		OXR_SESSION_ALLOCATE_AND_INIT(log, sys, OXR_SESSION_GRAPHICS_EXT_XLIB_GL, *out_session);
-		OXR_CREATE_XRT_SESSION_AND_NATIVE_COMPOSITOR(log, xsi, *out_session);
+		XrResult ret = oxr_session_allocate_and_init(log, sys, OXR_SESSION_GRAPHICS_EXT_XLIB_GL, out_session);
+		OXR_CHECK_XR_SUCCESS(log, ret, "Failed to create session/compositor");
+
+		ret = oxr_create_xrt_session_and_native_compositor(log, xsi, *out_session);
+		OXR_CHECK_XR_SUCCESS(log, ret, "Failed to create session/compositor");
+
 		return oxr_session_populate_gl_xlib(log, sys, opengl_xlib, *out_session);
 	}
 #endif
@@ -1397,9 +1435,16 @@ oxr_session_create(struct oxr_logger *log,
 		return ret;
 	}
 
+	int64_t now = os_monotonic_get_ns();
+	XrTime now_xr = time_state_monotonic_to_ts_ns(sess->sys->inst->timekeeping, now);
+	if (now_xr <= 0) {
+		// shouldn't happen but be sure to log if it does
+		U_LOG_W("Time keeping oddity: XR_SESSION_STATE_IDLE reached at XrTime %" PRIi64, now_xr);
+	}
+
 	// Everything is in order, start the state changes.
-	oxr_session_change_state(log, sess, XR_SESSION_STATE_IDLE, 0);
-	oxr_session_change_state(log, sess, XR_SESSION_STATE_READY, 0);
+	oxr_session_change_state(log, sess, XR_SESSION_STATE_IDLE, now_xr);
+	oxr_session_change_state(log, sess, XR_SESSION_STATE_READY, now_xr);
 
 	*out_session = sess;
 
