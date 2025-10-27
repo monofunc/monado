@@ -506,16 +506,32 @@ ipc_handle_session_create(volatile struct ipc_client_state *ics,
 
 	struct xrt_session *xs = NULL;
 	struct xrt_compositor_native *xcn = NULL;
+	struct xrt_compositor_native **xcn_ptr = NULL;
 
 	if (ics->xs != NULL) {
 		return XRT_ERROR_IPC_SESSION_ALREADY_CREATED;
 	}
 
+#ifndef XRT_FEATURE_NO_COMPOSITOR_FOR_HEADLESS_SESSIONS
+	/*
+	 * Currently if we don't create a compositor the session will not
+	 * receive focused/visibility events since the IPC layer can not change
+	 * tell the multi compositor about it.
+	 *
+	 * The default for XRT_FEATURE_NO_COMPOSITOR_FOR_HEADLESS_SESSIONS is
+	 * off, meaning that the ifndef is true and as such this code is being
+	 * run by default.
+	 */
 	if (!create_native_compositor) {
 		IPC_INFO(ics->server, "App asked for headless session, creating native compositor anyways");
+		create_native_compositor = true;
 	}
+#endif
 
-	xrt_result_t xret = xrt_system_create_session(ics->server->xsys, xsi, &xs, &xcn);
+	// This is false in headless sessions, don't create a native compositor.
+	xcn_ptr = create_native_compositor ? &xcn : NULL;
+
+	xrt_result_t xret = xrt_system_create_session(ics->server->xsys, xsi, &xs, xcn_ptr);
 	if (xret != XRT_SUCCESS) {
 		return xret;
 	}
@@ -523,12 +539,25 @@ ipc_handle_session_create(volatile struct ipc_client_state *ics,
 	ics->client_state.session_overlay = xsi->is_overlay;
 	ics->client_state.z_order = xsi->z_order;
 
-	ics->xs = xs;
-	ics->xc = &xcn->base;
+	// Either we didn't ask for a native compositor or we got one.
+	assert(xcn_ptr == NULL || xcn != NULL);
 
-	xrt_syscomp_set_state(ics->server->xsysc, ics->xc, ics->client_state.session_visible,
-	                      ics->client_state.session_focused, os_monotonic_get_ns());
-	xrt_syscomp_set_z_order(ics->server->xsysc, ics->xc, ics->client_state.z_order);
+	ics->xs = xs;
+	ics->xc = xcn != NULL ? &xcn->base : NULL;
+
+	if (ics->xc != NULL) {
+		xrt_syscomp_set_state(                 //
+		    ics->server->xsysc,                //
+		    ics->xc,                           //
+		    ics->client_state.session_visible, //
+		    ics->client_state.session_focused, //
+		    os_monotonic_get_ns());            //
+
+		xrt_syscomp_set_z_order(        //
+		    ics->server->xsysc,         //
+		    ics->xc,                    //
+		    ics->client_state.z_order); //
+	}
 
 	return XRT_SUCCESS;
 }
