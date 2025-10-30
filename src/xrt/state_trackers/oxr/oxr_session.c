@@ -12,6 +12,7 @@
 #include "oxr_frame_sync.h"
 #include "xrt/xrt_device.h"
 #include "xrt/xrt_session.h"
+#include "xrt/xrt_instance.h"
 #include "xrt/xrt_config_build.h" // IWYU pragma: keep
 #include "xrt/xrt_config_have.h"  // IWYU pragma: keep
 
@@ -539,6 +540,9 @@ oxr_session_poll(struct oxr_logger *log, struct oxr_session *sess)
 			oxr_event_push_XrEventDataUserPresenceChangedEXT(log, sess,
 			                                                 xse.presence_change.is_user_present);
 #endif // OXR_HAVE_EXT_user_presence
+			break;
+		case XRT_SESSION_EVENT_DEVICE_ADDED:
+			sess->sys->inst->xinst->update_devices(sess->sys->inst->xinst, sess->sys->xsysd);
 			break;
 		default: U_LOG_W("unhandled event type! %d", xse.type); break;
 		}

@@ -3,7 +3,7 @@
 
 add_library(monado SHARED monado.c libmonado.def)
 set(LIBMONADO_HEADER_DIR ${CMAKE_INSTALL_INCLUDEDIR}/monado)
-target_link_libraries(monado PRIVATE aux_util ipc_client)
+target_link_libraries(monado PUBLIC aux_util PRIVATE ipc_client)
 target_include_directories(
 	monado INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
 			 $<INSTALL_INTERFACE:${LIBMONADO_HEADER_DIR}>

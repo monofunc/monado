@@ -169,6 +169,14 @@ struct xrt_instance
 	xrt_result_t (*get_prober)(struct xrt_instance *xinst, struct xrt_prober **out_xp);
 
 	/*!
+	 * Update devices after new one has appeared.
+	 *
+	 * @param xinst Pointer to self
+	 * @param xsysd Pointer to system devices
+	 */
+	void (*update_devices)(struct xrt_instance *xinst, struct xrt_system_devices *xsysd);
+
+	/*!
 	 * Destroy the instance and its owned objects, including the prober (if
 	 * any).
 	 *

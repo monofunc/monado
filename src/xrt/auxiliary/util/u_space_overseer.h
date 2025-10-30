@@ -52,6 +52,9 @@ u_space_overseer_legacy_setup(struct u_space_overseer *uso,
                               bool root_is_unbounded,
                               bool per_app_local_spaces);
 
+void
+u_space_overseer_add_device(struct u_space_overseer *uso, struct xrt_device *xdev);
+
 /*!
  * Creates a space without any offset, this is just for optimisation over a
  * regular offset space.

@@ -26,6 +26,7 @@
 #include "blockqueue.hpp"
 #include "paths.hpp"
 
+#include "xrt/xrt_session.h"
 #include "xrt/xrt_tracking.h"
 
 enum IndexFinger
@@ -55,6 +56,8 @@ class Context final : public xrt_tracking_origin,
                       public std::enable_shared_from_this<Context>
 
 {
+	xrt_session_event_sink *broadcast;
+
 public:
 	Settings settings;
 
@@ -116,17 +119,22 @@ private:
 	}
 
 public:
-	Context(const std::string &steam_install, const std::string &steamvr_install, u_logging_level level);
+	Context(xrt_session_event_sink *broadcast,
+	        const std::string &steam_install,
+	        const std::string &steamvr_install,
+	        u_logging_level level);
 
 	// These are owned by monado, context is destroyed when these are destroyed
 	class HmdDevice *hmd{nullptr};
 	class ControllerDevice *controller[16]{nullptr};
+	size_t controller_index{0};
 	const u_logging_level log_level;
 
 	~Context();
 
 	[[nodiscard]] static std::shared_ptr<Context>
-	create(const std::string &steam_install,
+	create(xrt_session_event_sink *broadcast,
+	       const std::string &steam_install,
 	       const std::string &steamvr_install,
 	       std::vector<vr::IServerTrackedDeviceProvider *> providers);
 
