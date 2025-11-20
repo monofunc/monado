@@ -555,7 +555,8 @@ oxr_action_sync_data(struct oxr_logger *log,
                      struct oxr_session *sess,
                      uint32_t countActionSets,
                      const XrActiveActionSet *actionSets,
-                     const XrActiveActionSetPrioritiesEXT *activePriorities);
+                     const XrActiveActionSetPrioritiesEXT *activePriorities,
+                     const XrBypassActionSetPrioritiesMNDX *bypassPriorities);
 
 /*!
  * @public @memberof oxr_session
