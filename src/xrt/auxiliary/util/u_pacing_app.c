@@ -17,6 +17,7 @@
 #include "util/u_metrics.h"
 #include "util/u_logging.h"
 #include "util/u_trace_marker.h"
+#include "math/m_api.h"
 
 #include <stdio.h>
 #include <assert.h>
@@ -276,10 +277,15 @@ total_app_and_compositor_time_ns(const struct pacing_app *pa)
 }
 
 static int64_t
-calc_period(const struct pacing_app *pa, int64_t base_period_ns)
+calc_period(const struct pacing_app *pa, int64_t base_period_ns, int64_t min_frame_interval_ns)
 {
 	// Calculate the using both values separately.
 	int64_t period_ns = base_period_ns;
+
+	// Always respect the minimum frame interval.
+	while (min_frame_interval_ns > period_ns) {
+		period_ns += base_period_ns;
+	}
 
 	/*
 	 * We can either limit the application to a calculated frame rate that
@@ -457,7 +463,7 @@ pa_predict(struct u_pacing_app *upa,
 		base_period_ns = U_TIME_1MS_IN_NS * 16; // Sure
 	}
 
-	int64_t period_ns = calc_period(pa, base_period_ns);
+	int64_t period_ns = calc_period(pa, base_period_ns, min_frame_interval_ns);
 
 	int64_t predict_ns = predict_display_time(pa, now_ns, base_period_ns, period_ns);
 	// How long we think the frame should take.
@@ -473,6 +479,12 @@ pa_predict(struct u_pacing_app *upa,
 	 */
 	if (debug_get_bool_option_immediate_wait_frame_return()) {
 		wake_up_time_ns = now_ns;
+
+		if (min_frame_interval_ns > 0) {
+			int64_t render_time = min_frame_interval_ns - total_app_and_compositor_time_ns(pa);
+
+			wake_up_time_ns += MAX(0, render_time);
+		}
 	} else {
 		wake_up_time_ns = predict_ns - total_app_and_compositor_time_ns(pa);
 	}

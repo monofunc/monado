@@ -356,7 +356,8 @@ struct u_pacing_app
 	 * @param      upa                          Render timing helper.
 	 * @param[in]  now_ns                       The current timestamp in nanoseconds, nominally from @ref
 	 *                                          os_monotonic_get_ns
-	 * @param[in]  min_frame_interval_ns        The minimum frame interval (inverse of maximum frame rate) to target.
+	 * @param[in]  min_frame_interval_ns        The minimum frame interval (inverse of maximum frame rate) to
+	 * target.
 	 * @param[out] out_frame_id                 Frame ID of this predicted frame.
 	 * @param[out] out_wake_up_time             When the client should be woken up.
 	 * @param[out] out_predicted_display_time   Predicted display time.
