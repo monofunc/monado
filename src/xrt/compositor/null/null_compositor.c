@@ -361,6 +361,16 @@ null_compositor_end_session(struct xrt_compositor *xc)
 }
 
 static xrt_result_t
+null_compositor_set_min_frame_interval(struct xrt_compositor *xc, int64_t min_frame_interval_ns)
+{
+	struct null_compositor *c = null_compositor(xc);
+	NULL_DEBUG(c, "SET_MIN_FRAME_INTERVAL");
+
+	c->min_frame_interval_ns = min_frame_interval_ns;
+	return XRT_SUCCESS;
+}
+
+static xrt_result_t
 null_compositor_predict_frame(struct xrt_compositor *xc,
                               int64_t *out_frame_id,
                               int64_t *out_wake_time_ns,
@@ -381,7 +391,7 @@ null_compositor_predict_frame(struct xrt_compositor *xc,
 	u_pc_predict(                        //
 	    c->upc,                          // upc
 	    now_ns,                          // now_ns
-	    0,                               // min_frame_interval_ns
+	    c->min_frame_interval_ns,        // min_frame_interval_ns
 	    out_frame_id,                    // out_frame_id
 	    out_wake_time_ns,                // out_wake_up_time_ns
 	    &null_desired_present_time_ns,   // out_desired_present_time_ns
@@ -570,6 +580,7 @@ null_compositor_create_system(struct xrt_device *xdev, struct xrt_system_composi
 	struct xrt_compositor *iface = &c->base.base.base;
 	iface->begin_session = null_compositor_begin_session;
 	iface->end_session = null_compositor_end_session;
+	iface->set_min_frame_interval = null_compositor_set_min_frame_interval;
 	iface->predict_frame = null_compositor_predict_frame;
 	iface->mark_frame = null_compositor_mark_frame;
 	iface->begin_frame = null_compositor_begin_frame;

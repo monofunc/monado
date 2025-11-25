@@ -112,6 +112,9 @@ struct comp_compositor
 	//! Renderer helper.
 	struct comp_renderer *r;
 
+	//! Minimum frame interval to target.
+	int64_t min_frame_interval_ns;
+
 	//! Duration of a frame at current refresh rate.
 	int64_t frame_interval_ns;
 

@@ -1092,6 +1092,20 @@ struct xrt_compositor
 	 */
 
 	/*!
+	 * Set the minimum interval for successive frames to displayed in.
+	 *
+	 * This limits the maximum frame rate the application may render at.
+	 *
+	 * The compositor may round this up to the next multiple of the display
+	 * period, or any other value it deems appropriate.
+	 *
+	 * @param[in]  xc                              The compositor
+	 * @param[in]  min_frame_interval_ns           The minimum frame interval (inverse of maximum frame rate) to
+	 * target.
+	 */
+	xrt_result_t (*set_min_frame_interval)(struct xrt_compositor *xc, int64_t min_frame_interval_ns);
+
+	/*!
 	 * This function and @ref mark_frame function calls are a alternative to
 	 * @ref wait_frame.
 	 *
@@ -1587,6 +1601,19 @@ xrt_comp_end_session(struct xrt_compositor *xc)
  * @brief Related to the OpenXR `xr*Frame` functions
  * @{
  */
+
+/*!
+ * @copydoc xrt_compositor::set_min_frame_interval
+ *
+ * Helper for calling through the function pointer.
+ *
+ * @public @memberof xrt_compositor
+ */
+static inline xrt_result_t
+xrt_comp_set_min_frame_interval(struct xrt_compositor *xc, int64_t min_frame_interval_ns)
+{
+	return xc->set_min_frame_interval(xc, min_frame_interval_ns);
+}
 
 /*!
  * @copydoc xrt_compositor::predict_frame

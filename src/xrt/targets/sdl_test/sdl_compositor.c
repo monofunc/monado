@@ -354,6 +354,16 @@ sdl_compositor_end_session(struct xrt_compositor *xc)
 }
 
 static xrt_result_t
+sdl_compositor_set_min_frame_interval(struct xrt_compositor *xc, int64_t min_frame_interval_ns)
+{
+	struct sdl_compositor *c = &from_comp(xc)->c;
+	SC_DEBUG(c, "END_SESSION");
+
+	c->settings.min_frame_interval_ns = min_frame_interval_ns;
+	return XRT_SUCCESS;
+}
+
+static xrt_result_t
 sdl_compositor_predict_frame(struct xrt_compositor *xc,
                              int64_t *out_frame_id,
                              int64_t *out_wake_time_ns,
@@ -372,17 +382,17 @@ sdl_compositor_predict_frame(struct xrt_compositor *xc,
 	int64_t null_present_slop_ns = 0;
 	int64_t null_min_display_period_ns = 0;
 
-	u_pc_predict(                        //
-	    c->upc,                          // upc
-	    now_ns,                          // now_ns
-	    0,                               // min_frame_interval_ns
-	    out_frame_id,                    // out_frame_id
-	    out_wake_time_ns,                // out_wake_up_time_ns
-	    &null_desired_present_time_ns,   // out_desired_present_time_ns
-	    &null_present_slop_ns,           // out_present_slop_ns
-	    out_predicted_display_time_ns,   // out_predicted_display_time_ns
-	    out_predicted_display_period_ns, // out_predicted_display_period_ns
-	    &null_min_display_period_ns);    // out_min_display_period_ns
+	u_pc_predict(                          //
+	    c->upc,                            // upc
+	    now_ns,                            // now_ns
+	    c->settings.min_frame_interval_ns, // min_frame_interval_ns
+	    out_frame_id,                      // out_frame_id
+	    out_wake_time_ns,                  // out_wake_up_time_ns
+	    &null_desired_present_time_ns,     // out_desired_present_time_ns
+	    &null_present_slop_ns,             // out_present_slop_ns
+	    out_predicted_display_time_ns,     // out_predicted_display_time_ns
+	    out_predicted_display_period_ns,   // out_predicted_display_period_ns
+	    &null_min_display_period_ns);      // out_min_display_period_ns
 
 	return XRT_SUCCESS;
 }
@@ -536,6 +546,7 @@ sdl_compositor_init(struct sdl_program *sp)
 
 	iface->begin_session = sdl_compositor_begin_session;
 	iface->end_session = sdl_compositor_end_session;
+	iface->set_min_frame_interval = sdl_compositor_set_min_frame_interval;
 	iface->predict_frame = sdl_compositor_predict_frame;
 	iface->mark_frame = sdl_compositor_mark_frame;
 	iface->begin_frame = sdl_compositor_begin_frame;

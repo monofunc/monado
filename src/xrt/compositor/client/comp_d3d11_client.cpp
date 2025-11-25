@@ -514,6 +514,15 @@ client_d3d11_compositor_end_session(struct xrt_compositor *xc)
 }
 
 static xrt_result_t
+client_d3d11_compositor_set_min_frame_interval(struct xrt_compositor *xc, int64_t min_frame_interval_ns)
+{
+	struct client_d3d11_compositor *c = as_client_d3d11_compositor(xc);
+
+	// Pipe down call into native compositor.
+	return xrt_comp_set_min_frame_interval(&c->xcn->base, min_frame_interval_ns);
+}
+
+static xrt_result_t
 client_d3d11_compositor_wait_frame(struct xrt_compositor *xc,
                                    int64_t *out_frame_id,
                                    int64_t *predicted_display_time,
@@ -890,6 +899,7 @@ try {
 	c->base.base.destroy_passthrough = client_d3d11_compositor_passthrough_destroy;
 	c->base.base.begin_session = client_d3d11_compositor_begin_session;
 	c->base.base.end_session = client_d3d11_compositor_end_session;
+	c->base.base.set_min_frame_interval = client_d3d11_compositor_set_min_frame_interval;
 	c->base.base.wait_frame = client_d3d11_compositor_wait_frame;
 	c->base.base.begin_frame = client_d3d11_compositor_begin_frame;
 	c->base.base.discard_frame = client_d3d11_compositor_discard_frame;

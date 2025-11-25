@@ -84,6 +84,9 @@ struct null_compositor
 	//! The device we are displaying to.
 	struct xrt_device *xdev;
 
+	//! Minimum frame interval to target.
+	int64_t min_frame_interval_ns;
+
 	//! Pacing helper to drive us forward.
 	struct u_pacing_compositor *upc;
 

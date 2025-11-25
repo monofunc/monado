@@ -503,6 +503,15 @@ multi_compositor_end_session(struct xrt_compositor *xc)
 }
 
 static xrt_result_t
+multi_compositor_set_min_frame_interval(struct xrt_compositor *xc, int64_t min_frame_interval_ns)
+{
+	struct multi_compositor *mc = multi_compositor(xc);
+
+	mc->min_frame_interval_ns = min_frame_interval_ns;
+	return XRT_SUCCESS;
+}
+
+static xrt_result_t
 multi_compositor_predict_frame(struct xrt_compositor *xc,
                                int64_t *out_frame_id,
                                int64_t *out_wake_time_ns,
@@ -519,7 +528,7 @@ multi_compositor_predict_frame(struct xrt_compositor *xc,
 	u_pa_predict(                         //
 	    mc->upa,                          //
 	    now_ns,                           //
-	    0,                                //
+	    mc->min_frame_interval_ns,        //
 	    out_frame_id,                     //
 	    out_wake_time_ns,                 //
 	    out_predicted_display_time_ns,    //
@@ -983,6 +992,7 @@ multi_compositor_create(struct multi_system_compositor *msc,
 	mc->base.base.create_semaphore = multi_compositor_create_semaphore;
 	mc->base.base.begin_session = multi_compositor_begin_session;
 	mc->base.base.end_session = multi_compositor_end_session;
+	mc->base.base.set_min_frame_interval = multi_compositor_set_min_frame_interval;
 	mc->base.base.predict_frame = multi_compositor_predict_frame;
 	mc->base.base.mark_frame = multi_compositor_mark_frame;
 	mc->base.base.wait_frame = multi_compositor_wait_frame;

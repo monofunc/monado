@@ -419,6 +419,13 @@ client_vk_compositor_end_session(struct xrt_compositor *xc)
 }
 
 static xrt_result_t
+client_vk_compositor_set_min_frame_interval(struct xrt_compositor *xc, int64_t min_frame_interval_ns)
+{
+	// Pipe down call into native compositor.
+	return xrt_comp_set_min_frame_interval(to_native_compositor(xc), min_frame_interval_ns);
+}
+
+static xrt_result_t
 client_vk_compositor_wait_frame(struct xrt_compositor *xc,
                                 int64_t *out_frame_id,
                                 int64_t *predicted_display_time,
@@ -818,6 +825,7 @@ client_vk_compositor_create(struct xrt_compositor_native *xcn,
 	c->base.base.destroy_passthrough = client_vk_compositor_passthrough_destroy;
 	c->base.base.begin_session = client_vk_compositor_begin_session;
 	c->base.base.end_session = client_vk_compositor_end_session;
+	c->base.base.set_min_frame_interval = client_vk_compositor_set_min_frame_interval;
 	c->base.base.wait_frame = client_vk_compositor_wait_frame;
 	c->base.base.begin_frame = client_vk_compositor_begin_frame;
 	c->base.base.discard_frame = client_vk_compositor_discard_frame;
