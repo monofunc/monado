@@ -176,10 +176,10 @@ get_new_frame(struct fake_timing *ft)
 }
 
 static int64_t
-predict_next_frame_present_time(struct fake_timing *ft, int64_t now_ns)
+predict_next_frame_present_time(struct fake_timing *ft, int64_t now_ns, int64_t min_display_period_ns)
 {
 	int64_t time_needed_ns = ft->comp_time_ns;
-	int64_t predicted_present_time_ns = ft->last_present_time_ns + ft->frame_period_ns;
+	int64_t predicted_present_time_ns = ft->last_present_time_ns + min_display_period_ns;
 
 	while (now_ns + time_needed_ns > predicted_present_time_ns) {
 		predicted_present_time_ns += ft->frame_period_ns;
@@ -293,14 +293,18 @@ pc_predict(struct u_pacing_compositor *upc,
 
 	struct frame *f = get_new_frame(ft);
 
+	int64_t min_display_period_ns = ft->frame_period_ns;
+	while (min_display_period_ns < min_frame_interval_ns) {
+		min_display_period_ns += ft->frame_period_ns;
+	}
+
 	int64_t frame_id = f->frame_id;
-	int64_t desired_present_time_ns = predict_next_frame_present_time(ft, now_ns);
+	int64_t desired_present_time_ns = predict_next_frame_present_time(ft, now_ns, min_display_period_ns);
 	int64_t predicted_display_time_ns = calc_display_time(ft, desired_present_time_ns);
 
 	int64_t wake_up_time_ns = desired_present_time_ns - ft->comp_time_ns;
 	int64_t present_slop_ns = U_TIME_HALF_MS_IN_NS;
-	int64_t predicted_display_period_ns = ft->frame_period_ns;
-	int64_t min_display_period_ns = ft->frame_period_ns;
+	int64_t predicted_display_period_ns = min_display_period_ns;
 
 	// Set the frame info.
 	f->predicted_wake_up_time_ns = wake_up_time_ns;
