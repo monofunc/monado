@@ -232,6 +232,11 @@ set_brightness(struct ipc_connection *ipc_c, int device_id, const char *value)
 int
 set_fps_limit(struct ipc_connection *ipc_c, int client_id, const char *value)
 {
+	uint32_t real_client_id = client_id;
+	if (client_id == -1) {
+		real_client_id = UINT32_MAX;
+	}
+
 	const int length = strlen(value);
 	if (length == 0) {
 		return 1;
@@ -244,7 +249,7 @@ set_fps_limit(struct ipc_connection *ipc_c, int client_id, const char *value)
 	}
 	int64_t target_interval_ns = U_TIME_1S_IN_NS / target_fps;
 
-	xrt_result_t r = ipc_call_system_set_client_min_frame_interval(ipc_c, client_id, target_interval_ns);
+	xrt_result_t r = ipc_call_system_set_client_min_frame_interval(ipc_c, real_client_id, target_interval_ns);
 	if (r != XRT_SUCCESS) {
 		PE("Failed to set target fps for client %d\n", client_id);
 		return 1;
@@ -334,7 +339,8 @@ main(int argc, char *argv[])
 				PE("    -i <id>: Toggle whether client receives input\n");
 				PE("    --device <id>: Set device for subsequent command, otherwise defaults to the "
 				   "primary device\n");
-				PE("    --client <id>: Set client id for subsequent command\n");
+				PE("    --client <id>: Set client id for subsequent command, otherwise defaults to "
+				   "global settings\n");
 				PE("    --get-brightness: Get current display brightness in percent\n");
 				PE("    --set-brightness <[+-]brightness[%%]>: Set display brightness\n");
 				PE("    --set-fps-limit <fps>: Set fps limit\n");
