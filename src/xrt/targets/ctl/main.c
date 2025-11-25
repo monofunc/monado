@@ -32,6 +32,7 @@ typedef enum op_mode
 	MODE_RECENTER,
 	MODE_GET_BRIGHTNESS,
 	MODE_SET_BRIGHTNESS,
+	MODE_SET_FPS_LIMIT,
 } op_mode_t;
 
 
@@ -228,11 +229,38 @@ set_brightness(struct ipc_connection *ipc_c, int device_id, const char *value)
 	return 0;
 }
 
+int
+set_fps_limit(struct ipc_connection *ipc_c, int client_id, const char *value)
+{
+	const int length = strlen(value);
+	if (length == 0) {
+		return 1;
+	}
+
+	char *end = NULL;
+	float target_fps = strtof(value, &end);
+	if (target_fps < 1.0f / 30) {
+		target_fps = 1.0f / 30;
+	}
+	int64_t target_interval_ns = U_TIME_1S_IN_NS / target_fps;
+
+	xrt_result_t r = ipc_call_system_set_client_min_frame_interval(ipc_c, client_id, target_interval_ns);
+	if (r != XRT_SUCCESS) {
+		PE("Failed to set target fps for client %d\n", client_id);
+		return 1;
+	}
+
+	P("Set client %d target fps to %f\n", client_id, target_fps);
+	return 0;
+}
+
 enum LongOptions
 {
 	OPTION_DEVICE = 1,
+	OPTION_CLIENT,
 	OPTION_GET_BRIGHTNESS,
 	OPTION_SET_BRIGHTNESS,
+	OPTION_SET_FPS_LIMIT,
 };
 
 int
@@ -244,12 +272,15 @@ main(int argc, char *argv[])
 	int c;
 	int s_val = 0;
 	int device_val = -1;
-	char *brightness;
+	int client_val = -1;
+	char *brightness, *fps;
 
 	static struct option long_options[] = {
 	    {"device", required_argument, NULL, OPTION_DEVICE},
+	    {"client", required_argument, NULL, OPTION_CLIENT},
 	    {"get-brightness", no_argument, NULL, OPTION_GET_BRIGHTNESS},
 	    {"set-brightness", required_argument, NULL, OPTION_SET_BRIGHTNESS},
+	    {"set-fps-limit", required_argument, NULL, OPTION_SET_FPS_LIMIT},
 	    {NULL, 0, NULL, 0},
 	};
 
@@ -274,6 +305,10 @@ main(int argc, char *argv[])
 			device_val = atoi(optarg);
 			break;
 		}
+		case OPTION_CLIENT: {
+			client_val = atoi(optarg);
+			break;
+		}
 		case OPTION_GET_BRIGHTNESS: {
 			op_mode = MODE_GET_BRIGHTNESS;
 			break;
@@ -281,6 +316,11 @@ main(int argc, char *argv[])
 		case OPTION_SET_BRIGHTNESS: {
 			brightness = optarg;
 			op_mode = MODE_SET_BRIGHTNESS;
+			break;
+		}
+		case OPTION_SET_FPS_LIMIT: {
+			fps = optarg;
+			op_mode = MODE_SET_FPS_LIMIT;
 			break;
 		}
 		case '?':
@@ -294,8 +334,10 @@ main(int argc, char *argv[])
 				PE("    -i <id>: Toggle whether client receives input\n");
 				PE("    --device <id>: Set device for subsequent command, otherwise defaults to the "
 				   "primary device\n");
+				PE("    --client <id>: Set client id for subsequent command\n");
 				PE("    --get-brightness: Get current display brightness in percent\n");
 				PE("    --set-brightness <[+-]brightness[%%]>: Set display brightness\n");
+				PE("    --set-fps-limit <fps>: Set fps limit\n");
 			} else {
 				PE("Option `\\x%x' unknown.\n", optopt);
 			}
@@ -335,6 +377,7 @@ main(int argc, char *argv[])
 	case MODE_RECENTER: exit(recenter_local_spaces(&ipc_c)); break;
 	case MODE_GET_BRIGHTNESS: exit(get_brightness(&ipc_c, device_val)); break;
 	case MODE_SET_BRIGHTNESS: exit(set_brightness(&ipc_c, device_val, brightness)); break;
+	case MODE_SET_FPS_LIMIT: exit(set_fps_limit(&ipc_c, client_val, fps)); break;
 	default: P("Unrecognised operation mode.\n"); exit(1);
 	}
 
