@@ -276,15 +276,8 @@ total_app_and_compositor_time_ns(const struct pacing_app *pa)
 }
 
 static int64_t
-calc_period(const struct pacing_app *pa)
+calc_period(const struct pacing_app *pa, int64_t base_period_ns)
 {
-	// Error checking.
-	int64_t base_period_ns = min_period(pa);
-	if (base_period_ns == 0) {
-		assert(false && "Have not yet received and samples from timing driver.");
-		base_period_ns = U_TIME_1MS_IN_NS * 16; // Sure
-	}
-
 	// Calculate the using both values separately.
 	int64_t period_ns = base_period_ns;
 
@@ -456,7 +449,14 @@ pa_predict(struct u_pacing_app *upa,
 
 	DEBUG_PRINT_ID(frame_id);
 
-	int64_t period_ns = calc_period(pa);
+	int64_t base_period_ns = min_period(pa);
+	// Error checking.
+	if (base_period_ns == 0) {
+		assert(false && "Have not yet received and samples from timing driver.");
+		base_period_ns = U_TIME_1MS_IN_NS * 16; // Sure
+	}
+
+	int64_t period_ns = calc_period(pa, base_period_ns);
 
 	int64_t predict_ns = predict_display_time(pa, now_ns, period_ns);
 	// How long we think the frame should take.
