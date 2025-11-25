@@ -381,6 +381,7 @@ null_compositor_predict_frame(struct xrt_compositor *xc,
 	u_pc_predict(                        //
 	    c->upc,                          // upc
 	    now_ns,                          // now_ns
+	    0,                               // min_frame_interval_ns
 	    out_frame_id,                    // out_frame_id
 	    out_wake_time_ns,                // out_wake_up_time_ns
 	    &null_desired_present_time_ns,   // out_desired_present_time_ns

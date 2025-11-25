@@ -72,6 +72,8 @@ struct u_pacing_compositor
 	 * @param[in] upc                                The compositor pacing helper.
 	 * @param[in]  now_ns                            The current timestamp in nanoseconds, nominally from @ref
 	 *                                               os_monotonic_get_ns
+	 * @param[in]  min_frame_interval_ns             The minimum frame interval (inverse of maximum frame rate)
+	 *                                               to target.
 	 * @param[out] out_frame_id                      Id used to refer to this frame again.
 	 * @param[out] out_wake_up_time_ns               When should the compositor wake up.
 	 * @param[out] out_desired_present_time_ns       The GPU should start scanning out at this time.
@@ -84,6 +86,7 @@ struct u_pacing_compositor
 	 */
 	void (*predict)(struct u_pacing_compositor *upc,
 	                int64_t now_ns,
+	                int64_t min_frame_interval_ns,
 	                int64_t *out_frame_id,
 	                int64_t *out_wake_up_time_ns,
 	                int64_t *out_desired_present_time_ns,
@@ -208,6 +211,7 @@ struct u_pacing_compositor
 static inline void
 u_pc_predict(struct u_pacing_compositor *upc,
              int64_t now_ns,
+             int64_t min_frame_interval_ns,
              int64_t *out_frame_id,
              int64_t *out_wake_up_time_ns,
              int64_t *out_desired_present_time_ns,
@@ -218,6 +222,7 @@ u_pc_predict(struct u_pacing_compositor *upc,
 {
 	upc->predict(upc,                             //
 	             now_ns,                          //
+	             min_frame_interval_ns,           //
 	             out_frame_id,                    //
 	             out_wake_up_time_ns,             //
 	             out_desired_present_time_ns,     //

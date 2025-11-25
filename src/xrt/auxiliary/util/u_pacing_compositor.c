@@ -554,6 +554,7 @@ do_tracing(struct pacing_compositor *pc, struct frame *f)
 static void
 pc_predict(struct u_pacing_compositor *upc,
            int64_t now_ns,
+           int64_t min_frame_interval_ns,
            int64_t *out_frame_id,
            int64_t *out_wake_up_time_ns,
            int64_t *out_desired_present_time_ns,

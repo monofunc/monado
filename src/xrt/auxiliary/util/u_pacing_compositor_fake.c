@@ -280,6 +280,7 @@ calc_gpu_stats(struct fake_timing *ft, struct frame *f, int64_t gpu_start_ns, in
 static void
 pc_predict(struct u_pacing_compositor *upc,
            int64_t now_ns,
+           int64_t min_frame_interval_ns,
            int64_t *out_frame_id,
            int64_t *out_wake_up_time_ns,
            int64_t *out_desired_present_time_ns,
