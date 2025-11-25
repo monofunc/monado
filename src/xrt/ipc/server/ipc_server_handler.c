@@ -1622,6 +1622,19 @@ ipc_handle_system_get_client_info(volatile struct ipc_client_state *_ics,
 }
 
 xrt_result_t
+ipc_handle_system_set_client_min_frame_interval(volatile struct ipc_client_state *_ics,
+                                                uint32_t client_id,
+                                                int64_t min_frame_interval_ns)
+{
+	struct ipc_server *s = _ics->server;
+
+	IPC_INFO(s, "System setting minimum frame interval for client %d to %" PRId64 " ns.", client_id,
+	         min_frame_interval_ns);
+
+	return ipc_server_set_client_min_frame_interval(s, client_id, min_frame_interval_ns);
+}
+
+xrt_result_t
 ipc_handle_system_set_primary_client(volatile struct ipc_client_state *_ics, uint32_t client_id)
 {
 	struct ipc_server *s = _ics->server;

@@ -447,6 +447,14 @@ xrt_result_t
 ipc_server_get_client_app_state(struct ipc_server *s, uint32_t client_id, struct ipc_app_state *out_ias);
 
 /*!
+ * Set a client's minimum frame interval.
+ *
+ * @ingroup ipc_server
+ */
+xrt_result_t
+ipc_server_set_client_min_frame_interval(struct ipc_server *s, uint32_t client_id, int64_t min_frame_interval_ns);
+
+/*!
  * Set the new active client.
  *
  * @ingroup ipc_server
