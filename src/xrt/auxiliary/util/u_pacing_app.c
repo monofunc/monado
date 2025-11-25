@@ -477,7 +477,7 @@ pa_predict(struct u_pacing_app *upa,
 	}
 
 	// When the client's GPU work should have completed.
-	int64_t gpu_done_time_ns = predict_ns - total_compositor_time_ns(pa);
+	int64_t gpu_done_time_ns = wake_up_time_ns + total_app_time_ns(pa);
 
 	pa->last_returned_ns = predict_ns;
 
