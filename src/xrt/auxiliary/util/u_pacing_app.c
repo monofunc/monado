@@ -437,6 +437,7 @@ do_tracing(struct pacing_app *pa, struct u_pa_frame *f)
 static void
 pa_predict(struct u_pacing_app *upa,
            int64_t now_ns,
+           int64_t min_frame_interval_ns,
            int64_t *out_frame_id,
            int64_t *out_wake_up_time,
            int64_t *out_predicted_display_time,

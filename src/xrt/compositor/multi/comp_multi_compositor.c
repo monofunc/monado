@@ -519,6 +519,7 @@ multi_compositor_predict_frame(struct xrt_compositor *xc,
 	u_pa_predict(                         //
 	    mc->upa,                          //
 	    now_ns,                           //
+	    0,                                //
 	    out_frame_id,                     //
 	    out_wake_time_ns,                 //
 	    out_predicted_display_time_ns,    //
