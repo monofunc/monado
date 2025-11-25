@@ -306,7 +306,7 @@ calc_period(const struct pacing_app *pa, int64_t base_period_ns)
 }
 
 static int64_t
-predict_display_time(const struct pacing_app *pa, int64_t now_ns, int64_t period_ns)
+predict_display_time(const struct pacing_app *pa, int64_t now_ns, int64_t base_period_ns, int64_t period_ns)
 {
 
 	// Total app and compositor time to produce a frame
@@ -324,7 +324,7 @@ predict_display_time(const struct pacing_app *pa, int64_t now_ns, int64_t period
 
 	// Have to have enough time to perform app work.
 	while ((val - app_and_compositor_time_ns) <= now_ns) {
-		val += period_ns;
+		val += base_period_ns;
 	}
 
 	return val;
@@ -458,7 +458,7 @@ pa_predict(struct u_pacing_app *upa,
 
 	int64_t period_ns = calc_period(pa, base_period_ns);
 
-	int64_t predict_ns = predict_display_time(pa, now_ns, period_ns);
+	int64_t predict_ns = predict_display_time(pa, now_ns, base_period_ns, period_ns);
 	// How long we think the frame should take.
 	int64_t frame_time_ns = total_app_time_ns(pa);
 	// When should the client wake up.
