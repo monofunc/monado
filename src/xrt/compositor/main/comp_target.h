@@ -256,6 +256,7 @@ struct comp_target
 	 * turned into photons by the hardware.
 	 */
 	void (*calc_frame_pacing)(struct comp_target *ct,
+	                          int64_t min_frame_interval_ns,
 	                          int64_t *out_frame_id,
 	                          int64_t *out_wake_up_time_ns,
 	                          int64_t *out_desired_present_time_ns,
@@ -490,6 +491,7 @@ comp_target_flush(struct comp_target *ct)
  */
 static inline void
 comp_target_calc_frame_pacing(struct comp_target *ct,
+                              int64_t min_frame_interval_ns,
                               int64_t *out_frame_id,
                               int64_t *out_wake_up_time_ns,
                               int64_t *out_desired_present_time_ns,
@@ -500,6 +502,7 @@ comp_target_calc_frame_pacing(struct comp_target *ct,
 
 	ct->calc_frame_pacing(              //
 	    ct,                             //
+	    min_frame_interval_ns,          //
 	    out_frame_id,                   //
 	    out_wake_up_time_ns,            //
 	    out_desired_present_time_ns,    //

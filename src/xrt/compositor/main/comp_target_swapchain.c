@@ -976,6 +976,7 @@ comp_target_swapchain_check_ready(struct comp_target *ct)
 
 static void
 comp_target_swapchain_calc_frame_pacing(struct comp_target *ct,
+                                        int64_t min_frame_interval_ns,
                                         int64_t *out_frame_id,
                                         int64_t *out_wake_up_time_ns,
                                         int64_t *out_desired_present_time_ns,
@@ -995,7 +996,7 @@ comp_target_swapchain_calc_frame_pacing(struct comp_target *ct,
 
 	u_pc_predict(cts->upc,                     //
 	             now_ns,                       //
-	             0,                            //
+	             min_frame_interval_ns,        //
 	             &frame_id,                    //
 	             &wake_up_time_ns,             //
 	             &desired_present_time_ns,     //

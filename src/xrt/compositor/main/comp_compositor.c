@@ -203,6 +203,7 @@ compositor_predict_frame(struct xrt_compositor *xc,
 	int64_t predicted_display_time_ns = 0;
 	comp_target_calc_frame_pacing(   //
 	    c->target,                   //
+	    0,                           //
 	    &frame_id,                   //
 	    &wake_up_time_ns,            //
 	    &desired_present_time_ns,    //
