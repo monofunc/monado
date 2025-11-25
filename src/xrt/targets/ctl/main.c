@@ -311,7 +311,7 @@ main(int argc, char *argv[])
 	    .app_info.application_name = "monado-ctl",
 	};
 
-	xrt_result_t xret = ipc_client_connection_init(&ipc_c, U_LOGGING_INFO, &info);
+	xrt_result_t xret = ipc_client_connection_init(&ipc_c, U_LOGGING_INFO, 0, &info);
 	if (xret != XRT_SUCCESS) {
 		U_LOG_E("ipc_client_connection_init: %u", xret);
 		return -1;

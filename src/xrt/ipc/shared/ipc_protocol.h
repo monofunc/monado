@@ -293,6 +293,8 @@ struct ipc_shared_memory
 struct ipc_client_description
 {
 	pid_t pid;
+	//! alignas for 32 bit client support, see @ref ipc-design
+	XRT_ALIGNAS(8) int64_t initial_min_frame_interval_ns;
 	struct xrt_application_info info;
 };
 

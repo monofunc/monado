@@ -166,6 +166,9 @@ struct ipc_client_state
 	//! Array of xrt_devices with plane_detection_size entries.
 	struct xrt_device **plane_detection_xdev;
 
+	//! Minimum frame interval to target, limits frame rate.
+	int64_t min_frame_interval_ns;
+
 	int server_thread_index;
 
 	xrt_shmem_handle_t ism_handle;

@@ -315,7 +315,9 @@ ipc_client_check_git_tag(struct ipc_connection *ipc_c)
 }
 
 static xrt_result_t
-ipc_client_describe_client(struct ipc_connection *ipc_c, const struct xrt_application_info *a_info)
+ipc_client_describe_client(struct ipc_connection *ipc_c,
+                           const struct xrt_application_info *a_info,
+                           int64_t min_frame_interval_ns)
 {
 #ifdef XRT_OS_WINDOWS
 	DWORD pid = GetCurrentProcessId();
@@ -326,6 +328,7 @@ ipc_client_describe_client(struct ipc_connection *ipc_c, const struct xrt_applic
 	struct ipc_client_description desc = {0};
 	desc.info = *a_info;
 	desc.pid = pid; // Extra info.
+	desc.initial_min_frame_interval_ns = min_frame_interval_ns;
 
 	xrt_result_t xret = ipc_call_instance_describe_client(ipc_c, &desc);
 	if (xret != XRT_SUCCESS) {
@@ -346,6 +349,7 @@ ipc_client_describe_client(struct ipc_connection *ipc_c, const struct xrt_applic
 xrt_result_t
 ipc_client_connection_init(struct ipc_connection *ipc_c,
                            enum u_logging_level log_level,
+                           int64_t min_frame_interval_ns,
                            const struct xrt_instance_info *i_info)
 {
 	xrt_result_t xret;
@@ -399,7 +403,7 @@ ipc_client_connection_init(struct ipc_connection *ipc_c,
 	}
 
 	// Do this last.
-	xret = ipc_client_describe_client(ipc_c, &i_info->app_info);
+	xret = ipc_client_describe_client(ipc_c, &i_info->app_info, min_frame_interval_ns);
 	if (xret != XRT_SUCCESS) {
 		goto err_fini; // Already logged.
 	}

@@ -376,6 +376,7 @@ ipc_handle_instance_describe_client(volatile struct ipc_client_state *ics,
 	PNT("id: %u", ics->client_state.id);
 	PNT("application_name: '%s'", client_desc->info.application_name);
 	PNT("pid: %i", client_desc->pid);
+	PNT("initial_min_frame_interval_ns: %" PRId64, client_desc->initial_min_frame_interval_ns);
 	PNT("extensions:");
 
 	EXT(ext_hand_tracking_enabled);
@@ -396,6 +397,7 @@ ipc_handle_instance_describe_client(volatile struct ipc_client_state *ics,
 
 	// Log the pretty message.
 	IPC_INFO(ics->server, "%s", sink.buffer);
+	ics->min_frame_interval_ns = client_desc->initial_min_frame_interval_ns;
 
 	return XRT_SUCCESS;
 }
@@ -451,6 +453,11 @@ ipc_handle_session_create(volatile struct ipc_client_state *ics,
 	xrt_result_t xret = xrt_system_create_session(ics->server->xsys, xsi, &xs, &xcn);
 	if (xret != XRT_SUCCESS) {
 		return xret;
+	}
+
+	xret = xrt_comp_set_min_frame_interval(&xcn->base, ics->min_frame_interval_ns);
+	if (xret != XRT_SUCCESS) {
+		ics->min_frame_interval_ns = 0;
 	}
 
 	ics->client_state.session_overlay = xsi->is_overlay;

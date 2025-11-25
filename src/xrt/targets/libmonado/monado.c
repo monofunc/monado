@@ -141,7 +141,7 @@ mnd_root_create(mnd_root_t **out_root)
 	struct xrt_instance_info info = {0};
 	snprintf(info.app_info.application_name, sizeof(info.app_info.application_name), "%s", "libmonado");
 
-	xrt_result_t xret = ipc_client_connection_init(&r->ipc_c, U_LOGGING_INFO, &info);
+	xrt_result_t xret = ipc_client_connection_init(&r->ipc_c, U_LOGGING_INFO, 0, &info);
 	if (xret != XRT_SUCCESS) {
 		PE("Connection init error '%i'!\n", xret);
 		free(r);
