@@ -455,7 +455,12 @@ ipc_handle_session_create(volatile struct ipc_client_state *ics,
 		return xret;
 	}
 
-	xret = xrt_comp_set_min_frame_interval(&xcn->base, ics->min_frame_interval_ns);
+	int64_t client_min_frame_interval_ns = ics->min_frame_interval_ns;
+	if (client_min_frame_interval_ns < ics->server->min_frame_interval_ns) {
+		client_min_frame_interval_ns = ics->server->min_frame_interval_ns;
+	}
+
+	xret = xrt_comp_set_min_frame_interval(&xcn->base, client_min_frame_interval_ns);
 	if (xret != XRT_SUCCESS) {
 		ics->min_frame_interval_ns = 0;
 	}

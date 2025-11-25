@@ -426,6 +426,9 @@ struct ipc_server
 
 	//! Disable listening on stdin for server stop.
 	bool no_stdin;
+
+	//! Minimum frame interval to target for all clients.
+	int64_t min_frame_interval_ns;
 };
 
 /*!
