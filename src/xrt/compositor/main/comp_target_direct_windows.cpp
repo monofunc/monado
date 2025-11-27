@@ -14,6 +14,7 @@
  */
 
 
+#include "comp_target.h"
 #include "comp_target_direct_windows_swapchain.hpp"
 #include "comp_window.h"
 
@@ -419,16 +420,6 @@ CompTargetData::openHmd(const winrtWDDC::DisplayTarget &target, DisplayObjects &
 		// std::get<winrtWDDC::DisplayPath>(outObjects) = displayState.GetPathForTarget(target);
 		winrtWDDC::DisplayPath displayPath = finalStateResult.State().GetPathForTarget(target);
 
-		/// @todo This throws an exception right now:
-		// onecoreuap\windows\directx\dxg\ddisplay\core\ddisplaysource.cpp(210)\DDisplay.dll!00007FF8753A3DF5:
-		// (caller: 00007FF87538738B) ReturnHr(11) tid(e4d0) 80070057 The parameter is incorrect.
-		//     Msg:[onecoreuap\windows\directx\dxg\ddisplay\core\ddisplaysource.cpp(208)\DDisplay.dll!00007FF87538FA5E:
-		//     (caller: 00007FF87538738B) Exception(8) tid(e4d0) 80070057 The parameter is incorrect.
-		//     CallContext:[\DeviceCreateScanoutSource\DeviceCreateScanoutSource]
-		// ] CallContext:[\DeviceCreateScanoutSource\DeviceCreateScanoutSource]
-		// onecoreuap\windows\directx\dxg\ddisplay\core\ddisplaydevice.cpp(113)\DDisplay.dll!00007FF8753873ED:
-		// (caller: 00007FF84ABB422F) ReturnHr(12) tid(e4d0) 80070057 The parameter is incorrect.
-		//     CallContext:[\DeviceCreateScanoutSource]
 		winrtWDDC::DisplaySource displaySource = displayDevice.CreateScanoutSource(target);
 		outObjects = std::make_tuple(displayDevice, target, std::move(displayPath), std::move(displaySource));
 		return true;
@@ -634,15 +625,13 @@ try_open_hmds(struct comp_target_direct_windows *ctdw) noexcept
 
 static void
 comp_target_direct_windows_create_images(struct comp_target *ct,
-                                         uint32_t preferred_width,
-                                         uint32_t preferred_height,
-                                         VkFormat color_format,
-                                         VkColorSpaceKHR color_space,
-                                         VkImageUsageFlags image_usage,
-                                         VkPresentModeKHR present_mode)
+                                         const struct comp_target_create_images_info *create_info)
 {
 	struct comp_target_direct_windows *ctdw = (struct comp_target_direct_windows *)ct;
 	struct vk_bundle *vk = get_vk(ctdw);
+
+	VkFormat const color_format = create_info->formats[0]; // @todo: select from list
+	VkColorSpaceKHR const color_space = create_info->color_space;
 
 	uint64_t const now_ns = os_monotonic_get_ns();
 	// Some platforms really don't like the pacing_compositor code.
@@ -744,8 +733,8 @@ comp_target_direct_windows_present(struct comp_target *ct,
                                    VkQueue queue,
                                    uint32_t index,
                                    uint64_t timeline_semaphore_value,
-                                   uint64_t desired_present_time_ns,
-                                   uint64_t present_slop_ns)
+                                   int64_t desired_present_time_ns,
+                                   int64_t present_slop_ns)
 {
 	struct comp_target_direct_windows *ctdw = (struct comp_target_direct_windows *)ct;
 	struct vk_bundle *vk = get_vk(ctdw);
@@ -796,7 +785,7 @@ comp_target_direct_windows_init_post_vulkan(struct comp_target *ct, uint32_t wid
 		struct vk_bundle *vk = get_vk(ctdw);
 
 		ctdw->base.semaphores.render_complete_is_timeline = true;
-		VkResult const vkresult = vk_create_semaphore_from_native(
+		VkResult const vkresult = vk_create_timeline_semaphore_from_native(
 		    vk, ctdw->data->renderCompleteFenceHandle.get(), &ctdw->base.semaphores.render_complete);
 		if (vkresult != VK_SUCCESS) {
 			COMP_ERROR(ct->c, "Could not import timeline semaphore.");
@@ -862,21 +851,21 @@ comp_target_direct_windows_flush(struct comp_target *ct) noexcept
 static void
 comp_target_direct_windows_calc_frame_pacing(struct comp_target *ct,
                                              int64_t *out_frame_id,
-                                             uint64_t *out_wake_up_time_ns,
-                                             uint64_t *out_desired_present_time_ns,
-                                             uint64_t *out_present_slop_ns,
-                                             uint64_t *out_predicted_display_time_ns)
+                                             int64_t *out_wake_up_time_ns,
+                                             int64_t *out_desired_present_time_ns,
+                                             int64_t *out_present_slop_ns,
+                                             int64_t *out_predicted_display_time_ns)
 {
 	struct comp_target_direct_windows *ctdw = (struct comp_target_direct_windows *)ct;
 
 	int64_t frame_id = -1;
-	uint64_t wake_up_time_ns = 0;
-	uint64_t desired_present_time_ns = 0;
-	uint64_t present_slop_ns = 0;
-	uint64_t predicted_display_time_ns = 0;
-	uint64_t predicted_display_period_ns = 0;
-	uint64_t min_display_period_ns = 0;
-	uint64_t const now_ns = os_monotonic_get_ns();
+	int64_t wake_up_time_ns = 0;
+	int64_t desired_present_time_ns = 0;
+	int64_t present_slop_ns = 0;
+	int64_t predicted_display_time_ns = 0;
+	int64_t predicted_display_period_ns = 0;
+	int64_t min_display_period_ns = 0;
+	int64_t const now_ns = os_monotonic_get_ns();
 
 	u_pc_predict(ctdw->upc,                    //
 	             now_ns,                       //
@@ -898,10 +887,21 @@ comp_target_direct_windows_calc_frame_pacing(struct comp_target *ct,
 }
 
 static void
+comp_target_direct_windows_info_gpu(
+    struct comp_target *ct, int64_t frame_id, int64_t gpu_start_ns, int64_t gpu_end_ns, int64_t when_ns) noexcept
+{
+	struct comp_target_direct_windows *ctdw = (struct comp_target_direct_windows *)ct;
+
+	assert(frame_id == ctdw->current_frame_id);
+
+	u_pc_info_gpu(ctdw->upc, ctdw->current_frame_id, gpu_start_ns, gpu_end_ns, when_ns);
+}
+
+static void
 comp_target_direct_windows_mark_timing_point(struct comp_target *ct,
                                              enum comp_target_timing_point point,
                                              int64_t frame_id,
-                                             uint64_t when_ns) noexcept
+                                             int64_t when_ns) noexcept
 {
 	struct comp_target_direct_windows *ctdw = (struct comp_target_direct_windows *)ct;
 	assert(frame_id == ctdw->current_frame_id);
@@ -913,8 +913,11 @@ comp_target_direct_windows_mark_timing_point(struct comp_target *ct,
 	case COMP_TARGET_TIMING_POINT_BEGIN:
 		u_pc_mark_point(ctdw->upc, U_TIMING_POINT_BEGIN, ctdw->current_frame_id, when_ns);
 		break;
-	case COMP_TARGET_TIMING_POINT_SUBMIT:
-		u_pc_mark_point(ctdw->upc, U_TIMING_POINT_SUBMIT, ctdw->current_frame_id, when_ns);
+	case COMP_TARGET_TIMING_POINT_SUBMIT_BEGIN:
+		u_pc_mark_point(ctdw->upc, U_TIMING_POINT_SUBMIT_BEGIN, ctdw->current_frame_id, when_ns);
+		break;
+	case COMP_TARGET_TIMING_POINT_SUBMIT_END:
+		u_pc_mark_point(ctdw->upc, U_TIMING_POINT_SUBMIT_END, ctdw->current_frame_id, when_ns);
 		break;
 	default: assert(false);
 	}
@@ -969,6 +972,7 @@ comp_target_direct_windows_create(struct comp_compositor *c)
 		ctdw->base.destroy = comp_target_direct_windows_destroy;
 		ctdw->base.flush = comp_target_direct_windows_flush;
 		ctdw->base.has_images = comp_target_direct_windows_has_images;
+		ctdw->base.info_gpu = comp_target_direct_windows_info_gpu;
 		ctdw->base.init_post_vulkan = comp_target_direct_windows_init_post_vulkan;
 		ctdw->base.init_pre_vulkan = comp_target_direct_windows_init_pre_vulkan;
 		ctdw->base.mark_timing_point = comp_target_direct_windows_mark_timing_point;

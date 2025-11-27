@@ -32,9 +32,6 @@ using ::winrt::Windows::Devices::Display::Core::DisplayPrimaryDescription;
 using ::winrt::Windows::Devices::Display::Core::DisplaySource;
 using ::winrt::Windows::Devices::Display::Core::DisplayTarget;
 
-/// We retry opening an HMD a few times since it sometimes fails spuriously
-constexpr int kMaxOpenAttempts = 2;
-
 CompositorSwapchain::CompositorSwapchain(struct comp_compositor *comp,
                                          DisplayObjects &&objects,
                                          winrt::Windows::Graphics::DirectX::DirectXColorSpace colorSpace,
@@ -107,7 +104,9 @@ CompositorSwapchain::present(uint32_t i, const DisplayFence &fence, uint64_t fen
 	} else {
 		m_taskPool.ExecuteTask(task);
 	}
-	if (m_path.Status() != winrtWDDC::DisplayPathStatus::Succeeded) {
+	if (m_path.Status() != winrtWDDC::DisplayPathStatus::Succeeded &&
+	    m_path.Status() != winrtWDDC::DisplayPathStatus::Unknown) {
+		// TODO: is Unknown bad?
 		COMP_ERROR(c, "Path status is an error: %s", to_string(m_path.Status()));
 		return false;
 	}

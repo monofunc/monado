@@ -157,8 +157,6 @@ createScanout(SystemApiCapability const &capability,
 	auto haveWin11 = capability.supportsScanoutOptionsAndTryExecuteTask;
 
 	auto TryCreateScanout = [&] {
-		winrtWDDC::DisplayScanout ret{nullptr};
-
 		try {
 			if (haveWin11) {
 				// Can always use syncinterval 0 when we have API 14 (win 11) or newer because we can

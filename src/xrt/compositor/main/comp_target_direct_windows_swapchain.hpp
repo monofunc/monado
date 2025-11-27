@@ -30,6 +30,9 @@
 
 #include <stdint.h>
 
+/// We retry opening an HMD a few times since it sometimes fails spuriously
+constexpr int kMaxOpenAttempts = 2;
+
 namespace xrt::compositor::main {
 
 namespace winrtWDDC = winrt::Windows::Devices::Display::Core;
