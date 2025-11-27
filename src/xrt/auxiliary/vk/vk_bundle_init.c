@@ -1368,21 +1368,52 @@ vk_create_device(struct vk_bundle *vk,
 
 	vk_reset_queues(vk);
 
-	struct vk_queue_family main_queue_family = {0};
-	if (only_compute) {
-		ret = find_queue_family(vk, VK_QUEUE_COMPUTE_BIT, &main_queue_family);
-		VK_CHK_WITH_GOTO(ret, "find_queue_family", err_destroy);
-	} else {
-		ret = find_graphics_queue_family(vk, &main_queue_family);
-		VK_CHK_WITH_GOTO(ret, "find_graphics_queue_family", err_destroy);
-	}
-
-	assert(main_queue_family.queue_family.queueCount > 0);
+	struct vk_queue_family graphics_queue_family = {0};
+	ret = find_graphics_queue_family(vk, &graphics_queue_family);
+	VK_CHK_WITH_GOTO(ret, "find_graphics_queue_family", err_destroy);
+	assert(graphics_queue_family.queue_family.queueCount > 0);
 
 	const struct vk_queue_pair main_queue = {
-	    .family_index = main_queue_family.family_index,
+	    .family_index = graphics_queue_family.family_index,
 	    .index = 0,
 	};
+
+	struct vk_queue_pair compute_queue = VK_NULL_QUEUE_PAIR;
+	if (only_compute) {
+		struct vk_queue_family compute_queue_family = {0};
+		ret = find_queue_family(vk, VK_QUEUE_COMPUTE_BIT, &compute_queue_family);
+		VK_CHK_WITH_GOTO(ret, "find_queue_family", err_destroy);
+		assert(compute_queue_family.queue_family.queueCount > 0);
+
+		compute_queue = (struct vk_queue_pair){
+		    .family_index = compute_queue_family.family_index,
+		    .index = 0,
+		};
+
+		/*!
+		 * if the compute_queue_family & graphics_queue_family are the same and
+		 * supports more than one queue instance, prefer using separate instances
+		 * for each.
+		 *
+		 * worse case the device only supports a single [compute | graphics] queue family
+		 * with a queue-count == 1, in which case both
+		 * @ref vk_bundle::graphics_queue and @ref vk_bundnle::compute_queue
+		 * will refer to the same queue instance and queue mutex.
+		 */
+		if (compute_queue_family.family_index == graphics_queue_family.family_index &&
+		    compute_queue_family.queue_family.queueCount > 1) {
+
+			assert(compute_queue_family.queue_family.queueCount ==
+			       graphics_queue_family.queue_family.queueCount);
+
+			assert(compute_queue_family.queue_family.queueFlags ==
+			       graphics_queue_family.queue_family.queueFlags);
+
+			compute_queue.index = main_queue.index + 1;
+
+			assert(compute_queue.index < compute_queue_family.queue_family.queueCount);
+		}
+	}
 
 	VkDeviceQueueGlobalPriorityCreateInfoEXT priority_info = {
 	    .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT,
@@ -1393,11 +1424,12 @@ vk_create_device(struct vk_bundle *vk,
 	const float queue_priority[VK_BUNDLE_MAX_QUEUES] = {
 	    0.f,
 	    0.f,
+	    0.f,
 	};
 	VkDeviceQueueCreateInfo queue_create_info[VK_BUNDLE_MAX_QUEUES] = {0};
 	uint32_t queue_create_info_count = 1;
 
-	// Compute or Graphics queue
+	// Graphics/Presentation queue
 	queue_create_info[0] = (VkDeviceQueueCreateInfo){
 	    .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 	    .pNext = NULL,
@@ -1405,6 +1437,24 @@ vk_create_device(struct vk_bundle *vk,
 	    .queueFamilyIndex = main_queue.family_index,
 	    .pQueuePriorities = queue_priority,
 	};
+
+	// Compute queue
+	if (compute_queue.family_index != VK_QUEUE_FAMILY_IGNORED && //
+	    compute_queue.index != (uint32_t)-1) {
+
+		if (compute_queue.family_index != main_queue.family_index) {
+			queue_create_info[queue_create_info_count++] = (VkDeviceQueueCreateInfo){
+			    .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+			    .pNext = NULL,
+			    .queueCount = 1,
+			    .queueFamilyIndex = compute_queue.family_index,
+			    .pQueuePriorities = queue_priority,
+			};
+		} else if (compute_queue.index != main_queue.index) {
+			++queue_create_info[0].queueCount;
+			assert(queue_create_info[0].queueCount >= 2);
+		}
+	}
 
 #ifdef VK_KHR_video_encode_queue
 	// Video encode queue
@@ -1601,6 +1651,7 @@ vk_create_device(struct vk_bundle *vk,
 	vk->main_queue = vk_insert_get_queue(vk, &main_queue);
 	assert(vk->main_queue != NULL);
 
+	vk->compute_queue = vk_insert_get_queue(vk, &compute_queue);
 #if defined(VK_KHR_video_encode_queue)
 	vk->encode_queue = vk_insert_get_queue(vk, &encode_queue);
 #endif

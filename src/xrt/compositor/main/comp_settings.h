@@ -49,6 +49,15 @@ struct comp_settings
 	int display;
 
 	bool use_compute;
+	/*!
+	 * @brief use_main_queue_for_present - Always use @ref vk_bundle::main_queue for present ops
+	 *
+	 * Always use the main_queue for present ops/cmds even if the selected compute queue family
+	 * used for layer composition has present caps.
+	 *
+	 * Ignored if @ref use_compute == false
+	 */
+	bool use_main_queue_for_present;
 
 	VkFormat formats[XRT_MAX_SWAPCHAIN_FORMATS];
 	uint32_t format_count;

@@ -615,7 +615,7 @@ handle_focused_client_events(volatile struct ipc_client_state *ics, int active_i
 	ics->client_state.z_order = z_order;
 
 	if (ics->xc != NULL) {
-		xrt_syscomp_set_state(ics->server->xsysc, ics->xc, visible, focused);
+		xrt_syscomp_set_state(ics->server->xsysc, ics->xc, visible, focused, os_monotonic_get_ns());
 		xrt_syscomp_set_z_order(ics->server->xsysc, ics->xc, z_order);
 	}
 }

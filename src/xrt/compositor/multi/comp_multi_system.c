@@ -592,7 +592,8 @@ thread_func(void *ptr)
  */
 
 static xrt_result_t
-system_compositor_set_state(struct xrt_system_compositor *xsc, struct xrt_compositor *xc, bool visible, bool focused)
+system_compositor_set_state(
+    struct xrt_system_compositor *xsc, struct xrt_compositor *xc, bool visible, bool focused, int64_t timestamp_ns)
 {
 	struct multi_system_compositor *msc = multi_system_compositor(xsc);
 	struct multi_compositor *mc = multi_compositor(xc);
@@ -607,6 +608,7 @@ system_compositor_set_state(struct xrt_system_compositor *xsc, struct xrt_compos
 		xse.type = XRT_SESSION_EVENT_STATE_CHANGE;
 		xse.state.visible = visible;
 		xse.state.focused = focused;
+		xse.state.timestamp_ns = timestamp_ns;
 
 		return multi_compositor_push_event(mc, &xse);
 	}

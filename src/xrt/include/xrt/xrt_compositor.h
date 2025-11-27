@@ -2391,7 +2391,8 @@ struct xrt_multi_compositor_control
 	xrt_result_t (*set_state)(struct xrt_system_compositor *xsc,
 	                          struct xrt_compositor *xc,
 	                          bool visible,
-	                          bool focused);
+	                          bool focused,
+	                          int64_t timestamp_ns);
 
 	/*!
 	 * Set the rendering Z order for rendering, visible has higher priority
@@ -2491,13 +2492,14 @@ struct xrt_system_compositor
  * @public @memberof xrt_system_compositor
  */
 static inline xrt_result_t
-xrt_syscomp_set_state(struct xrt_system_compositor *xsc, struct xrt_compositor *xc, bool visible, bool focused)
+xrt_syscomp_set_state(
+    struct xrt_system_compositor *xsc, struct xrt_compositor *xc, bool visible, bool focused, int64_t timestamp_ns)
 {
 	if (xsc->xmcc == NULL) {
 		return XRT_ERROR_MULTI_SESSION_NOT_IMPLEMENTED;
 	}
 
-	return xsc->xmcc->set_state(xsc, xc, visible, focused);
+	return xsc->xmcc->set_state(xsc, xc, visible, focused, timestamp_ns);
 }
 
 /*!

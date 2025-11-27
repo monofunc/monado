@@ -565,6 +565,55 @@ struct render_resources
 
 			//! @todo other resources
 		} clear;
+
+		/*!
+		 * @brief compute::present - Only used when compute-only queue (family) does not support presentation
+		 * ops/cmds
+		 *
+		 * When the compute-pipeline is used, the compute-only queue family may not support
+		 * present ops/commands, a graphics queue will always be created for such case
+		 * but additional vk resources need to be created to handle ownership transfer of
+		 * (comp) target images to/from the compute-only (@see vk_bundle::compute_queue) and
+		 * graphics queue (@see vk_bundle::graphics_queue) before/after presenting them.
+		 *
+		 */
+		struct
+		{
+			//! Command pool for command buffers: @ref compute::present::[acquire_cmd|release_cmd]
+			VkCommandPool cmd_pool;
+
+			/*!
+			 * Acquire transfer ownership commands:
+			 *     @ref vk_bundle::graphics_queue (Present) -> @ref vk_bundle::compute_queue
+			 */
+			VkCommandBuffer acquire_cmd;
+
+			/*!
+			 * Release transfer ownership commands:
+			 *     @ref vk_bundle::compute_queue -> @ref vk_bundle::graphics_queue (Present)
+			 */
+			VkCommandBuffer release_cmd;
+
+			struct
+			{
+				/*!
+				 * compute_acquired - Signals transferring ownership of target images from
+				 * @ref vk_bundle::graphics_queue (Present) -> @ref vk_bundle::compute_queue
+				 * has finished.
+				 *
+				 * @see release_cmd, acquire_cmd
+				 */
+				VkSemaphore compute_acquired;
+
+				//! Signals when layer composition (compute-only work) has finished.
+				VkSemaphore compute_finished;
+
+				//! Are the semaphores timeline semaphores?
+				bool is_timeline;
+
+			} semaphores;
+		} present;
+
 	} compute;
 
 	struct
@@ -657,6 +706,12 @@ render_resources_get_timestamps(struct render_resources *r, uint64_t *out_gpu_st
  */
 bool
 render_resources_get_duration(struct render_resources *r, uint64_t *out_gpu_duration_ns);
+
+struct vk_bundle_queue *
+render_resources_get_queue(struct render_resources *r);
+
+VkResult
+render_resources_reset_semaphores(struct render_resources *r);
 
 
 /*
@@ -1206,6 +1261,8 @@ struct render_compute
 	 * @ref render_compute_projection, and @ref render_compute_clear.
 	 */
 	VkDescriptorSet shared_descriptor_set;
+
+	bool queue_supports_present;
 };
 
 /*!
@@ -1345,7 +1402,7 @@ struct render_compute_distortion_ubo_data
  * @public @memberof render_compute
  */
 bool
-render_compute_init(struct render_compute *render, struct render_resources *r);
+render_compute_init(struct render_compute *render, struct render_resources *r, bool queue_supports_present);
 
 /*!
  * Frees all resources held by the compute rendering, does not free the struct itself.

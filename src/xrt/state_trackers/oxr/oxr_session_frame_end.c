@@ -1551,10 +1551,10 @@ submit_equirect1_layer(struct oxr_session *sess,
 }
 
 static void
-do_synchronize_state_change(struct oxr_logger *log, struct oxr_session *sess)
+do_synchronize_state_change(struct oxr_logger *log, struct oxr_session *sess, XrTime time)
 {
 	if (!sess->has_ended_once && sess->state < XR_SESSION_STATE_VISIBLE) {
-		oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, 0);
+		oxr_session_change_state(log, sess, XR_SESSION_STATE_SYNCHRONIZED, time);
 		sess->has_ended_once = true;
 	}
 }
@@ -1663,6 +1663,13 @@ oxr_session_frame_end(struct oxr_logger *log, struct oxr_session *sess, const Xr
 	struct xrt_compositor *xc = sess->compositor;
 
 
+	int64_t now = os_monotonic_get_ns();
+	XrTime now_xr = time_state_monotonic_to_ts_ns(sess->sys->inst->timekeeping, now);
+	if (now_xr <= 0) {
+		// shouldn't happen but be sure to log if it does
+		U_LOG_W("Time keeping oddity: frame end at XrTime %" PRIi64, now_xr);
+	}
+
 	/*
 	 * Early out for headless sessions.
 	 */
@@ -1673,7 +1680,7 @@ oxr_session_frame_end(struct oxr_logger *log, struct oxr_session *sess, const Xr
 		sess->active_wait_frames--;
 		os_mutex_unlock(&sess->active_wait_frames_lock);
 
-		do_synchronize_state_change(log, sess);
+		do_synchronize_state_change(log, sess, now_xr);
 
 		return oxr_session_success_result(sess);
 	}
@@ -1716,7 +1723,7 @@ oxr_session_frame_end(struct oxr_logger *log, struct oxr_session *sess, const Xr
 		sess->frame_id.begun = -1;
 		sess->frame_started = false;
 
-		do_synchronize_state_change(log, sess);
+		do_synchronize_state_change(log, sess, now_xr);
 
 		return oxr_session_success_result(sess);
 	}
@@ -1785,7 +1792,7 @@ oxr_session_frame_end(struct oxr_logger *log, struct oxr_session *sess, const Xr
 	 */
 
 	// Do state change if needed.
-	do_synchronize_state_change(log, sess);
+	do_synchronize_state_change(log, sess, now_xr);
 
 	struct xrt_layer_frame_data data = {
 	    .frame_id = sess->frame_id.begun,

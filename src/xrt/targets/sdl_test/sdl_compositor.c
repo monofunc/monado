@@ -541,6 +541,7 @@ sdl_compositor_init(struct sdl_program *sp)
 	iface->discard_frame = sdl_compositor_discard_frame;
 	iface->layer_commit = sdl_compositor_layer_commit;
 	iface->destroy = sdl_compositor_destroy;
+	c->base.vk = (struct vk_bundle){0};
 	c->base.vk.log_level = log_level;
 	c->frame.waited.id = -1;
 	c->frame.rendering.id = -1;
