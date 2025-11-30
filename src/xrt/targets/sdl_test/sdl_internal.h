@@ -85,6 +85,9 @@ struct sdl_compositor
 	{
 		//! Frame interval that we are using.
 		uint64_t frame_interval_ns;
+
+		//! Minimum frame interval to target.
+		int64_t min_frame_interval_ns;
 	} settings;
 
 	// Kept here for convenience.

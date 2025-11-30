@@ -166,6 +166,9 @@ struct ipc_client_state
 	//! Array of xrt_devices with plane_detection_size entries.
 	struct xrt_device **plane_detection_xdev;
 
+	//! Minimum frame interval to target, limits frame rate.
+	int64_t min_frame_interval_ns;
+
 	int server_thread_index;
 
 	xrt_shmem_handle_t ism_handle;
@@ -423,6 +426,9 @@ struct ipc_server
 
 	//! Disable listening on stdin for server stop.
 	bool no_stdin;
+
+	//! Minimum frame interval to target for all clients.
+	int64_t min_frame_interval_ns;
 };
 
 /*!
@@ -442,6 +448,14 @@ ipc_server_init_system_if_available_locked(struct ipc_server *s,
  */
 xrt_result_t
 ipc_server_get_client_app_state(struct ipc_server *s, uint32_t client_id, struct ipc_app_state *out_ias);
+
+/*!
+ * Set a client's minimum frame interval.
+ *
+ * @ingroup ipc_server
+ */
+xrt_result_t
+ipc_server_set_client_min_frame_interval(struct ipc_server *s, uint32_t client_id, int64_t min_frame_interval_ns);
 
 /*!
  * Set the new active client.

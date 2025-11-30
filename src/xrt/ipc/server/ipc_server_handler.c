@@ -376,6 +376,7 @@ ipc_handle_instance_describe_client(volatile struct ipc_client_state *ics,
 	PNT("id: %u", ics->client_state.id);
 	PNT("application_name: '%s'", client_desc->info.application_name);
 	PNT("pid: %i", client_desc->pid);
+	PNT("initial_min_frame_interval_ns: %" PRId64, client_desc->initial_min_frame_interval_ns);
 	PNT("extensions:");
 
 	EXT(ext_hand_tracking_enabled);
@@ -397,6 +398,7 @@ ipc_handle_instance_describe_client(volatile struct ipc_client_state *ics,
 
 	// Log the pretty message.
 	IPC_INFO(ics->server, "%s", sink.buffer);
+	ics->min_frame_interval_ns = client_desc->initial_min_frame_interval_ns;
 
 	return XRT_SUCCESS;
 }
@@ -452,6 +454,16 @@ ipc_handle_session_create(volatile struct ipc_client_state *ics,
 	xrt_result_t xret = xrt_system_create_session(ics->server->xsys, xsi, &xs, &xcn);
 	if (xret != XRT_SUCCESS) {
 		return xret;
+	}
+
+	int64_t client_min_frame_interval_ns = ics->min_frame_interval_ns;
+	if (client_min_frame_interval_ns < ics->server->min_frame_interval_ns) {
+		client_min_frame_interval_ns = ics->server->min_frame_interval_ns;
+	}
+
+	xret = xrt_comp_set_min_frame_interval(&xcn->base, client_min_frame_interval_ns);
+	if (xret != XRT_SUCCESS) {
+		ics->min_frame_interval_ns = 0;
 	}
 
 	ics->client_state.session_overlay = xsi->is_overlay;
@@ -1614,6 +1626,19 @@ ipc_handle_system_get_client_info(volatile struct ipc_client_state *_ics,
 	struct ipc_server *s = _ics->server;
 
 	return ipc_server_get_client_app_state(s, client_id, out_ias);
+}
+
+xrt_result_t
+ipc_handle_system_set_client_min_frame_interval(volatile struct ipc_client_state *_ics,
+                                                uint32_t client_id,
+                                                int64_t min_frame_interval_ns)
+{
+	struct ipc_server *s = _ics->server;
+
+	IPC_INFO(s, "System setting minimum frame interval for client %d to %" PRId64 " ns.", client_id,
+	         min_frame_interval_ns);
+
+	return ipc_server_set_client_min_frame_interval(s, client_id, min_frame_interval_ns);
 }
 
 xrt_result_t

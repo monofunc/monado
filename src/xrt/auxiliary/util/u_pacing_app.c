@@ -17,6 +17,7 @@
 #include "util/u_metrics.h"
 #include "util/u_logging.h"
 #include "util/u_trace_marker.h"
+#include "math/m_api.h"
 
 #include <stdio.h>
 #include <assert.h>
@@ -276,17 +277,25 @@ total_app_and_compositor_time_ns(const struct pacing_app *pa)
 }
 
 static int64_t
-calc_period(const struct pacing_app *pa)
+calc_period(const struct pacing_app *pa, int64_t base_period_ns, int64_t min_frame_interval_ns)
 {
-	// Error checking.
-	int64_t base_period_ns = min_period(pa);
-	if (base_period_ns == 0) {
-		assert(false && "Have not yet received and samples from timing driver.");
-		base_period_ns = U_TIME_1MS_IN_NS * 16; // Sure
-	}
-
 	// Calculate the using both values separately.
 	int64_t period_ns = base_period_ns;
+
+	// Always respect the minimum frame interval.
+	while (min_frame_interval_ns > period_ns) {
+		period_ns += base_period_ns;
+	}
+
+	/*
+	 * We can either limit the application to a calculated frame rate that
+	 * depends on it's total frame time. Or we try to use the minimal frame
+	 * period, aka the compositor's frame period. This will use more power.
+	 */
+	if (debug_get_bool_option_use_min_frame_period()) {
+		return period_ns;
+	}
+
 	while (pa->app.cpu_time_ns > period_ns) {
 		period_ns += base_period_ns;
 	}
@@ -303,7 +312,7 @@ calc_period(const struct pacing_app *pa)
 }
 
 static int64_t
-predict_display_time(const struct pacing_app *pa, int64_t now_ns, int64_t period_ns)
+predict_display_time(const struct pacing_app *pa, int64_t now_ns, int64_t base_period_ns, int64_t period_ns)
 {
 
 	// Total app and compositor time to produce a frame
@@ -321,7 +330,7 @@ predict_display_time(const struct pacing_app *pa, int64_t now_ns, int64_t period
 
 	// Have to have enough time to perform app work.
 	while ((val - app_and_compositor_time_ns) <= now_ns) {
-		val += period_ns;
+		val += base_period_ns;
 	}
 
 	return val;
@@ -434,6 +443,7 @@ do_tracing(struct pacing_app *pa, struct u_pa_frame *f)
 static void
 pa_predict(struct u_pacing_app *upa,
            int64_t now_ns,
+           int64_t min_frame_interval_ns,
            int64_t *out_frame_id,
            int64_t *out_wake_up_time,
            int64_t *out_predicted_display_time,
@@ -446,20 +456,16 @@ pa_predict(struct u_pacing_app *upa,
 
 	DEBUG_PRINT_ID(frame_id);
 
-	int64_t period_ns;
-
-	/*
-	 * We can either limit the application to a calculated frame rate that
-	 * depends on it's total frame time. Or we try to use the minimal frame
-	 * period, aka the compositor's frame period. This will use more power.
-	 */
-	if (debug_get_bool_option_use_min_frame_period()) {
-		period_ns = min_period(pa);
-	} else {
-		period_ns = calc_period(pa);
+	int64_t base_period_ns = min_period(pa);
+	// Error checking.
+	if (base_period_ns == 0) {
+		assert(false && "Have not yet received and samples from timing driver.");
+		base_period_ns = U_TIME_1MS_IN_NS * 16; // Sure
 	}
 
-	int64_t predict_ns = predict_display_time(pa, now_ns, period_ns);
+	int64_t period_ns = calc_period(pa, base_period_ns, min_frame_interval_ns);
+
+	int64_t predict_ns = predict_display_time(pa, now_ns, base_period_ns, period_ns);
 	// How long we think the frame should take.
 	int64_t frame_time_ns = total_app_time_ns(pa);
 	// When should the client wake up.
@@ -473,12 +479,18 @@ pa_predict(struct u_pacing_app *upa,
 	 */
 	if (debug_get_bool_option_immediate_wait_frame_return()) {
 		wake_up_time_ns = now_ns;
+
+		if (min_frame_interval_ns > 0) {
+			int64_t render_time = min_frame_interval_ns - total_app_and_compositor_time_ns(pa);
+
+			wake_up_time_ns += MAX(0, render_time);
+		}
 	} else {
 		wake_up_time_ns = predict_ns - total_app_and_compositor_time_ns(pa);
 	}
 
 	// When the client's GPU work should have completed.
-	int64_t gpu_done_time_ns = predict_ns - total_compositor_time_ns(pa);
+	int64_t gpu_done_time_ns = wake_up_time_ns + total_app_time_ns(pa);
 
 	pa->last_returned_ns = predict_ns;
 

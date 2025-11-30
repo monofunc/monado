@@ -531,6 +531,16 @@ ipc_compositor_end_session(struct xrt_compositor *xc)
 }
 
 static xrt_result_t
+ipc_compositor_set_min_frame_interval(struct xrt_compositor *xc, int64_t min_frame_interval_ns)
+{
+	struct ipc_client_compositor *icc = ipc_client_compositor(xc);
+
+	IPC_TRACE(icc->ipc_c, "Compositor set min frame interval.");
+
+	return XRT_ERROR_NOT_IMPLEMENTED;
+}
+
+static xrt_result_t
 ipc_compositor_wait_frame(struct xrt_compositor *xc,
                           int64_t *out_frame_id,
                           int64_t *out_predicted_display_time,
@@ -903,6 +913,7 @@ ipc_compositor_init(struct ipc_client_compositor *icc, struct xrt_compositor_nat
 	icc->base.base.destroy_passthrough = ipc_compositor_destroy_passthrough;
 	icc->base.base.begin_session = ipc_compositor_begin_session;
 	icc->base.base.end_session = ipc_compositor_end_session;
+	icc->base.base.set_min_frame_interval = ipc_compositor_set_min_frame_interval;
 	icc->base.base.wait_frame = ipc_compositor_wait_frame;
 	icc->base.base.begin_frame = ipc_compositor_begin_frame;
 	icc->base.base.discard_frame = ipc_compositor_discard_frame;

@@ -275,11 +275,14 @@ do_clean_slate_frame(struct pacing_compositor *pc, int64_t now_ns)
  * prediction in it.
  */
 static struct frame *
-walk_forward_through_frames(struct pacing_compositor *pc, int64_t last_present_time_ns, int64_t now_ns)
+walk_forward_through_frames(struct pacing_compositor *pc,
+                            int64_t last_present_time_ns,
+                            int64_t now_ns,
+                            int64_t min_display_period_ns)
 {
 	// This is the earliest possible time we could present, assuming rendering still must take place.
 	int64_t from_time_ns = now_ns + calc_total_comp_time(pc);
-	int64_t desired_present_time_ns = last_present_time_ns + pc->frame_period_ns;
+	int64_t desired_present_time_ns = last_present_time_ns + min_display_period_ns;
 
 	while (desired_present_time_ns <= from_time_ns) {
 		UPC_LOG_D(
@@ -303,7 +306,7 @@ walk_forward_through_frames(struct pacing_compositor *pc, int64_t last_present_t
 }
 
 static struct frame *
-predict_next_frame(struct pacing_compositor *pc, int64_t now_ns)
+predict_next_frame(struct pacing_compositor *pc, int64_t now_ns, int64_t min_display_period_ns)
 {
 	struct frame *f = NULL;
 	// Last earliest display time, can be zero.
@@ -313,7 +316,8 @@ predict_next_frame(struct pacing_compositor *pc, int64_t now_ns)
 		f = do_clean_slate_frame(pc, now_ns);
 	} else if (last_completed == last_predicted) {
 		// Very high probability that we missed a frame.
-		f = walk_forward_through_frames(pc, last_completed->earliest_present_time_ns, now_ns);
+		f = walk_forward_through_frames(pc, last_completed->earliest_present_time_ns, now_ns,
+		                                min_display_period_ns);
 	} else if (last_completed != NULL) {
 		assert(last_predicted != NULL);
 		assert(last_predicted->frame_id > last_completed->frame_id);
@@ -321,7 +325,7 @@ predict_next_frame(struct pacing_compositor *pc, int64_t now_ns)
 		int64_t diff_id = last_predicted->frame_id - last_completed->frame_id;
 		int64_t diff_ns = last_completed->desired_present_time_ns - last_completed->earliest_present_time_ns;
 		int64_t adjusted_last_present_time_ns =
-		    last_completed->earliest_present_time_ns + diff_id * pc->frame_period_ns;
+		    last_completed->earliest_present_time_ns + diff_id * min_display_period_ns;
 
 		if (diff_ns > U_TIME_1MS_IN_NS) {
 			UPC_LOG_D("Large diff!");
@@ -339,11 +343,12 @@ predict_next_frame(struct pacing_compositor *pc, int64_t now_ns)
 			diff_id = 1;
 		}
 
-		f = walk_forward_through_frames(pc, adjusted_last_present_time_ns, now_ns);
+		f = walk_forward_through_frames(pc, adjusted_last_present_time_ns, now_ns, min_display_period_ns);
 	} else {
 		assert(last_predicted != NULL);
 
-		f = walk_forward_through_frames(pc, last_predicted->predicted_display_time_ns, now_ns);
+		f = walk_forward_through_frames(pc, last_predicted->predicted_display_time_ns, now_ns,
+		                                min_display_period_ns);
 	}
 
 	f->predicted_display_time_ns = calc_display_time_from_present_time(pc, f->desired_present_time_ns);
@@ -554,6 +559,7 @@ do_tracing(struct pacing_compositor *pc, struct frame *f)
 static void
 pc_predict(struct u_pacing_compositor *upc,
            int64_t now_ns,
+           int64_t min_frame_interval_ns,
            int64_t *out_frame_id,
            int64_t *out_wake_up_time_ns,
            int64_t *out_desired_present_time_ns,
@@ -564,14 +570,18 @@ pc_predict(struct u_pacing_compositor *upc,
 {
 	struct pacing_compositor *pc = pacing_compositor(upc);
 
-	struct frame *f = predict_next_frame(pc, now_ns);
+	int64_t min_display_period_ns = pc->frame_period_ns;
+	while (min_display_period_ns < min_frame_interval_ns) {
+		min_display_period_ns += pc->frame_period_ns;
+	}
+
+	struct frame *f = predict_next_frame(pc, now_ns, min_display_period_ns);
 
 	int64_t wake_up_time_ns = f->wake_up_time_ns;
 	int64_t desired_present_time_ns = f->desired_present_time_ns;
 	int64_t present_slop_ns = PRESENT_SLOP_NS;
 	int64_t predicted_display_time_ns = f->predicted_display_time_ns;
-	int64_t predicted_display_period_ns = pc->frame_period_ns;
-	int64_t min_display_period_ns = pc->frame_period_ns;
+	int64_t predicted_display_period_ns = min_display_period_ns;
 
 	*out_frame_id = f->frame_id;
 	*out_wake_up_time_ns = wake_up_time_ns;

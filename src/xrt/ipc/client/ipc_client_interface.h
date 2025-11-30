@@ -25,7 +25,9 @@ struct xrt_instance_info;
  * @ingroup ipc_client
  */
 xrt_result_t
-ipc_instance_create(const struct xrt_instance_info *i_info, struct xrt_instance **out_xinst);
+ipc_instance_create(const struct xrt_instance_info *i_info,
+                    int64_t min_frame_interval_ns,
+                    struct xrt_instance **out_xinst);
 
 
 #ifdef __cplusplus

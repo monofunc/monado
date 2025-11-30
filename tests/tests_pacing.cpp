@@ -207,7 +207,7 @@ TEST_CASE("u_pacing_compositor_display_timing")
 	clock.advance(1ms);
 
 	CompositorPredictions predictions;
-	u_pc_predict(upc, clock.now(), &predictions.frame_id, &predictions.wake_up_time_ns,
+	u_pc_predict(upc, clock.now(), 0, &predictions.frame_id, &predictions.wake_up_time_ns,
 	             &predictions.desired_present_time_ns, &predictions.present_slop_ns,
 	             &predictions.predicted_display_time_ns, &predictions.predicted_display_period_ns,
 	             &predictions.min_display_period_ns);
@@ -252,7 +252,7 @@ TEST_CASE("u_pacing_compositor_display_timing")
 		// Do basically the same thing a few more frames.
 		for (int i = 0; i < 20; ++i) {
 			CompositorPredictions loopPred;
-			u_pc_predict(upc, clock.now(), &loopPred.frame_id, &loopPred.wake_up_time_ns,
+			u_pc_predict(upc, clock.now(), 0, &loopPred.frame_id, &loopPred.wake_up_time_ns,
 			             &loopPred.desired_present_time_ns, &loopPred.present_slop_ns,
 			             &loopPred.predicted_display_time_ns, &loopPred.predicted_display_period_ns,
 			             &loopPred.min_display_period_ns);
@@ -266,7 +266,7 @@ TEST_CASE("u_pacing_compositor_display_timing")
 		}
 		// we should now get a shorter time before present to wake up.
 		CompositorPredictions newPred;
-		u_pc_predict(upc, clock.now(), &newPred.frame_id, &newPred.wake_up_time_ns,
+		u_pc_predict(upc, clock.now(), 0, &newPred.frame_id, &newPred.wake_up_time_ns,
 		             &newPred.desired_present_time_ns, &newPred.present_slop_ns,
 		             &newPred.predicted_display_time_ns, &newPred.predicted_display_period_ns,
 		             &newPred.min_display_period_ns);
@@ -315,7 +315,7 @@ TEST_CASE("u_pacing_compositor_display_timing")
 		// Do basically the same thing a few more frames.
 		for (int i = 0; i < 50; ++i) {
 			CompositorPredictions loopPred;
-			u_pc_predict(upc, clock.now(), &loopPred.frame_id, &loopPred.wake_up_time_ns,
+			u_pc_predict(upc, clock.now(), 0, &loopPred.frame_id, &loopPred.wake_up_time_ns,
 			             &loopPred.desired_present_time_ns, &loopPred.present_slop_ns,
 			             &loopPred.predicted_display_time_ns, &loopPred.predicted_display_period_ns,
 			             &loopPred.min_display_period_ns);
@@ -329,7 +329,7 @@ TEST_CASE("u_pacing_compositor_display_timing")
 
 		// we should now get a bigger time before present to wake up.
 		CompositorPredictions newPred;
-		u_pc_predict(upc, clock.now(), &newPred.frame_id, &newPred.wake_up_time_ns,
+		u_pc_predict(upc, clock.now(), 0, &newPred.frame_id, &newPred.wake_up_time_ns,
 		             &newPred.desired_present_time_ns, &newPred.present_slop_ns,
 		             &newPred.predicted_display_time_ns, &newPred.predicted_display_period_ns,
 		             &newPred.min_display_period_ns);
@@ -353,7 +353,7 @@ TEST_CASE("u_pacing_compositor_fake")
 	SECTION("Standalone predictions")
 	{
 		CompositorPredictions predictions;
-		u_pc_predict(upc, clock.now(), &predictions.frame_id, &predictions.wake_up_time_ns,
+		u_pc_predict(upc, clock.now(), 0, &predictions.frame_id, &predictions.wake_up_time_ns,
 		             &predictions.desired_present_time_ns, &predictions.present_slop_ns,
 		             &predictions.predicted_display_time_ns, &predictions.predicted_display_period_ns,
 		             &predictions.min_display_period_ns);
@@ -367,7 +367,7 @@ TEST_CASE("u_pacing_compositor_fake")
 
 			for (int i = 0; i < 10; ++i) {
 				CompositorPredictions predictions;
-				u_pc_predict(upc, clock.now(), &predictions.frame_id, &predictions.wake_up_time_ns,
+				u_pc_predict(upc, clock.now(), 0, &predictions.frame_id, &predictions.wake_up_time_ns,
 				             &predictions.desired_present_time_ns, &predictions.present_slop_ns,
 				             &predictions.predicted_display_time_ns,
 				             &predictions.predicted_display_period_ns,
@@ -385,7 +385,7 @@ TEST_CASE("u_pacing_compositor_fake")
 		{
 			for (int i = 0; i < 10; ++i) {
 				CompositorPredictions predictions;
-				u_pc_predict(upc, clock.now(), &predictions.frame_id, &predictions.wake_up_time_ns,
+				u_pc_predict(upc, clock.now(), 0, &predictions.frame_id, &predictions.wake_up_time_ns,
 				             &predictions.desired_present_time_ns, &predictions.present_slop_ns,
 				             &predictions.predicted_display_time_ns,
 				             &predictions.predicted_display_period_ns,

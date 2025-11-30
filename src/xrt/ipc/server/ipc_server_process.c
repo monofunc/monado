@@ -757,6 +757,58 @@ get_client_app_state_locked(struct ipc_server *s, uint32_t client_id, struct ipc
 }
 
 static xrt_result_t
+set_global_min_frame_interval_locked(struct ipc_server *s, int64_t min_frame_interval_ns)
+{
+	s->min_frame_interval_ns = min_frame_interval_ns;
+
+	for (uint32_t i = 0; i < IPC_MAX_CLIENTS; i++) {
+		volatile struct ipc_client_state *ics = &s->threads[i].ics;
+
+		// Not running?
+		if (ics->server_thread_index < 0) {
+			continue;
+		}
+
+		if (ics->min_frame_interval_ns < min_frame_interval_ns && ics->xc != NULL) {
+			if (xrt_comp_set_min_frame_interval(ics->xc, min_frame_interval_ns) != XRT_SUCCESS) {
+				IPC_WARN(s, "Error while setting minimum frame interval for client with ID '%d'",
+				         ics->client_state.id);
+			}
+		}
+	}
+
+	return XRT_SUCCESS;
+}
+
+static xrt_result_t
+set_client_min_frame_interval_locked(struct ipc_server *s, uint32_t client_id, int64_t min_frame_interval_ns)
+{
+	if (client_id == UINT32_MAX) {
+		return set_global_min_frame_interval_locked(s, min_frame_interval_ns);
+	}
+
+	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
+	if (ics == NULL) {
+		return XRT_ERROR_IPC_FAILURE;
+	}
+
+	int64_t client_min_frame_interval_ns = min_frame_interval_ns;
+	if (client_min_frame_interval_ns < s->min_frame_interval_ns) {
+		client_min_frame_interval_ns = s->min_frame_interval_ns;
+	}
+
+	xrt_result_t xret = XRT_SUCCESS;
+	if (ics->xc != NULL) {
+		xret = xrt_comp_set_min_frame_interval(ics->xc, client_min_frame_interval_ns);
+	}
+	if (xret == XRT_SUCCESS) {
+		ics->min_frame_interval_ns = min_frame_interval_ns;
+	}
+
+	return XRT_SUCCESS;
+}
+
+static xrt_result_t
 set_active_client_locked(struct ipc_server *s, uint32_t client_id)
 {
 	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
@@ -867,6 +919,16 @@ ipc_server_get_client_app_state(struct ipc_server *s, uint32_t client_id, struct
 {
 	os_mutex_lock(&s->global_state.lock);
 	xrt_result_t xret = get_client_app_state_locked(s, client_id, out_ias);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_set_client_min_frame_interval(struct ipc_server *s, uint32_t client_id, int64_t min_frame_interval_ns)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = set_client_min_frame_interval_locked(s, client_id, min_frame_interval_ns);
 	os_mutex_unlock(&s->global_state.lock);
 
 	return xret;

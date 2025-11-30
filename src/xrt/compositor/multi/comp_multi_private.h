@@ -185,6 +185,9 @@ struct multi_compositor
 
 	struct u_pacing_app *upa;
 
+	//! Minimum frame interval to target.
+	int64_t min_frame_interval_ns;
+
 	float current_refresh_rate_hz;
 };
 

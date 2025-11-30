@@ -8,7 +8,12 @@
 
 #include "xrt/xrt_config_build.h"
 
+#include "util/u_debug.h"
+#include "util/u_time.h"
 #include "util/u_trace_marker.h"
+
+
+DEBUG_GET_ONCE_FLOAT_OPTION(min_frame_interval_ns, "OXR_MIN_FRAME_INTERVAL_MS", 0.0f)
 
 
 #ifdef XRT_FEATURE_IPC_CLIENT
@@ -27,7 +32,9 @@ xrt_instance_create(struct xrt_instance_info *ii, struct xrt_instance **out_xins
 
 	XRT_TRACE_MARKER();
 
-	return ipc_instance_create(ii, out_xinst);
+	int64_t min_frame_interval_ns = debug_get_float_option_min_frame_interval_ns() * U_TIME_1MS_IN_NS;
+
+	return ipc_instance_create(ii, min_frame_interval_ns, out_xinst);
 }
 
 #else
