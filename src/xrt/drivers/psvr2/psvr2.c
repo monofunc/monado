@@ -27,6 +27,7 @@
 #include "math/m_mathinclude.h"
 #include "math/m_relation_history.h"
 #include "math/m_vec3.h"
+#include "math/m_space.h"
 
 #include "util/u_misc.h"
 #include "util/u_debug.h"
@@ -53,24 +54,6 @@
  * Structs and defines.
  *
  */
-#define USB_SLAM_XFER_SIZE 1024
-
-#define USB_STATUS_XFER_SIZE 1024
-
-#define USB_CAM_MODE10_XFER_SIZE 1040640
-#define USB_CAM_MODE1_XFER_SIZE 819456
-#define NUM_CAM_XFERS 1
-
-#define SERIAL_LENGTH 14
-
-#define USB_LD_XFER_SIZE 36944
-
-#define USB_RP_XFER_SIZE 821120
-
-#define USB_VD_XFER_SIZE 32768
-
-#define GYRO_SCALE (2000.0 / 32767.0)
-#define ACCEL_SCALE (4.0 * MATH_GRAVITY_M_S2 / 32767.0)
 
 // @todo Once clang format is updated in CI, remove this
 // clang-format off
@@ -79,114 +62,7 @@
 
 DEBUG_GET_ONCE_FLOAT_OPTION(psvr2_default_brightness, "PSVR2_DEFAULT_BRIGHTNESS", 1.0f)
 
-/*!
- * PSVR2 HMD device
- *
- * @implements xrt_device
- */
-struct psvr2_hmd
-{
-	struct xrt_device base;
-
-	struct xrt_pose pose;
-
-	enum u_logging_level log_level;
-
-	struct os_mutex data_lock;
-
-	/* Device status */
-	uint8_t dprx_status;               //< DisplayPort receiver status
-	xrt_atomic_s32_t proximity_sensor; //< Atomic state for whether the proximity sensor is triggered
-	bool function_button;              //< Boolean state for whether the function button is pressed
-
-	bool ipd_updated; //< Whether the IPD has been updated, and an HMD info refresh is needed
-	uint8_t ipd_mm;   //< IPD dial value in mm, from 59 to 72mm
-
-	bool camera_enable;                 //< Whether the camera is enabled
-	enum psvr2_camera_mode camera_mode; //< The current camera mode
-	struct u_var_button camera_enable_btn;
-	struct u_var_button camera_mode_btn;
-
-	struct u_var_button brightness_btn;
-	float brightness;
-
-	/* IMU input data */
-	uint32_t last_vts_us;       //< Last VTS timestamp, in microseconds
-	uint16_t last_imu_ts;       //< Last IMU timestamp, in microseconds
-	struct xrt_vec3 last_gyro;  //< Last gyro reading, in rad/s
-	struct xrt_vec3 last_accel; //< Last accel reading, in m/s²
-
-	/* SLAM input data */
-	uint32_t last_slam_ts_us;       //< Last slam timestamp, in microseconds
-	struct xrt_pose last_slam_pose; //< Last SLAM pose reading
-
-	struct xrt_pose slam_correction_pose;
-	struct u_var_button slam_correction_set_btn;
-	struct u_var_button slam_correction_reset_btn;
-
-	/* Display parameters */
-	struct u_device_simple_info info;
-
-	/* Camera debug sinks */
-	struct u_sink_debug debug_sinks[4];
-
-	/* USB communication */
-	libusb_context *ctx;
-	libusb_device_handle *dev;
-
-	struct os_thread_helper usb_thread;
-	int usb_complete;
-	int usb_active_xfers;
-
-	/* Status report */
-	struct libusb_transfer *status_xfer;
-	/* SLAM (bulk) transfer */
-	struct libusb_transfer *slam_xfer;
-	/* Camera (bulk) transfers */
-	struct libusb_transfer *camera_xfers[NUM_CAM_XFERS];
-	/* LD EP9 (bulk) transfer */
-	struct libusb_transfer *led_detector_xfer;
-	/* RP EP10 (bulk) transfer */
-	struct libusb_transfer *relocalizer_xfer;
-	/* VD EP11 (bulk) transfer */
-	struct libusb_transfer *vd_xfer;
-
-	/* Distortion calibration parameters, to be used with
-	 * psvr2_compute_distortion_asymmetric. Very specific to
-	 * PS VR2. */
-	float distortion_calibration[8];
-
-	/* Timing data */
-	bool timestamp_initialized;
-
-	timepoint_ns last_vts_ns;
-	timepoint_ns last_slam_ns;
-	timepoint_ns system_zero_ns;
-	timepoint_ns last_imu_ns;
-
-	time_duration_ns hw2mono;
-	time_duration_ns hw2mono_imu;
-
-	/* Tracking state */
-	struct m_relation_history *relation_history;
-};
-
-
-/// Casting helper function
-static inline struct psvr2_hmd *
-psvr2_hmd(struct xrt_device *xdev)
-{
-	return (struct psvr2_hmd *)xdev;
-}
-
 DEBUG_GET_ONCE_LOG_OPTION(psvr2_log, "PSVR2_LOG", U_LOGGING_WARN)
-
-#define PSVR2_TRACE(p, ...) U_LOG_XDEV_IFL_T(&p->base, p->log_level, __VA_ARGS__)
-#define PSVR2_TRACE_HEX(p, data, data_size) U_LOG_XDEV_IFL_T_HEX(&p->base, p->log_level, data, data_size)
-#define PSVR2_DEBUG(p, ...) U_LOG_XDEV_IFL_D(&p->base, p->log_level, __VA_ARGS__)
-#define PSVR2_DEBUG_HEX(p, data, data_size) U_LOG_XDEV_IFL_D_HEX(&p->base, p->log_level, data, data_size)
-#define PSVR2_WARN(p, ...) U_LOG_XDEV_IFL_W(&p->base, p->log_level, __VA_ARGS__)
-#define PSVR2_ERROR(p, ...) U_LOG_XDEV_IFL_E(&p->base, p->log_level, __VA_ARGS__)
 
 static void
 psvr2_usb_stop(struct psvr2_hmd *hmd);
@@ -257,9 +133,9 @@ psvr2_hmd_get_tracked_pose(struct xrt_device *xdev,
 {
 	struct psvr2_hmd *hmd = psvr2_hmd(xdev);
 
-	if (name != XRT_INPUT_GENERIC_HEAD_POSE) {
-		PSVR2_ERROR(hmd, "unknown input name");
-		return XRT_ERROR_INPUT_UNSUPPORTED;
+	switch (name) {
+	case XRT_INPUT_GENERIC_HEAD_POSE: break;
+	default: PSVR2_ERROR(hmd, "unknown input name"); return XRT_ERROR_INPUT_UNSUPPORTED;
 	}
 
 	os_mutex_lock(&hmd->data_lock);
@@ -270,7 +146,13 @@ psvr2_hmd_get_tracked_pose(struct xrt_device *xdev,
 
 	os_mutex_unlock(&hmd->data_lock);
 
-	m_relation_history_get(hmd->relation_history, prediction_ns_hw, out_relation);
+	struct xrt_relation_chain chain = {0};
+
+	// Push the normal head pose
+	m_relation_history_get(hmd->relation_history, prediction_ns_hw, m_relation_chain_reserve(&chain));
+
+	// Resolve the final relation
+	m_relation_chain_resolve(&chain, out_relation);
 
 	return XRT_SUCCESS;
 }
@@ -406,8 +288,8 @@ process_status_report(struct psvr2_hmd *hmd, uint8_t *buf, int bytes_read, timep
 	}
 }
 
-static bool
-hmd_usb_xfer_continue(struct libusb_transfer *xfer, const char *type)
+bool
+psvr2_usb_xfer_continue(struct libusb_transfer *xfer, const char *type)
 {
 	struct psvr2_hmd *hmd = xfer->user_data;
 
@@ -438,7 +320,7 @@ status_xfer_cb(struct libusb_transfer *xfer)
 {
 	DRV_TRACE_MARKER();
 
-	if (!hmd_usb_xfer_continue(xfer, "Status")) {
+	if (!psvr2_usb_xfer_continue(xfer, "Status")) {
 		return;
 	}
 
@@ -463,7 +345,7 @@ img_xfer_cb(struct libusb_transfer *xfer)
 {
 	DRV_TRACE_MARKER();
 
-	if (!hmd_usb_xfer_continue(xfer, "Camera frame")) {
+	if (!psvr2_usb_xfer_continue(xfer, "Camera frame")) {
 		return;
 	}
 
@@ -630,7 +512,7 @@ slam_xfer_cb(struct libusb_transfer *xfer)
 {
 	DRV_TRACE_MARKER();
 
-	if (!hmd_usb_xfer_continue(xfer, "SLAM frame")) {
+	if (!psvr2_usb_xfer_continue(xfer, "SLAM frame")) {
 		return;
 	}
 
@@ -659,7 +541,7 @@ dump_xfer_cb(struct libusb_transfer *xfer)
 		name = "VD";
 	assert(name != NULL);
 
-	if (!hmd_usb_xfer_continue(xfer, name)) {
+	if (!psvr2_usb_xfer_continue(xfer, name)) {
 		return;
 	}
 
@@ -707,6 +589,7 @@ struct psvr2_interface_info
 struct psvr2_interface_info interface_list[] = {
     {.interface_no = PSVR2_STATUS_INTERFACE, .altmode = 1, .name = "status"},
     {.interface_no = PSVR2_SLAM_INTERFACE, .altmode = 0, .name = "SLAM"},
+    {.interface_no = PSVR2_GAZE_INTERFACE, .altmode = 0, .name = "Gaze"},
     {.interface_no = PSVR2_CAMERA_INTERFACE, .altmode = 0, .name = "Camera"},
     {.interface_no = PSVR2_LD_INTERFACE, .altmode = 0, .name = "LED Detector"},
     {.interface_no = PSVR2_RP_INTERFACE, .altmode = 0, .name = "Relocalizer"},
@@ -808,7 +691,9 @@ set_camera_mode(struct psvr2_hmd *hmd, enum psvr2_camera_mode mode)
 	cmd.data[0] = __cpu_to_le32(0x1);
 	cmd.data[1] = __cpu_to_le32(mode);
 
-	return send_psvr2_control(hmd, 0xB, 0x1, (uint8_t *)(&cmd), sizeof(cmd));
+	PSVR2_DEBUG(hmd, "Setting camera mode to 0x%x", mode);
+
+	return send_psvr2_control(hmd, PSVR2_REPORT_ID_SET_CAMERA_MODE, 0x1, (uint8_t *)(&cmd), sizeof(cmd));
 }
 
 static void
@@ -832,7 +717,7 @@ set_brightness(struct psvr2_hmd *hmd, float brightness)
 {
 	uint8_t brightness_byte = CLAMP(brightness * 31, 0, 31);
 
-	return send_psvr2_control(hmd, 0x12, 1, &brightness_byte, sizeof(brightness_byte));
+	return send_psvr2_control(hmd, PSVR2_REPORT_ID_SET_BRIGHTNESS, 1, &brightness_byte, sizeof(brightness_byte));
 }
 
 bool
@@ -907,13 +792,12 @@ cycle_camera_mode(struct psvr2_hmd *hmd)
 	struct u_var_button *btn = &hmd->camera_mode_btn;
 
 	switch (hmd->camera_mode) {
-	case PSVR2_CAMERA_MODE_OFF:
-	case PSVR2_CAMERA_MODE_1:
+	default:
 		hmd->camera_mode++;
 		snprintf(btn->label, sizeof(btn->label), "Camera Mode 0x%x", hmd->camera_mode);
 		break;
-	case PSVR2_CAMERA_MODE_10:
-		hmd->camera_mode = PSVR2_CAMERA_MODE_1;
+	case PSVR2_CAMERA_MODE_BOTTOM_SBS_BC4:
+		hmd->camera_mode = PSVR2_CAMERA_MODE_BOTTOM_SBS_CROPPED;
 		snprintf(btn->label, sizeof(btn->label), "Camera Mode 0x1");
 		break;
 	}
@@ -1088,7 +972,8 @@ update_brightness(struct psvr2_hmd *hmd)
 	_(hmd->slam_xfer)                                                                                              \
 	_(hmd->led_detector_xfer)                                                                                      \
 	_(hmd->relocalizer_xfer)                                                                                       \
-	_(hmd->vd_xfer)
+	_(hmd->vd_xfer)                                                                                                \
+	_(hmd->gaze_xfer)
 
 static void
 psvr2_usb_stop(struct psvr2_hmd *hmd)
@@ -1217,7 +1102,7 @@ psvr2_hmd_create(struct xrt_prober_device *xpdev)
 	enum u_device_alloc_flags flags =
 	    (enum u_device_alloc_flags)(U_DEVICE_ALLOC_HMD | U_DEVICE_ALLOC_TRACKING_NONE);
 
-	struct psvr2_hmd *hmd = U_DEVICE_ALLOCATE(struct psvr2_hmd, flags, 2, 1);
+	struct psvr2_hmd *hmd = U_DEVICE_ALLOCATE(struct psvr2_hmd, flags, PSVR2_HMD_INPUT_COUNT, 1);
 
 	if (os_mutex_init(&hmd->data_lock) != 0) {
 		PSVR2_ERROR(hmd, "Failed to init data mutex!");
@@ -1259,8 +1144,8 @@ psvr2_hmd_create(struct xrt_prober_device *xpdev)
 	// Setup input.
 	hmd->base.name = XRT_DEVICE_PSVR2;
 	hmd->base.device_type = XRT_DEVICE_TYPE_HMD;
-	hmd->base.inputs[0].name = XRT_INPUT_GENERIC_HEAD_POSE;
-	hmd->base.inputs[1].name = XRT_INPUT_PSVR2_SYSTEM_CLICK;
+	hmd->base.inputs[PSVR2_HMD_INPUT_HEAD_POSE].name = XRT_INPUT_GENERIC_HEAD_POSE;
+	hmd->base.inputs[PSVR2_HMD_INPUT_FUNCTION_BUTTON].name = XRT_INPUT_PSVR2_SYSTEM_CLICK;
 
 	hmd->base.outputs[0].name = XRT_OUTPUT_NAME_PSVR2_HAPTIC;
 

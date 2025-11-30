@@ -1,12 +1,17 @@
+// Copyright 2020-2021, Collabora, Ltd.
 // Copyright 2023, Jan Schmidt
 // Copyright 2024, Joel Valenciano
+// Copyright 2025, Beyley Cardellio
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
- * @brief  PSVR2 HMD device internals
+ * @brief  PSVR2 HMD device
  *
  * @author Jan Schmidt <jan@centricular.com>
+ * @author Jakob Bornecrantz <jakob@collabora.com>
+ * @author Ryan Pavlik <ryan.pavlik@collabora.com>
  * @author Joel Valenciano <joelv1907@gmail.com>
+ * @author Beyley Cardellio <ep1cm1n10n123@gmail.com>
  * @ingroup drv_psvr2
  */
 #pragma once
@@ -17,99 +22,166 @@ extern "C" {
 
 #include <xrt/xrt_defines.h>
 #include <xrt/xrt_byte_order.h>
+#include "xrt/xrt_device.h"
+#include "xrt/xrt_prober.h"
+#include "xrt/xrt_tracking.h"
+
+#include "os/os_threading.h"
+#include "os/os_time.h"
+
+#include "math/m_api.h"
+#include "math/m_clock_tracking.h"
+#include "math/m_mathinclude.h"
+#include "math/m_relation_history.h"
+#include "math/m_filter_one_euro.h"
+
+#include "util/u_misc.h"
+#include "util/u_debug.h"
+#include "util/u_device.h"
+#include "util/u_distortion_mesh.h"
+#include "util/u_frame.h"
+#include "util/u_logging.h"
+#include "util/u_sink.h"
+#include "util/u_time.h"
+#include "util/u_trace_marker.h"
+#include "util/u_var.h"
+#include "util/u_debug.h"
+
+#include "psvr2_protocol.h"
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <assert.h>
+#include <libusb.h>
 
-#define PSVR2_SLAM_INTERFACE 3
-#define PSVR2_SLAM_ENDPOINT 3
 
-#define PSVR2_CAMERA_INTERFACE 6
-#define PSVR2_CAMERA_ENDPOINT 7
+#define NUM_CAM_XFERS 1
 
-#define PSVR2_STATUS_INTERFACE 7
-#define PSVR2_STATUS_ENDPOINT 8
+#define PSVR2_TRACE(p, ...) U_LOG_XDEV_IFL_T(&p->base, p->log_level, __VA_ARGS__)
+#define PSVR2_TRACE_HEX(p, data, data_size) U_LOG_XDEV_IFL_T_HEX(&p->base, p->log_level, data, data_size)
+#define PSVR2_DEBUG(p, ...) U_LOG_XDEV_IFL_D(&p->base, p->log_level, __VA_ARGS__)
+#define PSVR2_DEBUG_HEX(p, data, data_size) U_LOG_XDEV_IFL_D_HEX(&p->base, p->log_level, data, data_size)
+#define PSVR2_WARN(p, ...) U_LOG_XDEV_IFL_W(&p->base, p->log_level, __VA_ARGS__)
+#define PSVR2_ERROR(p, ...) U_LOG_XDEV_IFL_E(&p->base, p->log_level, __VA_ARGS__)
 
-#define PSVR2_LD_INTERFACE 8
-#define PSVR2_LD_ENDPOINT 9
-
-#define PSVR2_RP_INTERFACE 9
-#define PSVR2_RP_ENDPOINT 10
-
-#define PSVR2_VD_INTERFACE 10
-#define PSVR2_VD_ENDPOINT 11
-
-struct imu_record
+/*!
+ * PSVR2 HMD device
+ *
+ * @implements xrt_device
+ */
+struct psvr2_hmd
 {
-	uint32_t vts_us;
-	int16_t accel[3];
-	int16_t gyro[3];
-	uint16_t dp_frame_cnt;
-	uint16_t dp_line_cnt;
-	uint16_t imu_ts_us;
-	uint16_t status;
+	struct xrt_device base;
+
+	struct xrt_pose pose;
+
+	enum u_logging_level log_level;
+
+	struct os_mutex data_lock;
+
+	/* Device status */
+	uint8_t dprx_status;               //< DisplayPort receiver status
+	xrt_atomic_s32_t proximity_sensor; //< Atomic state for whether the proximity sensor is triggered
+	bool function_button;              //< Boolean state for whether the function button is pressed
+
+	bool ipd_updated; //< Whether the IPD has been updated, and an HMD info refresh is needed
+	uint8_t ipd_mm;   //< IPD dial value in mm, from 59 to 72mm
+
+	bool camera_enable;                 //< Whether the camera is enabled
+	enum psvr2_camera_mode camera_mode; //< The current camera mode
+	struct u_var_button camera_enable_btn;
+	struct u_var_button camera_mode_btn;
+
+	struct u_var_button brightness_btn;
+	float brightness;
+
+	/* IMU input data */
+	uint32_t last_vts_us;       //< Last VTS timestamp, in microseconds
+	uint16_t last_imu_ts;       //< Last IMU timestamp, in microseconds
+	struct xrt_vec3 last_gyro;  //< Last gyro reading, in rad/s
+	struct xrt_vec3 last_accel; //< Last accel reading, in m/s²
+
+	/* SLAM input data */
+	uint32_t last_slam_ts_us;       //< Last slam timestamp, in microseconds
+	struct xrt_pose last_slam_pose; //< Last SLAM pose reading
+
+	struct xrt_pose slam_correction_pose;
+	struct u_var_button slam_correction_set_btn;
+	struct u_var_button slam_correction_reset_btn;
+
+	/* Display parameters */
+	struct u_device_simple_info info;
+
+	/* Camera debug sinks */
+	struct u_sink_debug debug_sinks[4];
+
+	/* USB communication */
+	libusb_context *ctx;
+	libusb_device_handle *dev;
+
+	struct os_thread_helper usb_thread;
+	int usb_complete;
+	int usb_active_xfers;
+
+	/* Status report */
+	struct libusb_transfer *status_xfer;
+	/* SLAM (bulk) transfer */
+	struct libusb_transfer *slam_xfer;
+	/* Camera (bulk) transfers */
+	struct libusb_transfer *camera_xfers[NUM_CAM_XFERS];
+	/* LD EP9 (bulk) transfer */
+	struct libusb_transfer *led_detector_xfer;
+	/* RP EP10 (bulk) transfer */
+	struct libusb_transfer *relocalizer_xfer;
+	/* VD EP11 (bulk) transfer */
+	struct libusb_transfer *vd_xfer;
+	/* Gaze transfer */
+	struct libusb_transfer *gaze_xfer;
+
+	/* Distortion calibration parameters, to be used with
+	 * psvr2_compute_distortion_asymmetric. Very specific to
+	 * PS VR2. */
+	float distortion_calibration[8];
+
+	/* Timing data */
+	bool timestamp_initialized;
+
+	timepoint_ns last_vts_ns;
+	timepoint_ns last_slam_ns;
+	timepoint_ns system_zero_ns;
+	timepoint_ns last_imu_ns;
+
+	time_duration_ns hw2mono;
+	time_duration_ns hw2mono_imu;
+
+	/* Tracking state */
+	struct m_relation_history *relation_history;
 };
 
-struct imu_usb_record
+/// Casting helper function
+static inline struct psvr2_hmd *
+psvr2_hmd(struct xrt_device *xdev)
 {
-	__le32 vts_us;
-	__le16 accel[3];
-	__le16 gyro[3];
-	__le16 dp_frame_cnt;
-	__le16 dp_line_cnt;
-	__le16 imu_ts_us;
-	__le16 status;
-} __attribute__((packed));
+	return (struct psvr2_hmd *)xdev;
+}
 
-struct status_record_hdr
+enum psvr2_hmd_input_name
 {
-	uint8_t dprx_status;      //< 0 = not ready. 2 = cinematic? and 1 = unknown. HDCP? Other?
-	uint8_t prox_sensor_flag; //< 0 = not triggered. 1 = triggered?
-	uint8_t function_button;  //< 0 = not pressed, 1 = pressed
-	uint8_t empty0[2];
-	uint8_t ipd_dial_mm; //< 59 to 72mm
-
-	uint8_t remainder[26];
-} __attribute__((packed));
-
-struct slam_record
-{
-	uint32_t ts_us;   //< Timestamp of the SLAM, in microseconds
-	double pos[3];    //< 32-bit floats
-	double orient[4]; //< Orientation quaternion
-	uint8_t remainder[470];
-};
-
-struct slam_usb_record
-{
-	char SLAhdr[3];   //< "SLA"
-	uint8_t const1;   //< Constant 0x01?
-	__le32 pkt_size;  //< 0x0200 = 512 bytes;
-	__le32 ts;        //< Timestamp
-	__le32 unknown1;  //< Unknown. Constant 3?
-	__le32 pos[3];    //< 32-bit floats
-	__le32 orient[4]; //< Orientation quaternion
-	uint8_t remainder[468];
-} __attribute__((packed));
-
-struct sie_ctrl_pkt
-{
-	__le16 report_id;
-	__le16 subcmd;
-	__le32 len;
-	uint8_t data[512 - 8];
-} __attribute__((packed));
-
-enum psvr2_camera_mode
-{
-	PSVR2_CAMERA_MODE_OFF = 0,
-	PSVR2_CAMERA_MODE_1 = 1,
-	PSVR2_CAMERA_MODE_10 = 0x10,
+	PSVR2_HMD_INPUT_HEAD_POSE,
+	PSVR2_HMD_INPUT_FUNCTION_BUTTON,
+	PSVR2_HMD_INPUT_COUNT,
 };
 
 void
 psvr2_compute_distortion_asymmetric(
     float *calibration, struct xrt_uv_triplet *distCoords, int eEye, float fU, float fV);
+
+bool
+psvr2_usb_xfer_continue(struct libusb_transfer *xfer, const char *type);
+
+bool
+send_psvr2_control(struct psvr2_hmd *hmd, uint16_t report_id, uint8_t subcmd, uint8_t *pkt_data, uint32_t pkt_len);
 
 #ifdef __cplusplus
 }
