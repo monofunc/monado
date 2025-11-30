@@ -817,6 +817,22 @@ psvr2_hmd_set_output(struct xrt_device *xdev, enum xrt_output_name name, const s
 	return XRT_SUCCESS;
 }
 
+static xrt_result_t
+psvr2_hmd_get_compositor_info(struct xrt_device *xdev,
+                              const struct xrt_device_compositor_mode *mode,
+                              struct xrt_device_compositor_info *out_info)
+{
+	// @note The scanout duration is the same for both 90hz and 120hz VR modes
+	const double scanout_duration = 2040.0 / 2200.0;
+
+	*out_info = (struct xrt_device_compositor_info){
+	    .scanout_direction = XRT_SCANOUT_DIRECTION_TOP_TO_BOTTOM,
+	    .scanout_time_ns = mode->frame_interval_ns * scanout_duration,
+	};
+
+	return XRT_SUCCESS;
+}
+
 static void
 cycle_camera_mode(struct psvr2_hmd *hmd)
 {
@@ -1168,6 +1184,7 @@ psvr2_hmd_create(struct xrt_prober_device *xpdev)
 	hmd->base.get_brightness = psvr2_get_brightness;
 	hmd->base.set_brightness = psvr2_set_brightness;
 	hmd->base.set_output = psvr2_hmd_set_output;
+	hmd->base.get_compositor_info = psvr2_hmd_get_compositor_info;
 
 	hmd->pose = (struct xrt_pose)XRT_POSE_IDENTITY;
 	hmd->log_level = debug_get_log_option_psvr2_log();
@@ -1197,6 +1214,7 @@ psvr2_hmd_create(struct xrt_prober_device *xpdev)
 	hmd->base.supported.position_tracking = true;
 	hmd->base.supported.presence = true;
 	hmd->base.supported.brightness_control = true;
+	hmd->base.supported.compositor_info = true;
 
 	// Set up display details
 	// refresh rate
