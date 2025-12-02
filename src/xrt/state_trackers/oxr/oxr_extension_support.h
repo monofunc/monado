@@ -883,6 +883,18 @@
 #define OXR_EXTENSION_SUPPORT_MNDX_xdev_space(_)
 #endif
 
+
+/*
+ * XR_MNDX_bypass_action_set_priorities
+ */
+#if defined(XR_MNDX_bypass_action_set_priorities) && defined(XRT_FEATURE_OPENXR_BYPASS_ACTION_SET_PRIORITIES)
+#define OXR_HAVE_MNDX_bypass_action_set_priorities
+#define OXR_EXTENSION_SUPPORT_MNDX_bypass_action_set_priorities(_)                                                     \
+	_(MNDX_bypass_action_set_priorities, MNDX_BYPASS_ACTION_SET_PRIORITIES)
+#else
+#define OXR_EXTENSION_SUPPORT_MNDX_bypass_action_set_priorities(_)
+#endif
+
 // end of GENERATED per-extension defines - do not modify - used by scripts
 
 /*!
@@ -982,5 +994,6 @@
     OXR_EXTENSION_SUPPORT_MNDX_oculus_remote(_) \
     OXR_EXTENSION_SUPPORT_MNDX_psvr2_interaction(_) \
     OXR_EXTENSION_SUPPORT_MNDX_system_buttons(_) \
-    OXR_EXTENSION_SUPPORT_MNDX_xdev_space(_)
+    OXR_EXTENSION_SUPPORT_MNDX_xdev_space(_) \
+    OXR_EXTENSION_SUPPORT_MNDX_bypass_action_set_priorities(_)
 // clang-format on

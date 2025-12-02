@@ -145,6 +145,15 @@ oxr_xrSyncActions(XrSession session, const XrActionsSyncInfo *syncInfo)
 	}
 #endif
 
+	const XrBypassActionSetPrioritiesMNDX *bypass_priorities = NULL;
+
+#ifdef OXR_HAVE_MNDX_bypass_action_set_priorities
+	if (sess->sys->inst->extensions.MNDX_bypass_action_set_priorities) {
+		bypass_priorities = OXR_GET_OUTPUT_FROM_CHAIN(syncInfo->next, XR_TYPE_BYPASS_ACTION_SET_PRIORITIES_MNDX,
+		                                              const XrBypassActionSetPrioritiesMNDX);
+	}
+#endif
+
 	struct xrt_system_roles sys_roles = XRT_STRUCT_INIT;
 	xrt_system_devices_get_roles(sess->sys->xsysd, &sys_roles);
 	{
@@ -169,7 +178,7 @@ oxr_xrSyncActions(XrSession session, const XrActionsSyncInfo *syncInfo)
 	}
 
 	return oxr_action_sync_data(&log, sess, syncInfo->countActiveActionSets, syncInfo->activeActionSets,
-	                            active_priorities);
+	                            active_priorities, bypass_priorities);
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL
