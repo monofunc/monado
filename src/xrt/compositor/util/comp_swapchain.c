@@ -403,7 +403,7 @@ do_post_create_vulkan_setup(struct vk_bundle *vk,
 
 	VkImageAspectFlagBits image_barrier_aspect = vk_csci_get_barrier_aspect_mask(image_view_format);
 
-	VkImageSubresourceRange subresource_range = {
+	const VkImageSubresourceRange subresource_range = {
 	    .aspectMask = image_barrier_aspect,
 	    .baseMipLevel = 0,
 	    .levelCount = 1,
@@ -411,16 +411,26 @@ do_post_create_vulkan_setup(struct vk_bundle *vk,
 	    .layerCount = info->array_size * info->face_count,
 	};
 
+	const VkImageAspectFlagBits depth_stencil_mask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+
+	VkImageLayout target_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	VkAccessFlags target_access = VK_ACCESS_SHADER_READ_BIT;
+
+	if ((image_barrier_aspect & depth_stencil_mask) != 0) {
+		target_layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		target_access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	}
+
 	for (uint32_t i = 0; i < image_count; i++) {
-		vk_cmd_image_barrier_gpu_locked(              //
-		    vk,                                       //
-		    cmd_buffer,                               //
-		    sc->vkic.images[i].handle,                //
-		    0,                                        //
-		    VK_ACCESS_SHADER_READ_BIT,                //
-		    VK_IMAGE_LAYOUT_UNDEFINED,                //
-		    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, //
-		    subresource_range);                       //
+		vk_cmd_image_barrier_gpu_locked( //
+		    vk,                          //
+		    cmd_buffer,                  //
+		    sc->vkic.images[i].handle,   //
+		    0,                           //
+		    target_access,               //
+		    VK_IMAGE_LAYOUT_UNDEFINED,   //
+		    target_layout,               //
+		    subresource_range);          //
 	}
 
 	// Done writing commands, submit to queue, waits for command to finish.
