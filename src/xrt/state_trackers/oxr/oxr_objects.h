@@ -1177,6 +1177,7 @@ struct oxr_system
 		bool timeline_semaphore_enabled;
 		bool debug_utils_enabled;
 		bool image_format_list_enabled;
+		bool separate_depth_stencil_layouts_enabled;
 	} vk;
 
 #endif

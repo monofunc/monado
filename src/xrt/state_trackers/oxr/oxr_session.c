@@ -92,6 +92,10 @@ should_skip_format_vk_1_and_2(const struct oxr_instance *inst, uint64_t format)
 	bool skip_stencil = true;
 	bool skip_depth = inst->quirks.disable_vulkan_format_depth;
 
+	if (!inst->system.vk.separate_depth_stencil_layouts_enabled) {
+		skip_stencil = skip_depth = true;
+	}
+
 	// Access to Vulkan headers are not guaranteed.
 	switch (format) {
 	case 124: /* VK_FORMAT_D16_UNORM          */ return skip_depth;

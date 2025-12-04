@@ -421,6 +421,20 @@ do_post_create_vulkan_setup(struct vk_bundle *vk,
 		target_access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 	}
 
+#ifdef VK_KHR_separate_depth_stencil_layouts
+	if (vk->has_KHR_separate_depth_stencil_layouts && vk->features.separate_depth_stencil_layouts) {
+		if ((image_barrier_aspect & depth_stencil_mask) == VK_IMAGE_ASPECT_STENCIL_BIT) {
+			target_layout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL_KHR;
+			target_access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		}
+
+		if ((image_barrier_aspect & depth_stencil_mask) == VK_IMAGE_ASPECT_DEPTH_BIT) {
+			target_layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL_KHR;
+			target_access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		}
+	}
+#endif
+
 	for (uint32_t i = 0; i < image_count; i++) {
 		vk_cmd_image_barrier_gpu_locked( //
 		    vk,                          //

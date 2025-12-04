@@ -198,6 +198,9 @@ struct vk_bundle
 
 		//! Was KHR_video_maintenance1 requested, available, and enabled?
 		bool video_maintenance_1;
+
+		//! Was KHR_separate_depth_stencil_layouts requested, available, and enabled?
+		bool separate_depth_stencil_layouts;
 	} features;
 
 	struct
@@ -866,6 +869,7 @@ struct vk_device_features
 	bool storage_buffer_8bit_access;
 	bool present_wait;
 	bool video_maintenance_1;
+	bool separate_depth_stencil_layouts;
 };
 
 /*!
@@ -942,6 +946,7 @@ vk_init_from_given(struct vk_bundle *vk,
                    bool external_semaphore_fd_enabled,
                    bool timeline_semaphore_enabled,
                    bool image_format_list_enabled,
+                   bool separate_depth_stencil_layouts_enabled,
                    bool debug_utils_enabled,
                    enum u_logging_level log_level);
 

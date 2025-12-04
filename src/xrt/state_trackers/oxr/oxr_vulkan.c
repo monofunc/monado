@@ -172,6 +172,21 @@ static const char *optional_device_extensions[] = {
 #endif
 #ifdef VK_KHR_timeline_semaphore
     VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME,
+#endif
+// required by KHR_create_renderpass2, KHR_separate_depth_stencil_layouts
+#ifdef VK_KHR_maintenance2
+    VK_KHR_MAINTENANCE_2_EXTENSION_NAME,
+#endif
+// required by KHR_create_renderpass2, KHR_separate_depth_stencil_layouts
+#ifdef VK_KHR_multiview
+    VK_KHR_MULTIVIEW_EXTENSION_NAME,
+#endif
+// required by KHR_separate_depth_stencil_layouts,
+#ifdef VK_KHR_create_renderpass2
+    VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME,
+#endif
+#ifdef VK_KHR_separate_depth_stencil_layouts
+    VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME,
 #else
     NULL, // avoid zero sized array with UB
 #endif
@@ -425,6 +440,7 @@ oxr_vk_create_vulkan_device(struct oxr_logger *log,
 	bool external_semaphore_fd_enabled = false;
 #endif
 	bool image_format_list_enabled = false;
+	bool separate_depth_stencil_layouts_enabled = false;
 
 	for (uint32_t i = 0; i < ARRAY_SIZE(optional_device_extensions); i++) {
 		// Empty list or a not supported extension.
@@ -446,6 +462,10 @@ oxr_vk_create_vulkan_device(struct oxr_logger *log,
 
 		if (strcmp(optional_device_extensions[i], VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME) == 0) {
 			image_format_list_enabled = true;
+		}
+
+		if (strcmp(optional_device_extensions[i], VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME) == 0) {
+			separate_depth_stencil_layouts_enabled = true;
 		}
 	}
 
@@ -554,6 +574,12 @@ oxr_vk_create_vulkan_device(struct oxr_logger *log,
 #ifdef VK_KHR_image_format_list
 	if (*vulkanResult == VK_SUCCESS) {
 		sys->vk.image_format_list_enabled = image_format_list_enabled;
+	}
+#endif
+
+#ifdef VK_KHR_separate_depth_stencil_layouts
+	if (*vulkanResult == VK_SUCCESS) {
+		sys->vk.separate_depth_stencil_layouts_enabled = separate_depth_stencil_layouts_enabled;
 	}
 #endif
 
