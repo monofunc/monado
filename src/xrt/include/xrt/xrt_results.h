@@ -262,4 +262,9 @@ typedef enum xrt_result
 	 * C++ code threw an exception that wasn't caught.
 	 */
 	XRT_ERROR_UNCAUGHT_EXCEPTION = -43,
+
+	/*!
+	 * The requested property is not supported.
+	 */
+	XRT_ERROR_UNSUPPORTED_PROPERTY = -44,
 } xrt_result_t;
