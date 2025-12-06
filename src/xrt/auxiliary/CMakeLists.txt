@@ -61,3 +61,8 @@ endif()
 if(XRT_HAVE_VULKAN)
 	add_subdirectory(vk)
 endif()
+
+# Allocation library, needs to be after the graphics libraries.
+if(XRT_HAVE_VULKAN)
+	add_subdirectory(allocation)
+endif()
