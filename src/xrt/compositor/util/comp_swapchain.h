@@ -1,4 +1,5 @@
 // Copyright 2019-2023, Collabora, Ltd.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -10,7 +11,9 @@
 
 #pragma once
 
-#include "vk/vk_image_allocator.h"
+#include "xrt/xrt_allocation_collection.h"
+#include "xrt/xrt_vulkan_includes.h"
+
 #include "vk/vk_cmd_pool.h"
 
 #include "util/u_threading.h"
@@ -56,6 +59,9 @@ struct comp_swapchain_shared
  */
 struct comp_swapchain_image
 {
+	//! Vulkan image handle.
+	VkImage image;
+
 	//! Views used by the renderer and distortion code, for each array layer.
 	struct
 	{
@@ -95,7 +101,6 @@ struct comp_swapchain
 	struct vk_bundle *vk;
 	struct comp_swapchain_shared *cscs;
 
-	struct vk_image_collection vkic;
 	struct comp_swapchain_image images[XRT_MAX_SWAPCHAIN_IMAGES];
 
 	/*!
