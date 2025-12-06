@@ -16,7 +16,8 @@
 #include "util/u_limited_unique_id.h"
 
 #include "vk/vk_mini_helpers.h"
-#include "vk/vk_image_allocator.h"
+
+#include "allocation/a_allocator.h"
 
 
 /*
@@ -128,11 +129,11 @@ indices_discard(struct comp_scratch_indices *i)
 
 struct tmp
 {
-	//! Images created.
-	struct vk_image_collection vkic;
+	//! Allocation collection created.
+	struct xrt_allocation_collection *xac;
 
-	//! Handles retrieved.
-	xrt_graphics_buffer_handle_t handles[COMP_SCRATCH_NUM_IMAGES];
+	//! VkImages retrieved from collection.
+	VkImage vk_images[COMP_SCRATCH_NUM_IMAGES];
 
 	//! For automatic conversion to linear, only populated on mutable.
 	VkImageView srgb_views[COMP_SCRATCH_NUM_IMAGES];
@@ -149,19 +150,28 @@ tmp_init_and_create(struct tmp *t,
                     const VkFormat unorm_format)
 {
 	VkResult ret;
+	xrt_result_t xret;
 
 	// Completely init the struct so it's safe to destroy on failure.
 	U_ZERO(t);
-	for (uint32_t i = 0; i < COMP_SCRATCH_NUM_IMAGES; i++) {
-		t->handles[i] = XRT_GRAPHICS_BUFFER_HANDLE_INVALID;
-	}
 
 	// Do the allocation.
-	ret = vk_ic_allocate(vk, info, COMP_SCRATCH_NUM_IMAGES, &t->vkic);
-	VK_CHK_WITH_RET(ret, "vk_ic_allocate", false);
+	xret = a_allocator_allocate(vk, info, COMP_SCRATCH_NUM_IMAGES, &t->xac);
+	if (xret != XRT_SUCCESS) {
+		VK_ERROR(vk, "a_allocator_allocate failed");
+		return false;
+	}
 
-	ret = vk_ic_get_handles(vk, &t->vkic, COMP_SCRATCH_NUM_IMAGES, t->handles);
-	VK_CHK_WITH_GOTO(ret, "vk_ic_get_handles", err_destroy_vkic);
+	// Get VkImages from collection.
+	xret = xrt_allocation_collection_get_all( //
+	    t->xac,                               //
+	    XRT_ALLOCATION_TYPE_VULKAN_IMAGE,     //
+	    sizeof(VkImage),                      //
+	    t->vk_images);                        //
+	if (xret != XRT_SUCCESS) {
+		VK_ERROR(vk, "xrt_allocation_collection_get_all(VULKAN_IMAGE) failed");
+		goto err_destroy_xac;
+	}
 
 
 	/*
@@ -186,7 +196,7 @@ tmp_init_and_create(struct tmp *t,
 	};
 
 	for (uint32_t i = 0; i < COMP_SCRATCH_NUM_IMAGES; i++) {
-		VkImage image = t->vkic.images[i].handle;
+		VkImage image = t->vk_images[i];
 
 		if (srgb_format != VK_FORMAT_UNDEFINED) {
 			ret = vk_create_view_usage( //
@@ -223,34 +233,74 @@ err_destroy_views:
 		D(ImageView, t->unorm_views[i]);
 	}
 
-err_destroy_vkic:
-	vk_ic_destroy(vk, &t->vkic);
+err_destroy_xac:
+	xrt_allocation_collection_reference(&t->xac, NULL);
 
 	return false;
 }
 
 static inline void
+tmp_get_native_images(struct tmp *t, struct xrt_image_native native_images[COMP_SCRATCH_NUM_IMAGES])
+{
+	// Initialize the native images to invalid values.
+	for (uint32_t i = 0; i < COMP_SCRATCH_NUM_IMAGES; i++) {
+		native_images[i].handle = XRT_GRAPHICS_BUFFER_HANDLE_INVALID;
+		native_images[i].size = 0;
+		native_images[i].use_dedicated_allocation = false;
+	}
+
+	// Check if the collection supports native images.
+	bool supports_native_images = false;
+	for (uint32_t i = 0; i < t->xac->supported_types_count; i++) {
+		if (t->xac->supported_types[i].type == XRT_ALLOCATION_TYPE_NATIVE_IMAGE) {
+			supports_native_images = true;
+			break; // We found the native image type, so we can stop searching.
+		}
+	}
+	if (!supports_native_images) {
+		return; // Done now, we don't need to get the native images.
+	}
+
+	/*
+	 * Get native images from collection, we are passed the ownership
+	 * of the native images, so we need to unref them later.
+	 */
+	xrt_result_t xret = xrt_allocation_collection_get_all( //
+	    t->xac,                                            //
+	    XRT_ALLOCATION_TYPE_NATIVE_IMAGE,                  //
+	    sizeof(struct xrt_image_native),                   //
+	    native_images);                                    //
+	if (xret != XRT_SUCCESS) {
+		U_LOG_E("xrt_allocation_collection_get_all(NATIVE_IMAGE) failed");
+		return; // Done now, we don't need to get the native images.
+	}
+}
+
+static inline void
 tmp_take(struct tmp *t,
+         struct xrt_allocation_collection **out_xac,
          struct xrt_image_native native_images[COMP_SCRATCH_NUM_IMAGES],
          struct render_scratch_color_image images[COMP_SCRATCH_NUM_IMAGES])
 {
+	// Get native images from collection.
+	tmp_get_native_images(t, native_images);
+
 	for (uint32_t i = 0; i < COMP_SCRATCH_NUM_IMAGES; i++) {
-		images[i].image = t->vkic.images[i].handle;
-		images[i].device_memory = t->vkic.images[i].memory;
+		// VkImage is owned by collection, we just borrow the handle.
+		images[i].image = t->vk_images[i];
+		// VkDeviceMemory is owned by collection, set to NULL.
+		images[i].device_memory = VK_NULL_HANDLE;
+		// Move image views.
 		images[i].srgb_view = t->srgb_views[i];
 		images[i].unorm_view = t->unorm_views[i];
 
-		native_images[i].size = t->vkic.images[i].size;
-		native_images[i].use_dedicated_allocation = t->vkic.images[i].use_dedicated_allocation;
-		native_images[i].handle = t->handles[i]; // Move
-
 		t->srgb_views[i] = VK_NULL_HANDLE;
 		t->unorm_views[i] = VK_NULL_HANDLE;
-		t->handles[i] = XRT_GRAPHICS_BUFFER_HANDLE_INVALID;
 	}
 
-	// We now own everything.
-	U_ZERO(&t->vkic);
+	// Move ownership of collection.
+	*out_xac = t->xac;
+	t->xac = NULL;
 }
 
 
@@ -287,8 +337,8 @@ ensure(struct comp_scratch_single_images *cssi,
 	// Clear old information, we haven't touched this struct yet.
 	comp_scratch_single_images_free(cssi, vk);
 
-	// Copy out images and information.
-	tmp_take(&t, cssi->native_images, cssi->images);
+	// Copy out images and information, takes ownership of collection.
+	tmp_take(&t, &cssi->xac, cssi->native_images, cssi->images);
 
 	// Generate new unique id for caching and set info.
 	cssi->limited_unique_id = u_limited_unique_id_get();
@@ -351,13 +401,21 @@ comp_scratch_single_images_free(struct comp_scratch_single_images *cssi, struct 
 	u_native_images_debug_clear(&cssi->unid);
 
 	for (uint32_t i = 0; i < COMP_SCRATCH_NUM_IMAGES; i++) {
-		u_graphics_buffer_unref(&cssi->native_images[i].handle);
-
+		// Destroy image views (we own these).
 		D(ImageView, cssi->images[i].srgb_view);
 		D(ImageView, cssi->images[i].unorm_view);
-		D(Image, cssi->images[i].image);
-		DF(Memory, cssi->images[i].device_memory);
+
+		// Clear image handle (owned by collection).
+		cssi->images[i].image = VK_NULL_HANDLE;
+
+		// Free native image handle (ownership was transferred to us).
+		u_graphics_buffer_unref(&cssi->native_images[i].handle);
+		cssi->native_images[i].size = 0;
+		cssi->native_images[i].use_dedicated_allocation = false;
 	}
+
+	// Release collection (destroys VkImages and VkDeviceMemory).
+	xrt_allocation_collection_reference(&cssi->xac, NULL);
 
 	// Clear info, so ensure will recreate.
 	U_ZERO(&cssi->info);
