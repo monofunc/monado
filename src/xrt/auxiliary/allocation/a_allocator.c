@@ -12,6 +12,10 @@
 #include "vk/vk_helpers.h"
 #include "vk/vk_image_collection.h"
 
+#if defined(XRT_OS_OSX)
+#include "metal/mtl_image_collection.h"
+#endif
+
 #include "a_allocator.h"
 
 
@@ -32,8 +36,9 @@ a_allocator_allocate(struct vk_bundle *vk,
 	xrt_result_t xret = vk_xac_allocate(vk, xscci, image_count, out_xac);
 	XVK_CHK_ALWAYS_RET(xret, "vk_xac_allocate");
 #elif defined(XRT_OS_OSX)
-	// To not break the build on OSX for now.
-	return XRT_ERROR_ALLOCATION;
+	// On macOS, use Metal-backed allocation collection.
+	xrt_result_t xret = mtl_image_collection_create_from_vk(vk, xscci, image_count, out_xac);
+	XVK_CHK_ALWAYS_RET(xret, "mtl_image_collection_create_from_vk");
 #else
 #error "Unsupported platform"
 #endif
@@ -51,7 +56,8 @@ a_allocator_import_from_natives(struct vk_bundle *vk,
 	// This is platform-independent as it imports existing native handles.
 	return vk_xac_from_natives(vk, xscci, native_images, image_count, out_xac);
 #elif defined(XRT_OS_OSX)
-	// To not break the build on OSX for now.
+	// Not supported yet.
+	U_LOG_E("Importing from native images is not supported on macOS yet");
 	return XRT_ERROR_ALLOCATION;
 #else
 #error "Unsupported platform"
@@ -158,6 +164,14 @@ a_allocator_ensure_vk_images(struct vk_bundle *vk,
 			return xret;
 		}
 	}
+
+#if defined(XRT_OS_OSX)
+	if (supports_metal_device && supports_metal_texture) {
+		// Use the Metal wrapper function.
+		xret = mtl_image_collection_wrap_from_metal(vk, xac, out_xac);
+		XVK_CHK_ALWAYS_RET(xret, "mtl_image_collection_wrap_from_metal");
+	}
+#endif
 
 	VK_ERROR(vk,
 	         "All methods to ensure VkImage failed!"
