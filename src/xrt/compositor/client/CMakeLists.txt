@@ -72,3 +72,10 @@ if(XRT_HAVE_D3D12)
 		comp_client PRIVATE comp_d3d12_client.cpp comp_d3d12_client.h comp_d3d12_glue.c
 		)
 endif()
+
+if(APPLE)
+	target_sources(comp_client PRIVATE comp_metal_client.m comp_metal_glue.m)
+	target_link_libraries(
+		comp_client PRIVATE aux_metal "-framework Metal" "-framework IOSurface" objc
+		)
+endif()
