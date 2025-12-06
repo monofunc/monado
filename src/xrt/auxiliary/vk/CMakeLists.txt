@@ -53,6 +53,8 @@ add_library(
 	vk_helpers.h
 	vk_image_allocator.c
 	vk_image_allocator.h
+	vk_image_collection.c
+	vk_image_collection.h
 	vk_image_readback_to_xf_pool.c
 	vk_image_readback_to_xf_pool.h
 	vk_mini_helpers.h

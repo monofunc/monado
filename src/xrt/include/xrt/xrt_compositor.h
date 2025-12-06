@@ -1,5 +1,5 @@
 // Copyright 2019-2024, Collabora, Ltd.
-// Copyright 2025, NVIDIA CORPORATION.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -44,6 +44,7 @@ extern "C" {
  *
  */
 
+struct xrt_allocation_collection;
 struct xrt_device;
 struct xrt_image_native;
 struct xrt_compositor;
@@ -2233,6 +2234,12 @@ struct xrt_swapchain_native
 	 * not synchronized between service and any apps via the IPC layer.
 	 */
 	xrt_limited_unique_id_t limited_unique_id;
+
+	/*!
+	 * Optional allocation collection that may be used by client compositors
+	 * to avoid allocating their own textures when the devices match.
+	 */
+	struct xrt_allocation_collection *xac;
 
 	struct xrt_image_native images[XRT_MAX_SWAPCHAIN_IMAGES];
 };
