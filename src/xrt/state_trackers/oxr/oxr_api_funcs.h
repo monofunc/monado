@@ -273,6 +273,15 @@ XRAPI_ATTR XrResult XRAPI_CALL
 oxr_xrGetSystemEGLDeviceMND(XrInstance instance, const XrSystemEGLDeviceGetInfoMND *info, XrSystemEGLDeviceMND *device);
 #endif // OXR_HAVE_MND_query_egl_device
 
+#ifdef XR_USE_GRAPHICS_API_METAL
+
+//! OpenXR API function @ep{xrGetMetalGraphicsRequirementsKHR}
+XRAPI_ATTR XrResult XRAPI_CALL
+oxr_xrGetMetalGraphicsRequirementsKHR(XrInstance instance,
+                                      XrSystemId systemId,
+                                      XrGraphicsRequirementsMetalKHR *graphicsRequirements);
+#endif // XR_USE_GRAPHICS_API_METAL
+
 /*
  *
  * oxr_api_session.c

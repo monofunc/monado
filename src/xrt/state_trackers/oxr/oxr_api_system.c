@@ -1,5 +1,5 @@
 // Copyright 2018-2020, Collabora, Ltd.
-// Copyright 2024-2025, NVIDIA CORPORATION.
+// Copyright 2024-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -16,6 +16,7 @@
 #include "xrt/xrt_compiler.h"
 #include "xrt/xrt_gfx_gl.h"
 #include "xrt/xrt_gfx_gles.h"
+#include "xrt/xrt_gfx_metal.h"
 
 #include "util/u_debug.h"
 #include "util/u_trace_marker.h"
@@ -532,5 +533,36 @@ oxr_xrGetD3D12GraphicsRequirementsKHR(XrInstance instance,
 	sys->gotten_requirements = true;
 
 	return oxr_d3d12_get_requirements(&log, sys, graphicsRequirements);
+}
+#endif
+
+
+/*
+ *
+ * Metal
+ *
+ */
+
+#ifdef XR_USE_GRAPHICS_API_METAL
+
+XRAPI_ATTR XrResult XRAPI_CALL
+oxr_xrGetMetalGraphicsRequirementsKHR(XrInstance instance,
+                                      XrSystemId systemId,
+                                      XrGraphicsRequirementsMetalKHR *graphicsRequirements)
+{
+	OXR_TRACE_MARKER();
+
+	struct oxr_instance *inst;
+	struct oxr_logger log;
+	OXR_VERIFY_INSTANCE_AND_INIT_LOG(&log, instance, inst, "xrGetMetalGraphicsRequirementsKHR");
+	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, graphicsRequirements, XR_TYPE_GRAPHICS_REQUIREMENTS_METAL_KHR);
+	OXR_VERIFY_SYSTEM_AND_GET(&log, inst, systemId, sys);
+	OXR_VERIFY_XSYSC(&log, sys);
+
+	xrt_gfx_metal_get_device(&graphicsRequirements->metalDevice);
+
+	sys->gotten_requirements = true;
+
+	return XR_SUCCESS;
 }
 #endif
