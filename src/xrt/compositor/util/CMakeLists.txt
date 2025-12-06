@@ -1,5 +1,5 @@
 # Copyright 2019-2024, Collabora, Ltd.
-# Copyright 2025, NVIDIA CORPORATION.
+# Copyright 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: BSL-1.0
 
 ##
@@ -34,5 +34,10 @@ add_library(
 target_link_libraries(
 	comp_util
 	PUBLIC xrt-interfaces comp_includes
-	PRIVATE aux_util aux_os aux_vk comp_render
+	PRIVATE
+		aux_util
+		aux_os
+		aux_vk
+		comp_render
+		aux_allocation
 	)
