@@ -267,4 +267,9 @@ typedef enum xrt_result
 	 * The specified @ref xrt_view_type was unsupported by the callee.
 	 */
 	XRT_ERROR_UNSUPPORTED_VIEW_TYPE = -44,
+
+	/*!
+	 * The requested property is not supported.
+	 */
+	XRT_ERROR_UNSUPPORTED_PROPERTY = -45,
 } xrt_result_t;

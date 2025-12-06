@@ -73,6 +73,17 @@
 #define XRT_MAX_SWAPCHAIN_CREATE_INFO_FORMAT_LIST_COUNT 8
 
 /*!
+ * Max number of allocation properties that can be reported by the
+ * allocation collection in @ref xrt_allocation_collection.
+ */
+#define XRT_MAX_ALLOCATION_PROPERTY_COUNT 4
+
+/*!
+ * Max number of allocation types that an allocation collection can support.
+ */
+#define XRT_MAX_ALLOCATION_TYPE_COUNT 4
+
+/*!
  * Max number of supported display refresh rates, artificial limit.
  */
 #define XRT_MAX_SUPPORTED_REFRESH_RATES 16
