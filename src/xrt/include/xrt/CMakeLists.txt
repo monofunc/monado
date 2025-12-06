@@ -33,6 +33,10 @@ configure_file(
 	${CMAKE_CURRENT_BINARY_DIR}/xrt_config_android.h @ONLY
 	)
 
+if(APPLE)
+	set(XR_USE_GRAPHICS_API_METAL ON)
+endif()
+
 if(XRT_HAVE_VULKAN)
 	set(XR_USE_GRAPHICS_API_VULKAN ON)
 endif()
