@@ -1,5 +1,5 @@
 // Copyright 2019, Collabora, Ltd.
-// Copyright 2024-2025, NVIDIA CORPORATION.
+// Copyright 2024-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -11,7 +11,7 @@
 #include "util/u_debug.h"
 #include "comp_settings.h"
 
-#ifdef XRT_OS_ANDROID
+#if defined(XRT_OS_ANDROID) || defined(XRT_OS_OSX)
 #define USE_COMPUTE_DEFAULT false
 #else
 #define USE_COMPUTE_DEFAULT true
