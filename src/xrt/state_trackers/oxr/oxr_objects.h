@@ -1059,6 +1059,28 @@ oxr_swapchain_d3d12_create(struct oxr_logger *,
 
 /*
  *
+ * Metal, located in various files.
+ *
+ */
+
+#ifdef XR_USE_GRAPHICS_API_METAL
+
+XrResult
+oxr_session_populate_metal(struct oxr_logger *log,
+                           struct oxr_system *sys,
+                           XrGraphicsBindingMetalKHR const *next,
+                           struct oxr_session *sess);
+
+XrResult
+oxr_swapchain_metal_create(struct oxr_logger *,
+                           struct oxr_session *sess,
+                           const XrSwapchainCreateInfo *,
+                           struct oxr_swapchain **out_swapchain);
+
+#endif
+
+/*
+ *
  * Structs
  *
  */

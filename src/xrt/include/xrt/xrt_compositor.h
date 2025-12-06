@@ -2144,6 +2144,41 @@ struct xrt_compositor_d3d12
 };
 #endif
 
+#if defined(XRT_OS_OSX) || defined(XRT_DOXYGEN)
+/*
+ *
+ * Metal interface.
+ *
+ */
+
+/*!
+ * Base class for a Metal client swapchain.
+ *
+ * @ingroup xrt_iface comp_client
+ * @extends xrt_swapchain
+ */
+struct xrt_swapchain_metal
+{
+	//! @public Base
+	struct xrt_swapchain base;
+
+	//! Metal textures to be used by the caller.
+	void *images[XRT_MAX_SWAPCHAIN_IMAGES];
+};
+
+/*!
+ * Base class for a Metal client compositor.
+ *
+ * @ingroup xrt_iface comp_client
+ * @extends xrt_compositor
+ */
+struct xrt_compositor_metal
+{
+	//! @public Base
+	struct xrt_compositor base;
+};
+#endif // XRT_OS_OSX
+
 /*
  *
  * Native interface.
