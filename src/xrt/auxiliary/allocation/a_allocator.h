@@ -79,6 +79,10 @@ a_allocator_import_from_natives(struct vk_bundle *vk,
  * - If the collection supports native images
  *   (@ref XRT_ALLOCATION_TYPE_NATIVE_IMAGE), creates a new collection by
  *   importing the native images using @ref a_allocator_import_from_natives.
+ * - If the collection supports Metal textures
+ *   (@ref XRT_ALLOCATION_TYPE_METAL_TEXTURE),
+ *   wraps them as VkImages using @ref mtl_image_collection_wrap_from_metal
+ *   (macOS only).
  * - Otherwise, returns XRT_ERROR_ALLOCATION.
  *
  * @param vk      Vulkan bundle.

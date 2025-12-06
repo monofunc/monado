@@ -68,6 +68,6 @@ if(APPLE)
 endif()
 
 # Allocation library, needs to be after the graphics libraries.
-if(XRT_HAVE_VULKAN)
+if(XRT_HAVE_VULKAN OR APPLE)
 	add_subdirectory(allocation)
 endif()
