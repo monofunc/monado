@@ -24,6 +24,10 @@ if(XRT_BUILD_DRIVER_PSVR OR XRT_BUILD_DRIVER_PSMV)
 	target_sources(target_lists PRIVATE target_builder_rgb_tracking.c)
 endif()
 
+if(XRT_BUILD_DRIVER_PSVR2)
+	target_sources(target_lists PRIVATE target_builder_psvr2.c)
+endif()
+
 if(XRT_BUILD_DRIVER_RIFT_S)
 	target_sources(target_lists PRIVATE target_builder_rift_s.c)
 endif()

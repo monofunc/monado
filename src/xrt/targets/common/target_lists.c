@@ -132,6 +132,10 @@ xrt_builder_create_func_t target_builder_list[] = {
     rift_s_builder_create,
 #endif // XRT_BUILD_DRIVER_RIFT_S
 
+#ifdef XRT_BUILD_DRIVER_PSVR2
+    t_builder_psvr2_create,
+#endif // XRT_BUILD_DRIVER_PSVR2
+
 #ifdef T_BUILDER_RGB_TRACKING
     t_builder_rgb_tracking_create,
 #endif // T_BUILDER_RGB_TRACKING
