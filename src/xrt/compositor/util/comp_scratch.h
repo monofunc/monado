@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include "xrt/xrt_allocation_collection.h"
+
 #include "util/u_native_images_debug.h"
 
 #include "vk/vk_helpers.h"
@@ -67,6 +69,9 @@ struct comp_scratch_indices
  */
 struct comp_scratch_single_images
 {
+	//! Allocation collection that owns the images.
+	struct xrt_allocation_collection *xac;
+
 	//! Images used when rendering.
 	struct render_scratch_color_image images[COMP_SCRATCH_NUM_IMAGES];
 
