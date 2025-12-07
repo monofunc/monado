@@ -388,6 +388,9 @@ comp_vulkan_init_bundle(struct vk_bundle *vk,
 void
 comp_vulkan_formats_check(struct vk_bundle *vk, struct comp_vulkan_formats *formats)
 {
+#if defined(XRT_OS_OSX)
+	formats->has_R8G8B8A8_SRGB = true;
+#else
 #define CHECK_COLOR(FORMAT)                                                                                            \
 	formats->has_##FORMAT = vk_csci_is_format_supported(vk, VK_FORMAT_##FORMAT, 0, XRT_SWAPCHAIN_USAGE_COLOR);
 #define CHECK_DS(FORMAT)                                                                                               \
@@ -398,6 +401,7 @@ comp_vulkan_formats_check(struct vk_bundle *vk, struct comp_vulkan_formats *form
 
 #undef CHECK_COLOR
 #undef CHECK_DS
+#endif
 
 #if defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_AHARDWAREBUFFER)
 	/*
