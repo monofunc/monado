@@ -148,6 +148,8 @@ psvr2_open_system_impl(struct xrt_builder *xb,
 	}
 
 	ubrh->head = head_xdev;
+	ubrh->eyes = head_xdev;
+	ubrh->face = head_xdev;
 
 #ifdef XRT_BUILD_DRIVER_PSSENSE
 	struct xrt_device *left_xdev = NULL;
