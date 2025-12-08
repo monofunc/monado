@@ -129,7 +129,7 @@ solarxr_ipc_socket_find(const enum u_logging_level log_level, const char filenam
 	}
 
 	// try path used by SlimeVR flatpak
-	static const char flatpak_runtime_dir[] = "app/" SLIMEVR_IDENTIFIER "/";
+	static const char flatpak_runtime_dir[] = ".flatpak/" SLIMEVR_IDENTIFIER "/xdg-run/";
 	if (sizeof(addr.sun_path) - 1 - filename_len - runtime_dir_len >= sizeof(flatpak_runtime_dir) - 1) {
 		memcpy(&addr.sun_path[runtime_dir_len], flatpak_runtime_dir, sizeof(flatpak_runtime_dir) - 1);
 		memcpy(&addr.sun_path[runtime_dir_len + (sizeof(flatpak_runtime_dir) - 1)], filename, filename_len + 1);
