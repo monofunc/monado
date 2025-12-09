@@ -167,7 +167,7 @@ android_sensor_callback(ASensorEvent *event, struct android_device *d)
 		ANDROID_TRACE(d, "gyro %" PRId64 " %.2f %.2f %.2f", event->timestamp, gyro.x, gyro.y, gyro.z);
 
 		// TODO: Make filter handle accelerometer
-		struct xrt_vec3 null_accel;
+		struct xrt_vec3 null_accel = XRT_VEC3_ZERO;
 
 		// Lock last and the fusion.
 		os_mutex_lock(&d->lock);
@@ -176,6 +176,7 @@ android_sensor_callback(ASensorEvent *event, struct android_device *d)
 
 		// Now done.
 		os_mutex_unlock(&d->lock);
+		break;
 	}
 	default: ANDROID_TRACE(d, "Unhandled event type %d", event->type);
 	}
@@ -316,7 +317,10 @@ android_device_get_tracked_pose(struct xrt_device *xdev,
 	struct android_device *d = android_device(xdev);
 
 	struct xrt_space_relation new_relation = XRT_SPACE_RELATION_ZERO;
+
+	os_mutex_lock(&d->lock);
 	new_relation.pose.orientation = d->fusion.rot;
+	os_mutex_unlock(&d->lock);
 
 	//! @todo assuming that orientation is actually currently tracked.
 	new_relation.relation_flags = (enum xrt_space_relation_flags)(XRT_SPACE_RELATION_ORIENTATION_VALID_BIT |
