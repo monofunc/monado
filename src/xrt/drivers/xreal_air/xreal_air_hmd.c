@@ -212,7 +212,7 @@ send_payload_to_sensor(struct xreal_air_hmd *hmd, uint8_t msgid, const uint8_t *
 	payload[3] = ((checksum >> 16u) & 0xFFu);
 	payload[4] = ((checksum >> 24u) & 0xFFu);
 
-	return os_hid_write(hmd->hid_sensor, payload, payload_len);
+	return os_hid_write(hmd->hid_sensor, payload, payload_len) > 0;
 }
 
 static void
@@ -675,7 +675,7 @@ read_thread(void *ptr)
 static bool
 send_payload_to_control(struct xreal_air_hmd *hmd, uint16_t msgid, const uint8_t *data, uint8_t len)
 {
-	uint8_t payload[CONTROL_BUFFER_SIZE];
+	uint8_t payload[CONTROL_BUFFER_SIZE] = {0};
 
 	const uint16_t packet_len = 17 + len;
 	const uint16_t payload_len = 5 + packet_len;
@@ -702,7 +702,12 @@ send_payload_to_control(struct xreal_air_hmd *hmd, uint16_t msgid, const uint8_t
 	payload[3] = ((checksum >> 16u) & 0xFFu);
 	payload[4] = ((checksum >> 24u) & 0xFFu);
 
-	return os_hid_write(hmd->hid_control, payload, payload_len);
+	// Device has a single report, so the ReportID needs to be 0
+	uint8_t packet[CONTROL_BUFFER_SIZE + 1] = {0};
+	memcpy(packet + 1, &payload, payload_len);
+
+	int size = os_hid_write(hmd->hid_control, &packet, sizeof(packet));
+	return size == sizeof(packet);
 }
 
 static void
