@@ -1042,6 +1042,42 @@ os_ble_notify_read(struct os_ble_device *bdev, uint8_t *data, size_t length, int
 	return ret;
 }
 
+static inline int
+os_ble_ni_write(struct os_ble_device *bdev, const uint8_t *data, size_t length)
+{
+	(void)bdev;
+	(void)data;
+	(void)length;
+	U_LOG_E("os_ble_ni_write not implemented!\n");
+	return -1;
+}
+
+static inline bool
+os_ble_ni_is_connected(const struct os_ble_device *bdev)
+{
+	(void)bdev;
+	U_LOG_E("os_ble_ni_is_connected not implemented!\n");
+	return true;
+}
+
+static inline bool
+os_ble_ni_get_address(const struct os_ble_device *bdev, char out_address[OS_BLE_DEVICE_MAC_ADDRESS_SIZE])
+{
+	(void)bdev;
+	(void)out_address;
+	U_LOG_E("os_ble_ni_is_connected not implemented!\n");
+	return true;
+}
+
+static inline bool
+os_ble_ni_get_name(const struct os_ble_device *bdev, char out_name[OS_BLE_DEVICE_NAME_SIZE])
+{
+	(void)bdev;
+	(void)out_name;
+	U_LOG_E("os_ble_ni_get_name not implemented!\n");
+	return true;
+}
+
 static void
 os_ble_notify_destroy(struct os_ble_device *bdev)
 {
@@ -1063,12 +1099,33 @@ os_ble_notify_destroy(struct os_ble_device *bdev)
  * 'Exported' functions.
  *
  */
+int
+os_ble_open(const char *dev_uuid,
+            const char *notify_char_uuid,
+            const char *write_char_uuid,
+            const char *device_name,
+            int major_device_class,
+            struct os_ble_device **out_ble)
+{
+	(void)dev_uuid;
+	(void)notify_char_uuid;
+	(void)write_char_uuid;
+	(void)device_name;
+	(void)major_device_class;
+	(void)out_ble;
+	U_LOG_E("os_ble_open not implemented!\n");
+	return -1;
+}
 
 int
 os_ble_notify_open(const char *dev_uuid, const char *char_uuid, struct os_ble_device **out_ble)
 {
 	struct ble_notify *bledev = U_TYPED_CALLOC(struct ble_notify);
 	bledev->base.read = os_ble_notify_read;
+	bledev->base.write = os_ble_ni_write;
+	bledev->base.is_connected = os_ble_ni_is_connected;
+	bledev->base.get_address = os_ble_ni_get_address;
+	bledev->base.get_name = os_ble_ni_get_name;
 	bledev->base.destroy = os_ble_notify_destroy;
 	bledev->fd = -1;
 
