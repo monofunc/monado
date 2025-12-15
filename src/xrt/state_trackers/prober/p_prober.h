@@ -44,16 +44,7 @@
 #define P_WARN(d, ...) U_LOG_IFL_W(d->log_level, __VA_ARGS__)
 #define P_ERROR(d, ...) U_LOG_IFL_E(d->log_level, __VA_ARGS__)
 
-#ifdef XRT_OS_LINUX
-/*!
- * A hidraw interface that a @ref prober_device exposes.
- */
-struct prober_hidraw
-{
-	ssize_t hid_iface;
-	const char *path;
-};
-
+#ifdef XRT_HAVE_V4L2
 /*!
  * A v4l interface that a @ref prober_device exposes.
  */
@@ -109,11 +100,6 @@ struct prober_device
 #ifdef XRT_HAVE_V4L2
 	size_t num_v4ls;
 	struct prober_v4l *v4ls;
-#endif
-
-#ifdef XRT_OS_LINUX
-	size_t num_hidraws;
-	struct prober_hidraw *hidraws;
 #endif
 };
 
