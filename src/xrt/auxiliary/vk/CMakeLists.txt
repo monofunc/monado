@@ -27,9 +27,8 @@ add_library(
 	vk_sync_objects.c
 	vk_time.c
 	)
-target_link_libraries(aux_vk PUBLIC aux_os aux_util)
-target_link_libraries(aux_vk PUBLIC Vulkan::Vulkan)
-target_include_directories(aux_vk PUBLIC ${Vulkan_INCLUDE_DIR})
+target_link_libraries(aux_vk PUBLIC xrt-external-vulkan-headers aux_os aux_util)
+target_link_libraries(aux_vk PRIVATE xrt-external-vulkan-loader)
 
 if(ANDROID)
 	target_link_libraries(aux_vk PUBLIC aux_android)

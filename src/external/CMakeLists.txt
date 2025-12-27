@@ -107,6 +107,11 @@ if(XRT_FEATURE_SLAM)
 		)
 endif()
 
+# Vulkan
+if(XRT_HAVE_VULKAN)
+	add_subdirectory(vulkan)
+endif()
+
 # SDL
 if(XRT_HAVE_SDL2)
 	add_library(xrt-external-sdl2 INTERFACE)
