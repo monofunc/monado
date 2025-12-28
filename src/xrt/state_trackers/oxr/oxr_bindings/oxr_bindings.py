@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2020-2025, Collabora, Ltd.
-# Copyright 2024-2025, NVIDIA CORPORATION.
+# Copyright 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: BSL-1.0
 """Generate OpenXR binding code using the auxiliary bindings scripts."""
 
@@ -165,11 +165,133 @@ def get_verify_functions(profile):
     return ret
 
 
+def generate_profile_template(profile):
+    """Generate a single profile_template entry. Returns a list of lines."""
+    lines = []
+
+    hw_name = str(profile.name.split("/")[-1])
+    vendor_name = str(profile.name.split("/")[-2])
+    fname = vendor_name + "_" + hw_name + "_profile.json"
+    controller_type = "monado_" + vendor_name + "_" + hw_name
+
+    binding_count = len(profile.components)
+    lines.extend([
+        '\t{ // profile_template',
+        f'\t\t.name = {profile.monado_device_enum},',
+        f'\t\t.path = "{profile.name}",',
+        f'\t\t.localized_name = "{profile.localized_name}",',
+        f'\t\t.steamvr_input_profile_path = "{fname}",',
+        f'\t\t.steamvr_controller_type = "{controller_type}",',
+        f'\t\t.binding_count = {binding_count},',
+        '\t\t.bindings = (struct binding_template[]){ // array of binding_template',
+    ])
+
+    component: Component
+    for idx, component in enumerate(profile.components):
+        # @todo Doesn't handle pose yet.
+        steamvr_path = component.steamvr_path
+        if component.component_name in ["click", "touch", "force", "value", "proximity"]:
+            steamvr_path += "/" + component.component_name
+
+        lines.extend([
+            f'\t\t\t{{ // binding_template {idx}',
+            f'\t\t\t\t.subaction_path = "{component.subaction_path}",',
+            f'\t\t\t\t.steamvr_path = "{steamvr_path}",',
+            f'\t\t\t\t.localized_name = "{component.subpath_localized_name}",',
+            '',
+            '\t\t\t\t.paths = { // array of paths',
+        ])
+
+        lines.extend([f'\t\t\t\t\t"{path}",' for path in component.get_full_openxr_paths()])
+
+        lines.extend([
+            '\t\t\t\t\tNULL,',
+            '\t\t\t\t}, // /array of paths',
+        ])
+
+        # controllers can have input that we don't have bindings for
+        if component.monado_binding:
+            monado_binding = component.monado_binding
+
+            # Input, dpad_activate and output default to 0.
+            # If a binding specifies an actual binding value for them in json, those get overridden.
+            input_value = '0'
+            dpad_activate_value = '0'
+            output_value = '0'
+
+            if component.is_input() and monado_binding is not None:
+                input_value = monado_binding
+
+            if component.has_dpad_emulation() and "activate" in component.dpad_emulation:
+                activate_component = find_component_in_list_by_name(
+                    component.dpad_emulation["activate"], profile.components,
+                    subaction_path=component.subaction_path,
+                    identifier_json_path=component.identifier_json_path)
+                dpad_activate_value = activate_component.monado_binding
+
+            if component.is_output() and monado_binding is not None:
+                output_value = monado_binding
+
+            lines.extend([
+                f'\t\t\t\t.input = {input_value},',
+                f'\t\t\t\t.dpad_activate = {dpad_activate_value},',
+                f'\t\t\t\t.output = {output_value},',
+            ])
+
+        lines.append(f'\t\t\t}}, // /binding_template {idx}')
+
+    lines.append('\t\t}, // /array of binding_template')
+
+    # Handle dpads
+    dpads = []
+    for identifier in profile.identifiers:
+        if identifier.dpad:
+            dpads.append(identifier)
+
+    dpad_count = len(dpads)
+    lines.append(f'\t\t.dpad_count = {dpad_count},')
+    if len(dpads) == 0:
+        lines.append('\t\t.dpads = NULL,')
+    else:
+        lines.append('\t\t.dpads = (struct dpad_emulation[]){ // array of dpad_emulation')
+        for identifier in dpads:
+            lines.append('\t\t\t{')
+            lines.append(f'\t\t\t\t.subaction_path = "{identifier.subaction_path}",')
+            lines.append('\t\t\t\t.paths = {')
+            for path in identifier.dpad.paths:
+                lines.append(f'\t\t\t\t\t"{path}",')
+            lines.append('\t\t\t\t},')
+            lines.append(f'\t\t\t\t.position = {identifier.dpad.position_component.monado_binding},')
+            if identifier.dpad.activate_component:
+                lines.append(f'\t\t\t\t.activate = {identifier.dpad.activate_component.monado_binding},')
+            else:
+                lines.append('\t\t\t\t.activate = 0')
+            lines.append('\t\t\t},')
+        lines.append('\t\t}, // /array of dpad_emulation')
+
+    lines.append(f'\t\t.openxr_version.promoted.major = {profile.openxr_version_promoted["major"]},')
+    lines.append(f'\t\t.openxr_version.promoted.minor = {profile.openxr_version_promoted["minor"]},')
+
+    fn_prefixes = ["subpath", "dpad_path", "dpad_emulator"]
+    for prefix in fn_prefixes:
+        lines.append(f'\t\t.{prefix}_fn = oxr_verify_{profile.validation_func_name}_{prefix},')
+    lines.append(f'\t\t.ext_verify_fn = oxr_verify_{profile.validation_func_name}_ext,')
+
+    if profile.extension_name is None:
+        lines.append('\t\t.extension_name = NULL,')
+    else:
+        lines.append(f'\t\t.extension_name = "{profile.extension_name}",')
+
+    lines.append('\t}, // /profile_template')
+
+    return lines
+
+
 def generate_bindings_c(file, b):
     """Generate the file to verify subpaths on a interaction profile."""
-    f = open(file, "w")
+    lines = []
 
-    wl(f,
+    lines.extend([
         header.format(brief='Generated bindings data', group='oxr_main'),
         '#include "oxr_bindings/b_oxr_generated_bindings.h"',
         '#include <string.h>',
@@ -177,143 +299,31 @@ def generate_bindings_c(file, b):
         '',
         '// clang-format off',
         '',
+    ])
 
-        # unpack list comprehension that put the list of returned lines from the inner loop into a new list
-        *[verify_function_lines
-            for profile in b.profiles
-                for verify_function_lines in get_verify_functions(profile)
-        ],
-
-        f'\n\nstruct profile_template profile_templates[{len(b.profiles)}] = {{ // array of profile_template',
-    )
-
-
+    # Add all verify functions
     for profile in b.profiles:
-        hw_name = str(profile.name.split("/")[-1])
-        vendor_name = str(profile.name.split("/")[-2])
-        fname = vendor_name + "_" + hw_name + "_profile.json"
-        controller_type = "monado_" + vendor_name + "_" + hw_name
+        lines.extend(get_verify_functions(profile))
 
-        binding_count = len(profile.components)
-        wl(f,
-            f'\t{{ // profile_template',
-            f'\t\t.name = {profile.monado_device_enum},',
-            f'\t\t.path = "{profile.name}",',
-            f'\t\t.localized_name = "{profile.localized_name}",',
-            f'\t\t.steamvr_input_profile_path = "{fname}",',
-            f'\t\t.steamvr_controller_type = "{controller_type}",',
-            f'\t\t.binding_count = {binding_count},',
-            f'\t\t.bindings = (struct binding_template[]){{ // array of binding_template',
-        )
+    lines.extend([
+        '',
+        '',
+        f'struct profile_template profile_templates[{len(b.profiles)}] = {{ // array of profile_template',
+    ])
 
-        component: Component
-        for idx, component in enumerate(profile.components):
+    # Add all profile templates
+    for profile in b.profiles:
+        lines.extend(generate_profile_template(profile))
 
-            # @todo Doesn't handle pose yet.
-            steamvr_path = component.steamvr_path
-            if component.component_name in ["click", "touch", "force", "value", "proximity"]:
-                steamvr_path += "/" + component.component_name
+    lines.extend([
+        '}; // /array of profile_template',
+        '',
+        '// clang-format on',
+    ])
 
-            wl(f,
-                f'\t\t\t{{ // binding_template {idx}',
-                f'\t\t\t\t.subaction_path = "{component.subaction_path}",',
-                f'\t\t\t\t.steamvr_path = "{steamvr_path}",',
-                f'\t\t\t\t.localized_name = "{component.subpath_localized_name}",',
-                '',
-                '\t\t\t\t.paths = { // array of paths',
-
-                '\n'.join([f'\t\t\t\t\t"{path}",' for path in component.get_full_openxr_paths() ]),
-
-                '\t\t\t\t\tNULL,',
-                '\t\t\t\t}, // /array of paths',
-            )
-
-            # print("component", component.__dict__)
-
-            component_str = component.component_name
-
-            # controllers can have input that we don't have bindings for
-            if component.monado_binding:
-                monado_binding = component.monado_binding
-
-                # Input, dpad_activate and output default to 0.
-                # If a binding specifies an actual binding value for them in json, those get overridden.
-                input_value = '0'
-                dpad_activate_value = '0'
-                output_value = '0'
-
-                if component.is_input() and monado_binding is not None:
-                    input_value = monado_binding
-
-                if component.has_dpad_emulation() and "activate" in component.dpad_emulation:
-                    activate_component = find_component_in_list_by_name(
-                        component.dpad_emulation["activate"], profile.components,
-                        subaction_path=component.subaction_path,
-                        identifier_json_path=component.identifier_json_path)
-                    dpad_activate_value = activate_component.monado_binding
-
-                if component.is_output() and monado_binding is not None:
-                    output_value = monado_binding
-
-                wl(f,
-                    f'\t\t\t\t.input = {input_value},',
-                    f'\t\t\t\t.dpad_activate = {dpad_activate_value},',
-                    f'\t\t\t\t.output = {output_value},',
-                )
-
-            wl(f, f'\t\t\t}}, // /binding_template {idx}')
-
-        wl(f, '\t\t}, // /array of binding_template')
-
-        dpads = []
-        for idx, identifier in enumerate(profile.identifiers):
-            if identifier.dpad:
-                dpads.append(identifier)
-
-#        for identifier in dpads:
-#            print(identifier.path, identifier.dpad_position_component)
-
-        dpad_count = len(dpads)
-        f.write(f'\t\t.dpad_count = {dpad_count},\n')
-        if len(dpads) == 0:
-            f.write(f'\t\t.dpads = NULL,\n')
-        else:
-            f.write(
-                f'\t\t.dpads = (struct dpad_emulation[]){{ // array of dpad_emulation\n')
-            for idx, identifier in enumerate(dpads):
-                f.write('\t\t\t{\n')
-                f.write(f'\t\t\t\t.subaction_path = "{identifier.subaction_path}",\n')
-                f.write('\t\t\t\t.paths = {\n')
-                for path in identifier.dpad.paths:
-                    f.write(f'\t\t\t\t\t"{path}",\n')
-                f.write('\t\t\t\t},\n')
-                f.write(f'\t\t\t\t.position = {identifier.dpad.position_component.monado_binding},\n')
-                if identifier.dpad.activate_component:
-                    f.write(f'\t\t\t\t.activate = {identifier.dpad.activate_component.monado_binding},\n')
-                else:
-                    f.write(f'\t\t\t\t.activate = 0')
-
-                f.write('\t\t\t},\n')
-            f.write('\t\t}, // /array of dpad_emulation\n')
-
-        f.write(f'\t\t.openxr_version.promoted.major = {profile.openxr_version_promoted["major"]},\n')
-        f.write(f'\t\t.openxr_version.promoted.minor = {profile.openxr_version_promoted["minor"]},\n')
-
-        fn_prefixes = ["subpath", "dpad_path", "dpad_emulator"]
-        for prefix in fn_prefixes:
-            f.write(f'\t\t.{prefix}_fn = oxr_verify_{profile.validation_func_name}_{prefix},\n')
-        f.write(f'\t\t.ext_verify_fn = oxr_verify_{profile.validation_func_name}_ext,\n')
-        if profile.extension_name is None:
-            f.write(f'\t\t.extension_name = NULL,\n')
-        else:
-            f.write(f'\t\t.extension_name = "{profile.extension_name}",\n')
-        f.write('\t}, // /profile_template\n')
-
-    f.write('}; // /array of profile_template\n\n')
-
-    f.write("\n// clang-format on\n")
-
-    f.close()
+    # Write all lines to file
+    with open(file, "w") as f:
+        f.write('\n'.join(lines) + '\n')
 
 
 H_TEMPLATE = Template("""$header
@@ -407,28 +417,29 @@ extern struct profile_template profile_templates[OXR_BINDINGS_PROFILE_TEMPLATE_C
 
 def generate_bindings_h(file, b):
     """Generate header for the verify subpaths functions."""
-
     verify_protos = []
     fn_prefixes = ["_subpath", "_dpad_path", "_dpad_emulator"]
+
     for profile in b.profiles:
         for fn_suffix in fn_prefixes:
-            verify_protos += [
+            verify_protos.extend([
                 'bool',
                 f'oxr_verify_{profile.validation_func_name}{fn_suffix}(const struct oxr_extension_status *extensions, XrVersion openxr_major_minor, const char *str, size_t length);',
                 '',
-            ]
-        verify_protos += [
+            ])
+        verify_protos.extend([
             'void',
             f'oxr_verify_{profile.validation_func_name}_ext(const struct oxr_extension_status *extensions, XrVersion openxr_version, bool *out_supported, bool *out_enabled);',
             '',
-        ]
+        ])
+
+    filled = H_TEMPLATE.substitute(
+        header=header.format(brief='Generated bindings data', group='oxr_main'),
+        template_count=len(b.profiles),
+        verify_protos='\n'.join(verify_protos)
+    )
 
     with open(file, "w") as f:
-        filled = H_TEMPLATE.substitute(
-            header = header.format(brief='Generated bindings data', group='oxr_main'),
-            template_count=len(b.profiles),
-            verify_protos='\n'.join(verify_protos)
-        )
         f.write(filled)
 
 
