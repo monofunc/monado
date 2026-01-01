@@ -257,6 +257,8 @@ if(XRT_BUILD_DRIVER_RIFT)
 		rift/rift_driver.c
 		rift/rift_distortion.c
 		rift/rift_prober.c
+		rift/rift_usb.c
+		rift/rift_usb.h
 		)
 	target_include_directories(drv_rift SYSTEM PRIVATE)
 	target_link_libraries(
