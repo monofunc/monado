@@ -19,6 +19,8 @@ extern "C" {
 #endif
 
 
+struct rift_hmd;
+
 enum rift_variant
 {
 	RIFT_VARIANT_DK1,
@@ -48,8 +50,13 @@ rift_found(struct xrt_prober *xp,
            cJSON *attached_data,
            struct xrt_device **out_xdev);
 
-struct rift_hmd *
-rift_hmd_create(struct os_hid_device *dev, enum rift_variant variant, char *device_name, char *serial_number);
+int
+rift_devices_create(struct os_hid_device *dev,
+                    enum rift_variant variant,
+                    char *device_name,
+                    char *serial_number,
+                    struct rift_hmd **out_hmd,
+                    struct xrt_device **out_xdevs);
 
 /*!
  * @dir drivers/rift

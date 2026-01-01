@@ -488,8 +488,13 @@ rift_hmd_get_visibility_mask(struct xrt_device *xdev,
 	return XRT_SUCCESS;
 }
 
-struct rift_hmd *
-rift_hmd_create(struct os_hid_device *dev, enum rift_variant variant, char *device_name, char *serial_number)
+int
+rift_devices_create(struct os_hid_device *dev,
+                    enum rift_variant variant,
+                    char *device_name,
+                    char *serial_number,
+                    struct rift_hmd **out_hmd,
+                    struct xrt_device **out_xdevs)
 {
 	int result;
 
@@ -721,8 +726,11 @@ rift_hmd_create(struct os_hid_device *dev, enum rift_variant variant, char *devi
 	u_var_add_f32(hmd, &hmd->extra_display_info.icd, "ICD");
 	m_imu_3dof_add_vars(&hmd->fusion, hmd, "3dof_");
 
-	return hmd;
+	*out_hmd = hmd;
+	*out_xdevs = &hmd->base;
+
+	return 1;
 error:
 	rift_hmd_destroy(&hmd->base);
-	return NULL;
+	return -1;
 }

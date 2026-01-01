@@ -21,7 +21,7 @@ rift_found(struct xrt_prober *xp,
            size_t device_count,
            size_t index,
            cJSON *attached_data,
-           struct xrt_device **out_xdev)
+           struct xrt_device **out_xdevs)
 {
 	struct xrt_prober_device *dev = devices[index];
 
@@ -73,11 +73,11 @@ rift_found(struct xrt_prober *xp,
 		return -1;
 	}
 
-	struct rift_hmd *hd = rift_hmd_create(hid, variant, (char *)product, (char *)serial_number);
-	if (hd == NULL) {
+	struct rift_hmd *hd = NULL;
+	int created_devices = rift_devices_create(hid, variant, (char *)product, (char *)serial_number, &hd, out_xdevs);
+	if (created_devices < 0) {
 		return -1;
 	}
-	*out_xdev = &hd->base;
 
-	return 1;
+	return created_devices;
 }
