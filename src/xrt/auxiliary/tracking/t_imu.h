@@ -175,6 +175,13 @@ imu_fusion_get_prediction_rotation_vec(struct imu_fusion const *fusion,
                                        uint64_t timestamp_ns,
                                        struct xrt_vec3 *out_rotation_vec);
 
+/*!
+ * Normalize internal state.
+ *
+ * @param fusion The IMU Fusion object
+ */
+void
+imu_fusion_post_correct(struct imu_fusion *fusion);
 
 #ifdef __cplusplus
 }

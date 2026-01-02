@@ -192,3 +192,9 @@ imu_fusion_incorporate_gyros_and_accelerometer(struct imu_fusion *fusion,
 		return -1;
 	}
 }
+
+void
+imu_fusion_post_correct(struct imu_fusion *fusion)
+{
+	fusion->simple_fusion.postCorrect();
+}
