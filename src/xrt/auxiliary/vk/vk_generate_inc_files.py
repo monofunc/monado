@@ -460,33 +460,17 @@ def generate_ext_members(exts):
 
 
 def generate_ext_check(exts):
-    yield "\t// Reset before filling out."
-
-    for ext in exts:
-        yield "\tvk->{} = false;".format(make_ext_member_name(ext))
-
-    yield ""
-    yield "\tconst char *const *exts = u_string_list_get_data(ext_list);"
-    yield "\tuint32_t ext_count = u_string_list_get_size(ext_list);"
-    yield ""
-    yield "\tfor (uint32_t i = 0; i < ext_count; i++) {"
-    yield "\t\tconst char *ext = exts[i];"
-    yield ""
-
     conditional = ConditionalGenerator()
     for ext in exts:
         condition_line = conditional.process_condition(compute_condition((ext,)))
         if condition_line:
             yield condition_line
-        yield "\t\tif (strcmp(ext, {}) == 0) {{".format(make_ext_name_define(ext))
-        yield "\t\t\tvk->{} = true;".format(make_ext_member_name(ext))
-        yield "\t\t\tcontinue;"
-        yield "\t\t}"
+        yield "\tvk->{} = u_string_list_contains(ext_list, {});".format(
+            make_ext_member_name(ext), make_ext_name_define(ext))
     # close any trailing conditions
     condition_line = conditional.finish()
     if condition_line:
         yield condition_line
-    yield "\t}"
 
 
 def write_generated_file(output_path: str, lines: List[str]):
