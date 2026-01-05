@@ -21,6 +21,7 @@ struct silly_device
 	silly_device(bool &destroyed_) : destroyed(&destroyed_)
 	{
 		base.destroy = [](xrt_device *xdev) { delete reinterpret_cast<silly_device *>(xdev); };
+		xrt_device_init(&base);
 	}
 	~silly_device()
 	{

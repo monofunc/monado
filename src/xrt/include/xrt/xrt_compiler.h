@@ -1,9 +1,10 @@
-// Copyright 2019, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Header holding common defines.
  * @author Jakob Bornecrantz <jakob@collabora.com>
+ * @author Simon Zeni <simon.zeni@collabora.com>
  * @ingroup xrt_iface
  */
 
@@ -223,4 +224,13 @@ typedef intptr_t ssize_t;
 #define XRT_C11_COMPOUND(X)
 #else
 #define XRT_C11_COMPOUND(X) (X)
+#endif
+
+/*
+ * `typeof` is standard in C23 only, it is a GNU extension prior to this version
+ */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
+#define XRT_TYPEOF(expr) typeof(expr)
+#else
+#define XRT_TYPEOF(expr) __typeof(expr)
 #endif

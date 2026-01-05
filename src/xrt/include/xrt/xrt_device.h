@@ -1,4 +1,4 @@
-// Copyright 2019-2024, Collabora, Ltd.
+// Copyright 2019-2025, Collabora, Ltd.
 // Copyright 2024-2025, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
@@ -13,9 +13,10 @@
 #pragma once
 
 #include "xrt/xrt_defines.h"
-#include "xrt/xrt_plane_detector.h"
-#include "xrt/xrt_visibility_mask.h"
 #include "xrt/xrt_limits.h"
+#include "xrt/xrt_plane_detector.h"
+#include "xrt/xrt_signal.h"
+#include "xrt/xrt_visibility_mask.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -341,6 +342,13 @@ struct xrt_device
 
 	//! What features/functions/things does this device supports?
 	struct xrt_device_supported supported;
+
+	//! Signals emitted by the device
+	struct
+	{
+		//! Emitted on xrt_device_destroy
+		struct xrt_signal destroy;
+	} events;
 
 
 	/*
@@ -741,6 +749,17 @@ struct xrt_device
 
 	// Add new functions above destroy.
 };
+
+/*!
+ * Initializes the common fields of a @ref xrt_device
+ *
+ * @public @memberof xrt_device
+ */
+static inline void
+xrt_device_init(struct xrt_device *xdev)
+{
+	xrt_signal_init(&xdev->events.destroy);
+}
 
 /*!
  * Helper function for @ref xrt_device::update_inputs.
@@ -1150,6 +1169,9 @@ xrt_device_destroy(struct xrt_device **xdev_ptr)
 	if (xdev == NULL) {
 		return;
 	}
+
+	xrt_signal_emit(&xdev->events.destroy, NULL);
+	assert(xrt_list_empty(&xdev->events.destroy.listeners));
 
 	xdev->destroy(xdev);
 	*xdev_ptr = NULL;
