@@ -1,5 +1,5 @@
 // Copyright 2019-2021, Collabora, Ltd.
-// Copyright 2024-2025, NVIDIA CORPORATION.
+// Copyright 2024-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -634,12 +634,16 @@ target_init_semaphores(struct comp_target_swapchain *cts)
  */
 
 static void
-comp_target_swapchain_create_images(struct comp_target *ct, const struct comp_target_create_images_info *create_info)
+comp_target_swapchain_create_images(struct comp_target *ct,
+                                    const struct comp_target_create_images_info *create_info,
+                                    struct vk_bundle_queue *present_queue)
 {
 	struct comp_target_swapchain *cts = (struct comp_target_swapchain *)ct;
 	struct vk_bundle *vk = get_vk(cts);
 	VkBool32 supported;
 	VkResult ret;
+
+	assert(present_queue != NULL);
 
 	int64_t now_ns = os_monotonic_get_ns();
 	// Some platforms really don't like the pacing_compositor code.
@@ -682,14 +686,18 @@ comp_target_swapchain_create_images(struct comp_target *ct, const struct comp_ta
 	// Can we create swapchains from the surface on this device and queue.
 	ret = vk->vkGetPhysicalDeviceSurfaceSupportKHR( //
 	    vk->physical_device,                        // physicalDevice
-	    vk->main_queue->family_index,               // queueFamilyIndex
+	    present_queue->family_index,                // queueFamilyIndex
 	    cts->surface.handle,                        // surface
 	    &supported);                                // pSupported
-	if (ret != VK_SUCCESS) {
-		COMP_ERROR(ct->c, "vkGetPhysicalDeviceSurfaceSupportKHR: %s", vk_result_string(ret));
-		goto error_print_and_free;
-	} else if (!supported) {
-		COMP_ERROR(ct->c, "vkGetPhysicalDeviceSurfaceSupportKHR: Surface not supported!");
+	VK_CHK_WITH_GOTO(ret, "vkGetPhysicalDeviceSurfaceSupportKHR", error_print_and_free);
+	if (!supported) {
+		/*
+		 * As the code is written now this won't actually fail in this
+		 * function, we can happily create the images. But when trying
+		 * to present the images it will fail.
+		 */
+		COMP_ERROR(ct->c, "Queue family (index: %u) does not support this swapchain!",
+		           present_queue->family_index);
 		goto error_print_and_free;
 	}
 

@@ -1,5 +1,5 @@
 // Copyright 2019-2023, Collabora, Ltd.
-// Copyright 2024-2025, NVIDIA CORPORATION.
+// Copyright 2024-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -76,11 +76,17 @@ target_check_ready(struct comp_target *ct)
 }
 
 static void
-target_create_images(struct comp_target *ct, const struct comp_target_create_images_info *create_info)
+target_create_images(struct comp_target *ct,
+                     const struct comp_target_create_images_info *create_info,
+                     struct vk_bundle_queue *present_queue)
 {
 	struct debug_image_target *dit = (struct debug_image_target *)ct;
 	struct vk_bundle *vk = &dit->base.c->base.vk;
 	bool use_unorm = false, use_srgb = false, maybe_convert = false;
+
+	// Debug image target doesn't use the present_queue parameter, but it must not be NULL
+	assert(present_queue != NULL);
+	(void)present_queue;
 
 	// Paranoia.
 	assert(dit->has_init_vulkan);

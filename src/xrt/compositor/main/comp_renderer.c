@@ -568,7 +568,7 @@ renderer_ensure_images_and_renderings(struct comp_renderer *r, bool force_recrea
 		info.formats[info.format_count++] = r->c->settings.formats[i];
 	}
 
-	comp_target_create_images(r->c->target, &info);
+	comp_target_create_images(target, &info, r->c->base.vk.main_queue);
 
 	bool pre_rotate = false;
 	if (r->c->target->surface_transform & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||

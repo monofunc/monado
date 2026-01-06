@@ -1,5 +1,5 @@
 // Copyright 2020, Collabora, Ltd.
-// Copyright 2024-2025, NVIDIA CORPORATION.
+// Copyright 2024-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -189,9 +189,15 @@ struct comp_target
 	 * Create or recreate the image(s) of the target, for swapchain based
 	 * targets this will (re)create the swapchain.
 	 *
+	 * @param ct self
+	 * @param create_info Image creation parameters
+	 * @param present_queue The queue that will be used for presentation operations (must not be NULL)
+	 *
 	 * @pre @ref check_ready returns true
 	 */
-	void (*create_images)(struct comp_target *ct, const struct comp_target_create_images_info *create_info);
+	void (*create_images)(struct comp_target *ct,
+	                      const struct comp_target_create_images_info *create_info,
+	                      struct vk_bundle_queue *present_queue);
 
 	/*!
 	 * Has this target successfully had images created?
@@ -391,11 +397,13 @@ comp_target_check_ready(struct comp_target *ct)
  * @ingroup comp_main
  */
 static inline void
-comp_target_create_images(struct comp_target *ct, const struct comp_target_create_images_info *create_info)
+comp_target_create_images(struct comp_target *ct,
+                          const struct comp_target_create_images_info *create_info,
+                          struct vk_bundle_queue *present_queue)
 {
 	COMP_TRACE_MARKER();
 
-	ct->create_images(ct, create_info);
+	ct->create_images(ct, create_info, present_queue);
 }
 
 /*!

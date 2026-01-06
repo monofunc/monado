@@ -55,6 +55,8 @@ get_vk(struct comp_window_peek *w)
 static inline void
 create_images(struct comp_window_peek *w)
 {
+	struct vk_bundle *vk = get_vk(w);
+
 	struct comp_target_create_images_info info = {
 	    .extent = {w->width, w->height},
 	    .color_space = w->c->settings.color_space,
@@ -67,7 +69,7 @@ create_images(struct comp_window_peek *w)
 		info.formats[info.format_count++] = w->c->settings.formats[i];
 	}
 
-	comp_target_create_images(&w->base.base, &info);
+	comp_target_create_images(&w->base.base, &info, vk->main_queue);
 }
 
 static void *
