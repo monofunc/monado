@@ -200,7 +200,7 @@ public:
 	virtual ~CSVWriter() {}
 
 	void
-	push(RowType row)
+	push(const RowType &row)
 	{
 		unique_lock lock(mutex);
 

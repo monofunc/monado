@@ -852,7 +852,7 @@ steamvr_lh_create_devices(struct xrt_prober *xp, struct xrt_system_devices **out
 	U_LOG_IFL_I(level, "Found SteamVR install: %s", steamvr.c_str());
 
 	std::vector<vr::IServerTrackedDeviceProvider *> drivers = {};
-	const auto loadDriver = [&](std::string soPath, bool require) {
+	const auto loadDriver = [&](const std::string &soPath, bool require) {
 		// TODO: support windows?
 		void *driver_lib = dlopen((steamvr + soPath).c_str(), RTLD_LAZY);
 		if (!driver_lib) {
