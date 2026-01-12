@@ -801,7 +801,10 @@ oxr_session_locate_views(struct oxr_logger *log,
 
 		struct xrt_pose view_pose = poses[i];
 
-		if (sess->sys->inst->quirks.parallel_views) {
+		bool parallelize_views =
+		    sess->sys->inst->quirks.parallel_views && !math_quat_is_identity(&view_pose.orientation, 0.0001f);
+
+		if (parallelize_views) {
 			view_pose.orientation = (struct xrt_quat)XRT_QUAT_IDENTITY;
 		}
 
@@ -820,7 +823,7 @@ oxr_session_locate_views(struct oxr_logger *log,
 
 		struct xrt_fov fov = fovs[i];
 
-		if (sess->sys->inst->quirks.parallel_views) {
+		if (parallelize_views) {
 			adjust_fov(&fovs[i], &poses[i].orientation, &fov);
 		}
 
