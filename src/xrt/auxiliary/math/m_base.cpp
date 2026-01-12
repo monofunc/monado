@@ -314,6 +314,12 @@ math_quat_validate(const struct xrt_quat *quat)
 }
 
 extern "C" bool
+math_quat_is_identity(const struct xrt_quat *quat, float epsilon)
+{
+	return map_quat(*quat).isApprox(Eigen::Quaternionf::Identity(), epsilon);
+}
+
+extern "C" bool
 math_quat_validate_within_1_percent(const struct xrt_quat *quat)
 {
 	return quat_validate(0.01f, quat);

@@ -295,6 +295,15 @@ bool
 math_quat_validate(const struct xrt_quat *quat);
 
 /*!
+ * Check if this quat is (approximately) identity.
+ *
+ * @relates xrt_quat
+ * @ingroup aux_math
+ */
+bool
+math_quat_is_identity(const struct xrt_quat *quat, float epsilon);
+
+/*!
  * Check if this quat is within 1% of unit length.
  *
  * @relates xrt_quat
