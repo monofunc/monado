@@ -31,6 +31,9 @@ a_allocator_allocate(struct vk_bundle *vk,
 	// On Linux, Windows, and Android, use Vulkan allocation collection.
 	xrt_result_t xret = vk_xac_allocate(vk, xscci, image_count, out_xac);
 	XVK_CHK_ALWAYS_RET(xret, "vk_xac_allocate");
+#elif defined(XRT_OS_OSX)
+	// To not break the build on OSX for now.
+	return XRT_ERROR_ALLOCATION;
 #else
 #error "Unsupported platform"
 #endif
@@ -47,6 +50,9 @@ a_allocator_import_from_natives(struct vk_bundle *vk,
 	// Import from native images using Vulkan.
 	// This is platform-independent as it imports existing native handles.
 	return vk_xac_from_natives(vk, xscci, native_images, image_count, out_xac);
+#elif defined(XRT_OS_OSX)
+	// To not break the build on OSX for now.
+	return XRT_ERROR_ALLOCATION;
 #else
 #error "Unsupported platform"
 #endif
