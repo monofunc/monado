@@ -15,7 +15,7 @@
 #include <iostream>
 #include <vector>
 
-using namespace std;
+// using namespace std;
 
 
 class HungarianAlgorithm
@@ -23,7 +23,7 @@ class HungarianAlgorithm
 public:
 	HungarianAlgorithm();
 	~HungarianAlgorithm();
-	double Solve(vector <vector<double> >& DistMatrix, vector<int>& Assignment);
+	double Solve(std::vector <std::vector<double> >& DistMatrix, std::vector<int>& Assignment);
 
 private:
 	void assignmentoptimal(int *assignment, double *cost, double *distMatrix, int nOfRows, int nOfColumns);
@@ -61,7 +61,7 @@ HungarianAlgorithm::~HungarianAlgorithm(){}
 //********************************************************//
 // A single function wrapper for solving assignment problem.
 //********************************************************//
-double HungarianAlgorithm::Solve(vector <vector<double> >& DistMatrix, vector<int>& Assignment)
+double HungarianAlgorithm::Solve(std::vector <std::vector<double> >& DistMatrix, std::vector<int>& Assignment)
 {
 	unsigned int nRows = DistMatrix.size();
 	unsigned int nCols = DistMatrix[0].size();
@@ -115,7 +115,7 @@ void HungarianAlgorithm::assignmentoptimal(int *assignment, double *cost, double
 	{
 		value = distMatrixIn[row];
 		if (value < 0)
-			cerr << "All matrix elements have to be non-negative." << endl;
+			std::cerr << "All matrix elements have to be non-negative." << std::endl;
 		distMatrix[row] = value;
 	}
 
