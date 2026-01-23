@@ -1043,15 +1043,15 @@ _create_hmd_device(struct survive_system *sys, const struct SurviveSimpleObject 
 	u_var_add_bool(survive, &survive->hmd.use_default_ipd, "Use default IPD");
 	u_var_add_f32(survive, &survive->hmd.ipd, "IPD");
 
+	u_var_add_f32(survive, &survive->base.hmd->distortion.fov[0].angle_up, "View 0 FovAngleUp");
 	u_var_add_f32(survive, &survive->base.hmd->distortion.fov[0].angle_down, "View 0 FovAngleDown");
 	u_var_add_f32(survive, &survive->base.hmd->distortion.fov[0].angle_left, "View 0 FovAngleLeft");
 	u_var_add_f32(survive, &survive->base.hmd->distortion.fov[0].angle_right, "View 0 FovAngleRight");
-	u_var_add_f32(survive, &survive->base.hmd->distortion.fov[0].angle_up, "View 0 FovAngleUp");
 
+	u_var_add_f32(survive, &survive->base.hmd->distortion.fov[1].angle_up, "View 1 FovAngleUp");
 	u_var_add_f32(survive, &survive->base.hmd->distortion.fov[1].angle_down, "View 1 FovAngleDown");
 	u_var_add_f32(survive, &survive->base.hmd->distortion.fov[1].angle_left, "View 1 FovAngleLeft");
 	u_var_add_f32(survive, &survive->base.hmd->distortion.fov[1].angle_right, "View 1 FovAngleRight");
-	u_var_add_f32(survive, &survive->base.hmd->distortion.fov[1].angle_up, "View 1 FovAngleUp");
 
 	return true;
 }
