@@ -555,7 +555,7 @@ lighthouse_open_system_impl(struct xrt_builder *xb,
 	}
 	case DRIVER_SURVIVE: {
 #ifdef XRT_BUILD_DRIVER_SURVIVE
-		xsysd->xdev_count += survive_get_devices(&xsysd->xdevs[xsysd->xdev_count], &lhs->hmd_config);
+		xsysd->xdev_count += survive_get_devices(xp, &xsysd->xdevs[xsysd->xdev_count], &lhs->hmd_config);
 #endif
 		break;
 	}

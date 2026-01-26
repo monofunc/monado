@@ -411,7 +411,12 @@ if(XRT_BUILD_DRIVER_HANDTRACKING)
 endif()
 
 if(XRT_BUILD_DRIVER_SURVIVE)
-	add_library(drv_survive STATIC survive/survive_driver.c survive/survive_interface.h)
+	add_library(
+		drv_survive STATIC
+		survive/survive_driver.c
+		survive/survive_interface.h
+		survive/survive_internal.h
+		)
 	target_link_libraries(
 		drv_survive
 		PRIVATE
