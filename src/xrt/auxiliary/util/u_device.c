@@ -11,6 +11,7 @@
  */
 
 #include "util/u_device.h"
+#include "util/u_debug.h"
 #include "util/u_device_ni.h"
 #include "util/u_logging.h"
 #include "util/u_misc.h"
@@ -24,6 +25,17 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <limits.h>
+
+
+/*
+ *
+ * Env variable options.
+ *
+ */
+
+DEBUG_GET_ONCE_OPTION(head_serial, "XRT_DEVICE_HEAD_SERIAL", NULL)
+DEBUG_GET_ONCE_OPTION(left_serial, "XRT_DEVICE_LEFT_SERIAL", NULL)
+DEBUG_GET_ONCE_OPTION(right_serial, "XRT_DEVICE_RIGHT_SERIAL", NULL)
 
 
 /*
@@ -385,8 +397,26 @@ u_device_assign_xdev_roles(
 	*gamepad = XRT_DEVICE_ROLE_UNASSIGNED;
 	assert(xdev_count < INT_MAX);
 
+	const char *head_serial = debug_get_option_head_serial();
+	const char *left_serial = debug_get_option_left_serial();
+	const char *right_serial = debug_get_option_right_serial();
+
 	for (size_t i = 0; i < xdev_count; i++) {
-		if (xdevs[i] == NULL) {
+		struct xrt_device *xdev = xdevs[i];
+		if (xdev == NULL) {
+			continue;
+		}
+
+		if (head_serial != NULL && (strncmp(xdev->serial, head_serial, XRT_DEVICE_NAME_LEN) == 0)) {
+			*head = (int)i;
+			continue;
+		}
+		if (left_serial != NULL && (strncmp(xdev->serial, left_serial, XRT_DEVICE_NAME_LEN) == 0)) {
+			*left = (int)i;
+			continue;
+		}
+		if (right_serial != NULL && (strncmp(xdev->serial, right_serial, XRT_DEVICE_NAME_LEN) == 0)) {
+			*right = (int)i;
 			continue;
 		}
 
