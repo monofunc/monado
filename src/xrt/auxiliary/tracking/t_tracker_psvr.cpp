@@ -824,7 +824,7 @@ solve_with_imu(TrackerPSVR &t,
 		(void)closest_index;
 
 		proximity_data_t p;
-		match_data_t measurement = measurements->at(i);
+		const match_data_t &measurement = measurements->at(i);
 
 		p.position = measurement.position;
 		p.vertex_index = measurement.vertex_index;
@@ -841,7 +841,7 @@ solve_with_imu(TrackerPSVR &t,
 
 		std::vector<match_model_t> temp_measurement_list;
 		for (uint32_t i = 0; i < proximity_data.size(); i++) {
-			proximity_data_t p = proximity_data[i];
+			const proximity_data_t &p = proximity_data[i];
 			Eigen::Vector4f model_vertex = t.model_vertices[p.vertex_index].position;
 			Eigen::Vector4f measurement_vertex = p.position;
 			Eigen::Vector4f measurement_offset = t.corrected_imu_rotation * model_vertex;
