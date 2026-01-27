@@ -148,7 +148,6 @@ Checks:       |
     -modernize-use-trailing-return-type,
     -modernize-use-transparent-functors,
     -modernize-use-using,
-    -performance-avoid-endl,
     -performance-enum-size,
     -performance-inefficient-string-concatenation,
     -performance-inefficient-vector-operation,
