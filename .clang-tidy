@@ -18,6 +18,8 @@ Checks:       |
     portability-*,
     readability-*,
 
+    -performance-no-int-to-ptr,
+
     -android-cloexec-dup,
     -android-cloexec-fopen,
     -android-cloexec-open,
