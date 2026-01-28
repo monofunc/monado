@@ -10,6 +10,8 @@
 #include "util/u_device.h"
 #include "util/u_var.h"
 
+#include "xrt/xrt_byte_order.h"
+
 #include "rift_radio.h"
 #include "rift_bindings.h"
 #include "rift_usb.h"
@@ -220,6 +222,9 @@ rift_touch_controller_create(struct rift_hmd *hmd, enum rift_radio_device_type d
 		return NULL;
 	}
 
+	controller->device_type = device_type;
+	controller->hmd = hmd;
+
 	controller->base.tracking_origin = hmd->base.tracking_origin;
 
 	strcpy(controller->base.str, "Oculus Touch (Unknown)");
@@ -291,6 +296,7 @@ rift_touch_controller_create(struct rift_hmd *hmd, enum rift_radio_device_type d
 
 	u_var_add_root(controller, "Rift Touch Controller", true);
 	u_var_add_u8(controller, &controller->input_state.buttons, "buttons");
+	u_var_add_bool(controller, &controller->radio_data.calibration_read, "Read Calibration");
 
 	return controller;
 }
@@ -301,12 +307,12 @@ rift_radio_read_device_serial_async_locked(struct rift_hmd *hmd,
                                            char serial[SERIAL_NUMBER_LENGTH],
                                            bool *serial_valid)
 {
-	// Radio is already busyk
+	// Radio is already busy
 	if (hmd->radio_state.current_command != RIFT_RADIO_COMMAND_NONE) {
 		return -EBUSY;
 	}
 
-	HMD_TRACE(hmd, "Reading serial for device type %d", device_type);
+	HMD_DEBUG(hmd, "Reading serial for device type %d", device_type);
 
 	int result = rift_send_radio_cmd(
 	    hmd, true,
@@ -325,32 +331,215 @@ rift_radio_read_device_serial_async_locked(struct rift_hmd *hmd,
 	return 0;
 }
 
+static int
+rift_radio_read_device_flash_async_locked(struct rift_hmd *hmd,
+                                          void *user_data,
+                                          enum rift_radio_device_type device_type,
+                                          uint16_t offset,
+                                          uint16_t length,
+                                          uint8_t *buffer,
+                                          flash_read_callback_t callback)
+{
+	// Radio is already busy
+	if (hmd->radio_state.current_command != RIFT_RADIO_COMMAND_NONE) {
+		return -EBUSY;
+	}
+
+	HMD_DEBUG(hmd, "Queueing flash read at %d of length %d for device %d", offset, length, device_type);
+
+	int result =
+	    rift_radio_send_data_read_cmd(hmd, &(struct rift_radio_data_read_cmd){.offset = offset, .length = length});
+	if (result < 0) {
+		HMD_ERROR(hmd, "Failed to send data read command to radio, reason %d", result);
+		return result;
+	}
+
+	result = rift_send_radio_cmd(hmd, true,
+	                             &(struct rift_radio_cmd_report){
+	                                 .a = 0x03, .b = RIFT_RADIO_READ_CMD_FLASH_CONTROL, .c = (uint8_t)device_type});
+	if (result < 0) {
+		HMD_ERROR(hmd, "Failed to send radio command report to HMD, reason %d", result);
+		return result;
+	}
+
+	hmd->radio_state.current_command = RIFT_RADIO_COMMAND_READ_FLASH;
+	hmd->radio_state.command_data.read_flash = (struct rift_radio_command_data_read_flash){
+	    .user_data = user_data,
+	    .address = offset,
+	    .length = length,
+	    .buffer = buffer,
+	    .read_callback = callback,
+	};
+
+	return 0;
+}
+
+static int
+rift_touch_controller_calibration_body_read_callback(void *user_data, uint16_t address, uint16_t length);
+
+static int
+rift_touch_controller_calibration_read_body_async_locked(struct rift_touch_controller *controller, uint16_t address)
+{
+	return rift_radio_read_device_flash_async_locked(
+	    controller->hmd, controller, controller->device_type, address + CALIBRATION_BODY_BYTE_OFFSET,
+	    MIN(controller->radio_data.calibration_body_json_length - address, CALIBRATION_BODY_BYTE_CHUNK_LENGTH),
+	    controller->radio_data.calibration_data_buffer, rift_touch_controller_calibration_body_read_callback);
+}
+
+static int
+rift_touch_controller_calibration_body_read_callback(void *user_data, uint16_t address, uint16_t length)
+{
+	int result;
+	struct rift_touch_controller *controller = user_data;
+
+	const uint8_t *chunk_buffer = controller->radio_data.calibration_data_buffer;
+
+	if (address == CALIBRATION_HEADER_BYTE_OFFSET) {
+		assert(length == CALIBRATION_HEADER_BYTE_LENGTH);
+
+		if (chunk_buffer[0] != 1 || chunk_buffer[1] != 0) {
+			HMD_ERROR(controller->hmd, "Got bad flash header");
+			return -1;
+		}
+
+		__le16 length_raw;
+		memcpy(&length_raw, chunk_buffer + 2, sizeof(length_raw));
+		HMD_DEBUG(controller->hmd, "Calibration body length: %d", length_raw);
+
+		uint16_t length = __le16_to_cpu(length_raw);
+
+		controller->radio_data.calibration_body_json = U_TYPED_ARRAY_CALLOC(uint8_t, length + 1);
+		if (controller->radio_data.calibration_body_json == NULL) {
+			HMD_ERROR(controller->hmd, "Failed to allocate calibration body JSON");
+			return -1;
+		}
+		// null terminate
+		controller->radio_data.calibration_body_json[length] = '\0';
+		controller->radio_data.calibration_body_json_length = length;
+
+		result = rift_touch_controller_calibration_read_body_async_locked(controller, 0);
+		assert(result != -EBUSY); // radio cannot be busy at this point
+		if (result < 0) {
+			return result;
+		}
+
+		return 0;
+	}
+
+	uint16_t body_offset = address - CALIBRATION_BODY_BYTE_OFFSET;
+
+	assert(body_offset + length <= controller->radio_data.calibration_body_json_length);
+	assert(length <= CALIBRATION_BODY_BYTE_CHUNK_LENGTH);
+
+	memcpy(controller->radio_data.calibration_body_json + body_offset, chunk_buffer, length);
+
+	if (body_offset + length < controller->radio_data.calibration_body_json_length) {
+		result = rift_touch_controller_calibration_read_body_async_locked(controller, body_offset + length);
+		assert(result != -EBUSY); // radio cannot be busy at this point
+		if (result < 0) {
+			return result;
+		}
+
+		return 0;
+	}
+
+	// Finished reading calibration body
+	HMD_INFO(controller->hmd, "Finished reading touch controller calibration JSON body for controller %d",
+	         controller->device_type);
+#if 0
+	printf("%s\n", controller->radio_data.calibration_body_json);
+#endif
+
+	controller->radio_data.calibration_read = true;
+
+	return 0;
+}
+
+static int
+rift_touch_controller_calibration_hash_read_callback(void *user_data, uint16_t address, uint16_t length)
+{
+	assert(address == CALIBRATION_HASH_BYTE_OFFSET);
+	if (length != CALIBRATION_HASH_BYTE_LENGTH) {
+		return -EINVAL;
+	}
+
+	struct rift_touch_controller *controller = user_data;
+
+	assert(controller->hmd->radio_state.current_command == RIFT_RADIO_COMMAND_NONE);
+
+	// @todo: load calibration JSON from disk using hash if available
+
+	int result = rift_radio_read_device_flash_async_locked(
+	    controller->hmd, controller, controller->device_type, CALIBRATION_HEADER_BYTE_OFFSET,
+	    CALIBRATION_HEADER_BYTE_LENGTH, controller->radio_data.calibration_data_buffer,
+	    rift_touch_controller_calibration_body_read_callback);
+	assert(result != -EBUSY); // radio cannot be busy at this point
+	if (result < 0) {
+		return result;
+	}
+
+	return 0;
+}
+
+static int
+rift_radio_read_touch_calibration_hash_async_locked(struct rift_hmd *hmd, struct rift_touch_controller *controller)
+{
+	int result;
+
+	result = rift_radio_read_device_flash_async_locked(
+	    hmd, controller, controller->device_type, CALIBRATION_HASH_BYTE_OFFSET, CALIBRATION_HASH_BYTE_LENGTH,
+	    controller->radio_data.calibration_hash, rift_touch_controller_calibration_hash_read_callback);
+	if (result < 0) {
+		return result;
+	}
+
+	return 0;
+}
+
 bool
 rift_radio_read_device_serial(struct rift_hmd *hmd,
                               enum rift_radio_device_type device_type,
-                              char serial[SERIAL_NUMBER_LENGTH],
+                              char *serial,
                               bool *serial_valid)
 {
-	os_thread_helper_lock(&hmd->radio_state.thread);
-
 	// Early out if read.
 	if (*serial_valid) {
-		os_thread_helper_unlock(&hmd->radio_state.thread);
 		return true;
 	}
 
 	int result = rift_radio_read_device_serial_async_locked(hmd, device_type, serial, serial_valid);
-
-	// Can now unlock.
-	os_thread_helper_unlock(&hmd->radio_state.thread);
 
 	if (result == -EBUSY) {
 		// try again later
 		return false;
 	}
 
-	if (result < 0 && result != -EBUSY) {
+	if (result < 0) {
 		HMD_ERROR(hmd, "Failed to start reading serial for device type %d, reason %d", device_type, result);
+		return false;
+	}
+
+	return true;
+}
+
+static bool
+rift_radio_read_controller_calibration(struct rift_hmd *hmd, struct rift_touch_controller *controller)
+{
+	// Early out if read.
+	if (controller->input.calibration_read) {
+		return true;
+	}
+
+	int result = rift_radio_read_touch_calibration_hash_async_locked(hmd, controller);
+
+	if (result == -EBUSY) {
+		// try again later
+		return false;
+	}
+
+	if (result < 0) {
+		HMD_ERROR(hmd, "Failed to start reading calibration hash for device type %d, reason %d",
+		          controller->device_type, result);
 		return false;
 	}
 
@@ -436,8 +625,13 @@ rift_radio_handle_read(struct rift_hmd *hmd)
 			}
 
 			if (!rift_radio_read_device_serial(hmd, message.device_type, controller->base.serial,
-			                                   &controller->serial_valid)) {
+			                                   &controller->radio_data.serial_valid)) {
 				// still waiting for serial
+				break;
+			}
+
+			if (!rift_radio_read_controller_calibration(hmd, controller)) {
+				// still waiting for calibration
 				break;
 			}
 
@@ -520,14 +714,17 @@ rift_radio_handle_command(struct rift_hmd *hmd)
 		return result;
 	}
 
-	HMD_TRACE(hmd, "Successfully received response for radio command %d", hmd->radio_state.current_command);
+	enum rift_radio_command command = hmd->radio_state.current_command;
+	hmd->radio_state.current_command = RIFT_RADIO_COMMAND_NONE;
 
-	switch (hmd->radio_state.current_command) {
+	HMD_TRACE(hmd, "Successfully received response for radio command %d", command);
+
+	switch (command) {
 	case RIFT_RADIO_COMMAND_READ_SERIAL: {
 		struct rift_radio_command_data_read_serial *data = &hmd->radio_state.command_data.read_serial;
 
 		uint8_t buf[24]; // size of data response
-		result = rift_radio_read_data(hmd, (uint8_t *)&buf, sizeof(buf));
+		result = rift_radio_read_data(hmd, (uint8_t *)&buf, sizeof(buf), false);
 		if (result < 0) {
 			HMD_ERROR(hmd, "Failed to read serial data from radio, reason %d", result);
 			break;
@@ -542,10 +739,26 @@ rift_radio_handle_command(struct rift_hmd *hmd)
 
 		break;
 	}
+	case RIFT_RADIO_COMMAND_READ_FLASH: {
+		struct rift_radio_command_data_read_flash *data = &hmd->radio_state.command_data.read_flash;
+
+		result = rift_radio_read_data(hmd, data->buffer, data->length, true);
+		if (result < 0) {
+			HMD_ERROR(hmd, "Failed to read flash data from radio, reason %d", result);
+			break;
+		}
+
+		// call user callback
+		result = data->read_callback(data->user_data, data->address, data->length);
+		if (result < 0) {
+			HMD_ERROR(hmd, "Flash read callback returned error %d", result);
+			break;
+		}
+
+		break;
+	}
 	default: break;
 	}
-
-	hmd->radio_state.current_command = RIFT_RADIO_COMMAND_NONE;
 
 	return 0;
 }

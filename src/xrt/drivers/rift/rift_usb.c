@@ -7,9 +7,11 @@
  * @ingroup drv_rift
  */
 
-#include <errno.h>
+#include "xrt/xrt_byte_order.h"
 
 #include "rift_usb.h"
+
+#include <errno.h>
 
 
 /*
@@ -227,6 +229,12 @@ rift_send_radio_cmd(struct rift_hmd *hmd, bool radio_hid, struct rift_radio_cmd_
 }
 
 int
+rift_radio_send_data_read_cmd(struct rift_hmd *hmd, struct rift_radio_data_read_cmd *cmd)
+{
+	return rift_send_report(hmd, true, FEATURE_REPORT_RADIO_READ_DATA_CMD, cmd, sizeof(*cmd));
+}
+
+int
 rift_get_radio_cmd_response(struct rift_hmd *hmd, bool wait, bool radio_hid)
 {
 	unsigned char buffer[REPORT_MAX_SIZE] = {0};
@@ -293,7 +301,7 @@ rift_get_radio_address(struct rift_hmd *hmd, uint8_t out_address[])
 }
 
 int
-rift_radio_read_data(struct rift_hmd *hmd, uint8_t *data, uint16_t length)
+rift_radio_read_data(struct rift_hmd *hmd, uint8_t *data, uint16_t length, bool flash_read)
 {
 	int result;
 	uint8_t buffer[REPORT_MAX_SIZE] = {0};
@@ -304,12 +312,22 @@ rift_radio_read_data(struct rift_hmd *hmd, uint8_t *data, uint16_t length)
 		return result;
 	}
 
-	if ((result - 7) != length) {
-		HMD_ERROR(hmd, "Rift sent bad length, probably corrupted packet..");
-		return -1;
+	struct rift_radio_flash_read_response_header flash_read_header;
+
+	if (flash_read) {
+		memcpy(&flash_read_header, buffer, sizeof(flash_read_header));
+		uint16_t expected_length = __le16_to_cpu(flash_read_header.data_length);
+
+		if (expected_length != length) {
+			HMD_ERROR(hmd, "Rift sent bad length, probably corrupted packet.. expected %d, got %d", length,
+			          (uint16_t)expected_length);
+			return -1;
+		}
 	}
 
-	memcpy(data, buffer + 7, MIN(length, (size_t)(result - 7)));
+	// @note: The header *contents* seem to be different for different types of reads, but the size is always the
+	//        same, since we only care about the flash read header, we can just always use that var.
+	memcpy(data, buffer + sizeof(flash_read_header), length);
 
 	return 0;
 }

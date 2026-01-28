@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "xrt/xrt_byte_order.h"
+
 #include "util/u_device.h"
 #include "util/u_logging.h"
 
@@ -39,6 +41,15 @@
 #define IMU_SAMPLE_RATE (1000)      // 1000hz
 #define NS_PER_SAMPLE (1000 * 1000) // 1ms (1,000,000 ns) per sample
 #define SERIAL_NUMBER_LENGTH 14
+
+#define CALIBRATION_HASH_BYTE_OFFSET 0x1bf0
+#define CALIBRATION_HASH_BYTE_LENGTH 0x10
+
+#define CALIBRATION_HEADER_BYTE_OFFSET 0x0
+#define CALIBRATION_HEADER_BYTE_LENGTH 0x4
+
+#define CALIBRATION_BODY_BYTE_OFFSET 0x4
+#define CALIBRATION_BODY_BYTE_CHUNK_LENGTH 0x14
 
 #define MICROMETERS_TO_METERS(microns) ((float)microns / 1000000.0f)
 
@@ -375,6 +386,23 @@ struct rift_radio_cmd_report
 
 SIZE_ASSERT(struct rift_radio_cmd_report, 5);
 
+struct rift_radio_data_read_cmd
+{
+	uint16_t command_id;
+	uint16_t offset;
+	uint16_t length;
+	uint8_t unk[28];
+};
+
+SIZE_ASSERT(struct rift_radio_data_read_cmd, 34);
+
+struct rift_radio_flash_read_response_header
+{
+	uint8_t unk[5];
+	__le16 data_length;
+};
+SIZE_ASSERT(struct rift_radio_flash_read_response_header, 7);
+
 struct rift_radio_address_radio_report
 {
 	uint16_t command_id;
@@ -576,13 +604,29 @@ struct rift_touch_controller
 {
 	struct xrt_device base;
 
+	struct rift_hmd *hmd;
+
+	enum rift_radio_device_type device_type;
+
 	bool input_mutex_created;
 	struct os_mutex input_mutex;
 
 	struct rift_touch_controller_input_state input_state;
 
 	//! Locked by radio_state.thread
-	bool serial_valid;
+	struct
+	{
+		bool serial_valid;
+
+		uint8_t calibration_hash[CALIBRATION_HASH_BYTE_LENGTH];
+
+		uint8_t calibration_data_buffer[CALIBRATION_BODY_BYTE_CHUNK_LENGTH];
+
+		uint8_t *calibration_body_json;
+		uint16_t calibration_body_json_length;
+
+		bool calibration_read;
+	} radio_data;
 };
 
 enum rift_remote_inputs
@@ -619,6 +663,7 @@ enum rift_radio_command
 {
 	RIFT_RADIO_COMMAND_NONE = 0,
 	RIFT_RADIO_COMMAND_READ_SERIAL,
+	RIFT_RADIO_COMMAND_READ_FLASH,
 };
 
 struct rift_radio_command_data_read_serial
@@ -629,8 +674,23 @@ struct rift_radio_command_data_read_serial
 	bool *serial_valid;
 };
 
+typedef int (*flash_read_callback_t)(void *user_data, uint16_t address, uint16_t length);
+
+struct rift_radio_command_data_read_flash
+{
+	void *user_data;
+
+	uint16_t address;
+	uint16_t length;
+
+	uint8_t *buffer;
+
+	flash_read_callback_t read_callback;
+};
+
 union rift_radio_command_data {
 	struct rift_radio_command_data_read_serial read_serial;
+	struct rift_radio_command_data_read_flash read_flash;
 };
 
 /*!
