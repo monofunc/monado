@@ -142,10 +142,10 @@ target_create_images(struct comp_target *ct, const struct comp_target_create_ima
 	for (uint32_t i = 0; i < COMP_SCRATCH_NUM_IMAGES; i++) {
 		dit->images[i].handle = dit->target.images[i].image;
 		if (use_unorm) {
-			dit->images[i].view = dit->target.images[i].unorm_view;
+			dit->images[i].views[0] = dit->target.images[i].unorm_view;
 		}
 		if (use_srgb) {
-			dit->images[i].view = dit->target.images[i].srgb_view;
+			dit->images[i].views[0] = dit->target.images[i].srgb_view;
 		}
 	}
 

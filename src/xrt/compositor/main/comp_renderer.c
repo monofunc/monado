@@ -382,15 +382,18 @@ renderer_build_rendering_target_resources(struct comp_renderer *r,
 
 	struct comp_compositor *c = r->c;
 
-	VkImageView image_view = r->c->target->images[index].view;
-	VkExtent2D extent = {r->c->target->width, r->c->target->height};
+	for (int i = 0; i < 2; ++i) {
+		VkImageView image_view = r->c->target->images[index].views[i];
+		VkExtent2D extent = {r->c->target->width, r->c->target->height};
 
-	render_gfx_target_resources_init( //
-	    rtr,                          //
-	    &c->nr,                       //
-	    &r->target_render_pass,       //
-	    image_view,                   //
-	    extent);                      //
+		render_gfx_target_resources_init( //
+		    rtr,                          //
+		    &c->nr,                       //
+		    &r->target_render_pass,       //
+		    image_view,                   //
+		    extent,
+		    i); //
+	}
 }
 
 /*!
@@ -1005,7 +1008,7 @@ dispatch_compute(struct comp_renderer *r,
 
 	// Target Vulkan resources..
 	VkImage target_image = r->c->target->images[r->acquired_buffer].handle;
-	VkImageView target_storage_view = r->c->target->images[r->acquired_buffer].view;
+	VkImageView target_storage_view = r->c->target->images[r->acquired_buffer].views[0];
 
 	// Target view information.
 	struct render_viewport_data target_viewport_datas[XRT_MAX_VIEWS];
