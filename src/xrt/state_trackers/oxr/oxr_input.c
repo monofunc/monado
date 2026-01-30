@@ -1870,14 +1870,11 @@ oxr_session_attach_action_sets(struct oxr_logger *log,
 		}
 	}
 
-#define POPULATE_PROFILE(X)                                                                                            \
-	sess->X = XR_NULL_PATH;                                                                                        \
-	if (profiles.X != NULL) {                                                                                      \
-		sess->X = profiles.X->path;                                                                            \
-		oxr_event_push_XrEventDataInteractionProfileChanged(log, sess);                                        \
-	}
-	OXR_FOR_EACH_VALID_SUBACTION_PATH(POPULATE_PROFILE)
-#undef POPULATE_PROFILE
+	/*
+	 * We used to send XrEventDataInteractionProfileChanged here, but that's
+	 * wrong. The OpenXR spec says we should only send them after a
+	 * successful call to xrSyncActionData.
+	 */
 
 	os_mutex_lock(&sess->sync_actions_mutex);
 	// Update the ID to not have to run bindings again on the next xrSyncActions.
