@@ -9,6 +9,7 @@
 
 #include "util/u_device.h"
 #include "util/u_var.h"
+#include "util/u_file.h"
 
 #include "xrt/xrt_byte_order.h"
 
@@ -304,6 +305,7 @@ rift_touch_controller_create(struct rift_hmd *hmd, enum rift_radio_device_type d
 
 	u_var_add_root(controller, "Rift Touch Controller", true);
 	u_var_add_u8(controller, &controller->input.state.buttons, "buttons");
+	u_var_add_ro_u32(controller, &controller->input.device_local_us, "Device Local Timestamp");
 	u_var_add_bool(controller, &controller->input.calibration_read, "Read Calibration");
 
 	return controller;
@@ -394,6 +396,16 @@ rift_touch_controller_calibration_read_body_async_locked(struct rift_touch_contr
 	    controller->radio_data.calibration_data_buffer, rift_touch_controller_calibration_body_read_callback);
 }
 
+// strlen("touchXX_.cal") + NULL == 13
+#define RIFT_TOUCH_CONTROLLER_CALIBRATION_FILENAME_MAX_LEN (XRT_DEVICE_NAME_LEN + 13)
+
+static void
+rift_touch_controller_get_calibration_filename(struct rift_touch_controller *controller, char *out_filename)
+{
+	snprintf(out_filename, RIFT_TOUCH_CONTROLLER_CALIBRATION_FILENAME_MAX_LEN, "touch%d_%s.cal",
+	         controller->device_type, controller->base.serial);
+}
+
 static int
 rift_touch_controller_calibration_body_read_callback(void *user_data, uint16_t address, uint16_t length)
 {
@@ -470,6 +482,38 @@ rift_touch_controller_calibration_body_read_callback(void *user_data, uint16_t a
 	controller->input.calibration_read = true;
 	os_mutex_unlock(&controller->input.mutex);
 
+	char calibration_filename[RIFT_TOUCH_CONTROLLER_CALIBRATION_FILENAME_MAX_LEN];
+	rift_touch_controller_get_calibration_filename(controller, calibration_filename);
+
+	FILE *calibration_file = u_file_open_file_in_config_dir_subpath(RIFT_CONFIG_SUBDIR, calibration_filename, "wb");
+	if (calibration_file == NULL) {
+		HMD_ERROR(controller->hmd, "Failed to open calibration file for writing");
+		return 0;
+	}
+
+	if (fwrite(controller->radio_data.calibration_hash, 1, CALIBRATION_HASH_BYTE_LENGTH, calibration_file) !=
+	    CALIBRATION_HASH_BYTE_LENGTH) {
+		HMD_ERROR(controller->hmd, "Failed to write calibration hash to file");
+		fclose(calibration_file);
+		return 0;
+	}
+
+	size_t to_write = controller->radio_data.calibration_body_json_length;
+	while (to_write > 0) {
+		size_t written = fwrite(controller->radio_data.calibration_body_json +
+		                            controller->radio_data.calibration_body_json_length - to_write,
+		                        1, to_write, calibration_file);
+		if (written == 0) {
+			HMD_ERROR(controller->hmd, "Failed to write calibration body to file");
+			fclose(calibration_file);
+			return 0;
+		}
+		to_write -= written;
+	}
+	fclose(calibration_file);
+
+	HMD_DEBUG(controller->hmd, "Wrote calibration data to %s", calibration_filename);
+
 	return 0;
 }
 
@@ -485,7 +529,41 @@ rift_touch_controller_calibration_hash_read_callback(void *user_data, uint16_t a
 
 	assert(controller->hmd->radio_state.current_command == RIFT_RADIO_COMMAND_NONE);
 
-	// @todo: load calibration JSON from disk using hash if available
+	char calibration_filename[RIFT_TOUCH_CONTROLLER_CALIBRATION_FILENAME_MAX_LEN];
+	rift_touch_controller_get_calibration_filename(controller, calibration_filename);
+
+	FILE *calibration_file = u_file_open_file_in_config_dir_subpath(RIFT_CONFIG_SUBDIR, calibration_filename, "r");
+	if (calibration_file != NULL) {
+		size_t file_size;
+		char *calibration_data = u_file_read_content(calibration_file, &file_size);
+		fclose(calibration_file);
+
+		if (memcmp(calibration_data, controller->radio_data.calibration_hash, CALIBRATION_HASH_BYTE_LENGTH) ==
+		    0) {
+			HMD_INFO(controller->hmd,
+			         "Calibration hash matches cached file for controller %d, loading from disk",
+			         controller->device_type);
+			if (rift_touch_calibration_parse(calibration_data + CALIBRATION_HASH_BYTE_LENGTH,
+			                                 file_size - CALIBRATION_HASH_BYTE_LENGTH,
+			                                 &controller->input.calibration)) {
+				controller->input.calibration_read = true;
+				free(calibration_data);
+				return 0;
+			} else {
+				HMD_ERROR(controller->hmd,
+				          "Failed to parse touch controller calibration JSON from disk, reading from "
+				          "device flash");
+				free(calibration_data);
+				// fall through to reading from device flash
+			}
+		} else {
+			HMD_INFO(
+			    controller->hmd,
+			    "Calibration hash does not match cached file for controller %d, reading from device flash",
+			    controller->device_type);
+			free(calibration_data);
+		}
+	}
 
 	int result = rift_radio_read_device_flash_async_locked(
 	    controller->hmd, controller, controller->device_type, CALIBRATION_HEADER_BYTE_OFFSET,
