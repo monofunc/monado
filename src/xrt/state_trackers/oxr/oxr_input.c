@@ -1824,17 +1824,6 @@ oxr_session_attach_action_sets(struct oxr_logger *log,
 	struct oxr_instance *inst = sess->sys->inst;
 	oxr_clone_profiles_to_session(log, inst, sess);
 
-	struct oxr_roles roles = XRT_STRUCT_INIT;
-	XrResult result = oxr_roles_init_on_stack(log, &roles, sess->sys);
-	if (result != XR_SUCCESS) {
-		return result;
-	}
-
-	struct oxr_profiles_per_subaction profiles = {0};
-#define FIND_PROFILE(X) oxr_find_profile_for_device(log, sess, GET_XDEV_BY_ROLE(&roles, X), &profiles.X);
-	OXR_FOR_EACH_VALID_SUBACTION_PATH(FIND_PROFILE)
-#undef FIND_PROFILE
-
 	// Allocate room for list. No need to check if anything has been
 	// attached the API function does that.
 	sess->action_set_attachment_count = bindInfo->countActionSets;
@@ -1865,7 +1854,6 @@ oxr_session_attach_action_sets(struct oxr_logger *log,
 
 			struct oxr_action_attachment *act_attached = &act_set_attached->act_attachments[child_index];
 			oxr_action_attachment_init(log, act_set_attached, act_attached, act);
-			oxr_action_attachment_bind(log, act_attached, &roles, &profiles);
 			++child_index;
 		}
 	}
@@ -1875,11 +1863,6 @@ oxr_session_attach_action_sets(struct oxr_logger *log,
 	 * wrong. The OpenXR spec says we should only send them after a
 	 * successful call to xrSyncActionData.
 	 */
-
-	os_mutex_lock(&sess->sync_actions_mutex);
-	// Update the ID to not have to run bindings again on the next xrSyncActions.
-	sess->dynamic_roles_generation_id = roles.roles.generation_id;
-	os_mutex_unlock(&sess->sync_actions_mutex);
 
 	return oxr_session_success_result(sess);
 }
