@@ -17,6 +17,7 @@
 #include "math/m_imu_3dof.h"
 #include "math/m_api.h"
 #include "math/m_mathinclude.h"
+#include "math/m_clock_tracking.h"
 
 #include "os/os_hid.h"
 #include "os/os_threading.h"
@@ -449,6 +450,20 @@ enum rift_radio_report_touch_buttons
 	RIFT_TOUCH_CONTROLLER_BUTTON_STICK = 0x08,
 };
 
+enum rift_radio_report_adc_channel
+{
+	RIFT_TOUCH_CONTROLLER_ADC_STICK = 0x01,
+	RIFT_TOUCH_CONTROLLER_ADC_B_Y = 0x02,
+	RIFT_TOUCH_CONTROLLER_ADC_TRIGGER = 0x03,
+	RIFT_TOUCH_CONTROLLER_ADC_A_X = 0x04,
+	RIFT_TOUCH_CONTROLLER_ADC_THUMBREST = 0x08,
+	// seen with values varying per controller, maybe power draw? temperature? my left controller while powered on
+	// had the value slowly rise from 2800 to 3000 over the span of a couple minutes, dunno what that could be tbh
+	RIFT_TOUCH_CONTROLLER_ADC_UNK1 = 0x20,
+	RIFT_TOUCH_CONTROLLER_ADC_BATTERY = 0x21,
+	RIFT_TOUCH_CONTROLLER_ADC_HAPTIC_COUNTER = 0x23,
+};
+
 struct rift_radio_report_touch_message
 {
 	uint32_t timestamp;
@@ -627,7 +642,7 @@ struct rift_touch_controller_input_state
 	uint8_t buttons;
 	float trigger;
 	float grip;
-	float stick[2];
+	struct xrt_vec2 stick;
 	uint8_t haptic_counter;
 	float cap_stick;
 	float cap_b_y;
@@ -656,10 +671,17 @@ struct rift_touch_controller
 
 		struct rift_touch_controller_input_state state;
 
+		xrt_atomic_s32_t battery_status;
+
+		uint32_t last_device_remote_us;
+		timepoint_ns device_remote_ns;
+		timepoint_ns device_local_ns;
+
+		struct m_clock_windowed_skew_tracker *clock_tracker;
+
 		bool calibration_read;
 		struct rift_touch_controller_calibration calibration;
 	} input;
-
 
 	//! Locked by radio_state.thread
 	struct
@@ -848,6 +870,23 @@ rift_radio_touch_index_to_device_type(size_t index)
 	}
 
 	return (enum rift_radio_device_type)0;
+}
+
+static inline float
+rift_min_mid_max_cap(struct rift_touch_controller_calibration *calibration, size_t index, float value)
+{
+	return (value - calibration->cap_sense_min[index]) /
+	       (calibration->cap_sense_touch[index] - calibration->cap_sense_min[index]);
+}
+
+static inline float
+rift_min_mid_max_range_to_float(uint16_t range[3], uint16_t value)
+{
+	if (value < range[1]) {
+		return 1.0f - ((float)value - range[0]) / (range[1] - range[0]) * 0.5f;
+	} else {
+		return 0.5f - ((float)value - range[1]) / (range[2] - range[1]) * 0.5f;
+	}
 }
 
 bool

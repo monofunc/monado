@@ -68,6 +68,10 @@ rift_touch_controller_destroy(struct xrt_device *xdev)
 		free(controller->input.calibration.leds);
 	}
 
+	if (controller->input.clock_tracker) {
+		m_clock_windowed_skew_tracker_destroy(controller->input.clock_tracker);
+	}
+
 	u_device_free(&controller->base);
 }
 
@@ -80,42 +84,64 @@ rift_touch_controller_update_inputs(struct xrt_device *xdev)
 	struct rift_touch_controller_input_state input_state = controller->input.state;
 	os_mutex_unlock(&controller->input.mutex);
 
-	uint64_t now = os_monotonic_get_ns();
+	uint64_t update_ns = controller->input.device_local_ns;
 
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_A_CLICK,
 	                  (union xrt_input_value){.boolean = input_state.buttons & RIFT_TOUCH_CONTROLLER_BUTTON_A},
-	                  now);
+	                  update_ns);
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_B_CLICK,
 	                  (union xrt_input_value){.boolean = input_state.buttons & RIFT_TOUCH_CONTROLLER_BUTTON_B},
-	                  now);
+	                  update_ns);
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_SYSTEM_CLICK,
 	                  (union xrt_input_value){.boolean = input_state.buttons & RIFT_TOUCH_CONTROLLER_BUTTON_MENU},
-	                  now);
+	                  update_ns);
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_THUMBSTICK_CLICK,
 	                  (union xrt_input_value){.boolean = input_state.buttons & RIFT_TOUCH_CONTROLLER_BUTTON_STICK},
-	                  now);
+	                  update_ns);
 
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_THUMBSTICK,
-	                  (union xrt_input_value){.vec2 = {CLAMP(input_state.stick[0], -1.0f, 1.0f),
-	                                                   CLAMP(input_state.stick[1], -1.0f, 1.0f)}},
-	                  now);
+	                  (union xrt_input_value){.vec2 = {CLAMP(input_state.stick.x, -1.0f, 1.0f),
+	                                                   CLAMP(input_state.stick.y, -1.0f, 1.0f)}},
+	                  update_ns);
 
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_TRIGGER_VALUE,
-	                  (union xrt_input_value){.vec1 = {CLAMP(input_state.trigger, 0.0f, 1.0f)}}, now);
+	                  (union xrt_input_value){.vec1 = {CLAMP(input_state.trigger, 0.0f, 1.0f)}}, update_ns);
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_SQUEEZE_VALUE,
-	                  (union xrt_input_value){.vec1 = {CLAMP(input_state.grip, 0.0f, 1.0f)}}, now);
+	                  (union xrt_input_value){.vec1 = {CLAMP(input_state.grip, 0.0f, 1.0f)}}, update_ns);
 
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_A_TOUCH,
-	                  (union xrt_input_value){.boolean = input_state.cap_a_x >= 1}, now);
+	                  (union xrt_input_value){.boolean = input_state.cap_a_x >= 1}, update_ns);
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_B_TOUCH,
-	                  (union xrt_input_value){.boolean = input_state.cap_b_y >= 1}, now);
+	                  (union xrt_input_value){.boolean = input_state.cap_b_y >= 1}, update_ns);
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_TRIGGER_TOUCH,
-	                  (union xrt_input_value){.boolean = input_state.cap_trigger >= 1}, now);
+	                  (union xrt_input_value){.boolean = input_state.cap_trigger >= 1}, update_ns);
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_THUMBSTICK_TOUCH,
-	                  (union xrt_input_value){.boolean = input_state.cap_stick >= 1}, now);
+	                  (union xrt_input_value){.boolean = input_state.cap_stick >= 1}, update_ns);
 	rift_update_input(&controller->base, RIFT_TOUCH_CONTROLLER_INPUT_THUMBREST_TOUCH,
-	                  (union xrt_input_value){.boolean = input_state.cap_thumbrest >= 1}, now);
+	                  (union xrt_input_value){.boolean = input_state.cap_thumbrest >= 1}, update_ns);
 
+	return XRT_SUCCESS;
+}
+
+static xrt_result_t
+rift_touch_controller_get_battery_status(struct xrt_device *xdev,
+                                         bool *out_present,
+                                         bool *out_charging,
+                                         float *out_charge)
+{
+	struct rift_touch_controller *controller = rift_touch_controller(xdev);
+
+	int32_t battery_status = xrt_atomic_s32_load(&controller->input.battery_status);
+
+	*out_charging = false;
+
+	if (battery_status == -1) {
+		*out_present = false;
+		return XRT_SUCCESS;
+	}
+
+	*out_present = true;
+	*out_charge = (float)battery_status / 100.0f;
 
 	return XRT_SUCCESS;
 }
@@ -291,6 +317,9 @@ rift_touch_controller_create(struct rift_hmd *hmd, enum rift_radio_device_type d
 	u_device_populate_function_pointers(&controller->base, rift_touch_controller_get_tracked_pose,
 	                                    rift_touch_controller_destroy);
 	controller->base.update_inputs = rift_touch_controller_update_inputs;
+	controller->base.get_battery_status = rift_touch_controller_get_battery_status;
+
+	controller->base.supported.battery_status = true;
 
 	controller->base.binding_profile_count = touch_profile_bindings_count;
 	controller->base.binding_profiles = touch_profile_bindings;
@@ -298,15 +327,41 @@ rift_touch_controller_create(struct rift_hmd *hmd, enum rift_radio_device_type d
 	result = os_mutex_init(&controller->input.mutex);
 	if (result < 0) {
 		HMD_ERROR(hmd, "Failed to init touch controller input mutex");
-		u_device_free(&controller->base);
+		rift_touch_controller_destroy(&controller->base);
 		return NULL;
 	}
 	controller->input.mutex_created = true;
 
+	controller->input.clock_tracker = m_clock_windowed_skew_tracker_alloc(64);
+	if (controller->input.clock_tracker == NULL) {
+		HMD_ERROR(hmd, "Failed to allocate touch controller clock tracker");
+		rift_touch_controller_destroy(&controller->base);
+		return NULL;
+	}
+
+	// -1 means unknown battery level/no data
+	xrt_atomic_s32_store(&controller->input.battery_status, -1);
+
 	u_var_add_root(controller, "Rift Touch Controller", true);
-	u_var_add_u8(controller, &controller->input.state.buttons, "buttons");
-	u_var_add_ro_u32(controller, &controller->input.device_local_us, "Device Local Timestamp");
+	u_var_add_ro_i64_ns(controller, &controller->input.device_remote_ns, "Device Remote Timestamp");
+	u_var_add_ro_i64_ns(controller, &controller->input.device_local_ns, "Device Local Timestamp");
 	u_var_add_bool(controller, &controller->input.calibration_read, "Read Calibration");
+
+	{
+		u_var_add_gui_header(controller, NULL, "Input State");
+		u_var_add_ro_i32(controller, (int32_t *)&controller->input.battery_status, "battery_status");
+		u_var_add_u8(controller, &controller->input.state.buttons, "buttons");
+		u_var_add_f32(controller, &controller->input.state.trigger, "trigger");
+		u_var_add_f32(controller, &controller->input.state.grip, "grip");
+		u_var_add_f32(controller, &controller->input.state.stick.x, "stick.x");
+		u_var_add_f32(controller, &controller->input.state.stick.y, "stick.y");
+		u_var_add_u8(controller, &controller->input.state.haptic_counter, "haptic_counter");
+		u_var_add_f32(controller, &controller->input.state.cap_stick, "cap_stick");
+		u_var_add_f32(controller, &controller->input.state.cap_b_y, "cap_b_y");
+		u_var_add_f32(controller, &controller->input.state.cap_a_x, "cap_a_x");
+		u_var_add_f32(controller, &controller->input.state.cap_trigger, "cap_trigger");
+		u_var_add_f32(controller, &controller->input.state.cap_thumbrest, "cap_thumbrest");
+	}
 
 	return controller;
 }
@@ -652,7 +707,7 @@ rift_radio_handle_read(struct rift_hmd *hmd)
 	// 3x expected wait time (500hz, so 2ms)
 	length = os_hid_read(hmd->radio_dev, buf, sizeof(buf), 6);
 
-	// int64_t receive_ns = os_monotonic_get_ns();
+	timepoint_ns receive_ns = os_monotonic_get_ns();
 
 	if (length < 0) {
 		HMD_ERROR(hmd, "Got error reading from radio device, assuming fatal, reason %d", length);
@@ -731,8 +786,83 @@ rift_radio_handle_read(struct rift_hmd *hmd)
 				break;
 			}
 
+			struct rift_touch_controller_calibration *c = &controller->input.calibration;
+
+			uint8_t tgs[5];
+			memcpy(tgs, message.touch.touch_grip_stick_state, sizeof tgs);
+			uint16_t raw_trigger = tgs[0] | ((tgs[1] & 0x03) << 8);
+			uint16_t raw_grip = ((tgs[1] & 0xfc) >> 2) | ((tgs[2] & 0xf) << 6);
+			uint16_t raw_stick_x = ((tgs[2] & 0xf0) >> 4) | ((tgs[3] & 0x3f) << 4);
+			uint16_t raw_stick_y = ((tgs[3] & 0xc0) >> 6) | ((tgs[4] & 0xff) << 2);
+
+			float trigger = rift_min_mid_max_range_to_float(c->trigger_range, (float)raw_trigger);
+			float grip = rift_min_mid_max_range_to_float(c->middle_range, (float)raw_grip);
+
+			struct xrt_vec2 joy;
+			if (raw_stick_x >= c->joy_x_dead[0] && raw_stick_x <= c->joy_x_dead[1] &&
+			    raw_stick_y >= c->joy_y_dead[0] && raw_stick_y <= c->joy_y_dead[1]) {
+				joy.x = 0.0f;
+				joy.y = 0.0f;
+			} else {
+				joy.x = ((float)raw_stick_x - c->joy_x_range[0]) /
+				            (c->joy_x_range[1] - c->joy_x_range[0]) * 2.0f -
+				        1.0f;
+				joy.y = ((float)raw_stick_y - c->joy_y_range[0]) /
+				            (c->joy_y_range[1] - c->joy_y_range[0]) * 2.0f -
+				        1.0f;
+			}
+
+			controller->input.device_remote_ns +=
+			    (timepoint_ns)(message.touch.timestamp - controller->input.last_device_remote_us) *
+			    U_TIME_1US_IN_NS;
+			controller->input.last_device_remote_us = message.touch.timestamp;
+
 			os_mutex_lock(&controller->input.mutex);
+			m_clock_windowed_skew_tracker_push(controller->input.clock_tracker, receive_ns,
+			                                   controller->input.device_remote_ns);
+
+			if (!m_clock_windowed_skew_tracker_to_local(controller->input.clock_tracker,
+			                                            controller->input.device_remote_ns,
+			                                            &controller->input.device_local_ns)) {
+				HMD_WARN(hmd, "Failed to convert device remote time to local time");
+				os_mutex_unlock(&controller->input.mutex);
+				break;
+			}
+
 			controller->input.state.buttons = message.touch.buttons & 0x0F;
+			controller->input.state.trigger = trigger;
+			controller->input.state.grip = grip;
+			controller->input.state.stick = joy;
+
+			switch (message.touch.adc_channel) {
+			case RIFT_TOUCH_CONTROLLER_ADC_STICK:
+				controller->input.state.cap_stick =
+				    rift_min_mid_max_cap(c, 0, (float)message.touch.adc_value);
+				break;
+			case RIFT_TOUCH_CONTROLLER_ADC_A_X:
+				controller->input.state.cap_a_x =
+				    rift_min_mid_max_cap(c, 3, (float)message.touch.adc_value);
+				break;
+			case RIFT_TOUCH_CONTROLLER_ADC_B_Y:
+				controller->input.state.cap_b_y =
+				    rift_min_mid_max_cap(c, 1, (float)message.touch.adc_value);
+				break;
+			case RIFT_TOUCH_CONTROLLER_ADC_TRIGGER:
+				controller->input.state.cap_trigger =
+				    rift_min_mid_max_cap(c, 2, (float)message.touch.adc_value);
+				break;
+			case RIFT_TOUCH_CONTROLLER_ADC_THUMBREST:
+				controller->input.state.cap_thumbrest =
+				    rift_min_mid_max_cap(c, 7, (float)message.touch.adc_value);
+				break;
+			case RIFT_TOUCH_CONTROLLER_ADC_HAPTIC_COUNTER:
+				controller->input.state.haptic_counter = (uint8_t)message.touch.adc_value;
+				break;
+			case RIFT_TOUCH_CONTROLLER_ADC_BATTERY:
+				xrt_atomic_s32_store(&controller->input.battery_status, message.touch.adc_value);
+				break;
+			}
+
 			os_mutex_unlock(&controller->input.mutex);
 
 			break;
