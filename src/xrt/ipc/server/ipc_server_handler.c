@@ -2216,30 +2216,59 @@ ipc_handle_device_update_input(volatile struct ipc_client_state *ics, uint32_t i
 
 	// Used on both branches.
 	const size_t input_size = xdev->input_count * sizeof(struct xrt_input);
+	const size_t output_size = xdev->output_count * sizeof(struct xrt_output);
 
 	// Send inputs as varlen data
 	bool io_active = ics->io_active;
 	if (io_active) {
-		// Send the full input state
-		xret = ipc_send(imc, xdev->inputs, input_size);
-		IPC_CHK_AND_RET(ics->server, xret, "ipc_send(inputs)");
+		if (input_size > 0) {
+			// Send the full input state
+			xret = ipc_send(imc, xdev->inputs, input_size);
+			IPC_CHK_AND_RET(ics->server, xret, "ipc_send(inputs)");
+		}
+		if (output_size > 0) {
+			// Send the full output state
+			xret = ipc_send(imc, xdev->outputs, output_size);
+			IPC_CHK_AND_RET(ics->server, xret, "ipc_send(outputs)");
+		}
 	} else {
-		struct xrt_input filtered[1024];
-		if (ARRAY_SIZE(filtered) < xdev->input_count) {
-			return XRT_ERROR_IPC_FAILURE;
-		}
-
-		for (uint32_t i = 0; i < xdev->input_count; i++) {
-			filtered[i].name = xdev->inputs[i].name;
-
-			// Special case the rotation of the head.
-			if (filtered[i].name == XRT_INPUT_GENERIC_HEAD_POSE) {
-				filtered[i].active = xdev->inputs[i].active;
+		if (input_size > 0) {
+			struct xrt_input filtered[1024];
+			if (ARRAY_SIZE(filtered) < xdev->input_count) {
+				return XRT_ERROR_IPC_FAILURE;
 			}
-		}
 
-		xret = ipc_send(imc, filtered, input_size);
-		IPC_CHK_AND_RET(ics->server, xret, "ipc_send(filtered inputs)");
+			for (uint32_t i = 0; i < xdev->input_count; i++) {
+				struct xrt_input *dst = &filtered[i];
+				// Make sure it's zeroed out, and we only zero out what we send.
+				U_ZERO(dst);
+				dst->name = xdev->inputs[i].name;
+
+				// Special case the rotation of the head.
+				if (dst->name == XRT_INPUT_GENERIC_HEAD_POSE) {
+					dst->active = xdev->inputs[i].active;
+				}
+			}
+
+			xret = ipc_send(imc, filtered, input_size);
+			IPC_CHK_AND_RET(ics->server, xret, "ipc_send(filtered inputs)");
+		}
+		if (output_size > 0) {
+			struct xrt_output filtered[1024];
+			if (ARRAY_SIZE(filtered) < xdev->output_count) {
+				return XRT_ERROR_IPC_FAILURE;
+			}
+
+			for (uint32_t i = 0; i < xdev->output_count; i++) {
+				struct xrt_output *dst = &filtered[i];
+				// Make sure it's zeroed out, and we only zero out what we send.
+				U_ZERO(dst);
+				dst->name = xdev->outputs[i].name;
+			}
+
+			xret = ipc_send(imc, filtered, output_size);
+			IPC_CHK_AND_RET(ics->server, xret, "ipc_send(filtered outputs)");
+		}
 	}
 
 	return XRT_SUCCESS;

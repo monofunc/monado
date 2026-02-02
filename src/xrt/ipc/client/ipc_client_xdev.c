@@ -56,10 +56,17 @@ ipc_client_xdev_update_inputs(struct xrt_device *xdev)
 	xret = reply.result;
 	IPC_CHK_WITH_GOTO(ipc_c, xret, "reply.result", out_unlock);
 
-	// Receive inputs as varlen data directly into our allocated array
-	if (xdev->input_count > 0) {
-		xret = ipc_receive(&ipc_c->imc, xdev->inputs, sizeof(struct xrt_input) * xdev->input_count);
+	// Receive inputs and outputs as varlen data directly into our allocated array
+	const size_t input_size = xdev->input_count * sizeof(struct xrt_input);
+	const size_t output_size = xdev->output_count * sizeof(struct xrt_output);
+
+	if (input_size > 0) {
+		xret = ipc_receive(&ipc_c->imc, xdev->inputs, input_size);
 		IPC_CHK_WITH_GOTO(ipc_c, xret, "ipc_receive(inputs)", out_unlock);
+	}
+	if (output_size > 0) {
+		xret = ipc_receive(&ipc_c->imc, xdev->outputs, output_size);
+		IPC_CHK_WITH_GOTO(ipc_c, xret, "ipc_receive(outputs)", out_unlock);
 	}
 
 out_unlock:
