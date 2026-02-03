@@ -46,7 +46,7 @@ target_include_directories(
 	)
 target_compile_definitions(xrt-external-imgui PUBLIC CIMGUI_NO_EXPORT CIMGUI_USE_OPENGL3)
 
-if(WIN32)
+if(MSVC)
 	target_compile_options(xrt-external-imgui PRIVATE "/W0")
 	target_compile_definitions(
 		xrt-external-imgui PUBLIC "IMGUI_IMPL_API=extern\ \"C\" __declspec\(dllexport\)"
