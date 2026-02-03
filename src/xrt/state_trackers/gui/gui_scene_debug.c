@@ -700,6 +700,9 @@ on_elem(struct u_var_info *info, void *priv)
 	case U_VAR_KIND_RO_VEC2_F32: igInputFloat2(name, (float *)ptr, "%+f", ro_i_flags); break;
 	case U_VAR_KIND_RO_VEC3_I32: igInputInt3(name, (int *)ptr, ro_i_flags); break;
 	case U_VAR_KIND_RO_VEC3_F32: igInputFloat3(name, (float *)ptr, "%+f", ro_i_flags); break;
+	case U_VAR_KIND_RO_VEC3_F64:
+		igInputScalarN(name, ImGuiDataType_Double, (double *)ptr, 3, NULL, NULL, "%+f", ro_i_flags);
+		break;
 	case U_VAR_KIND_RO_QUAT_F32: igInputFloat4(name, (float *)ptr, "%+f", ro_i_flags); break;
 	case U_VAR_KIND_RO_FF_VEC3_F32: on_ff_vec3_var(info, state->p); break;
 	case U_VAR_KIND_GUI_HEADER: assert(false && "Should be handled before this"); break;
