@@ -591,6 +591,7 @@ set_active_client_locked(struct ipc_server *s, uint32_t client_id)
 
 	if (index != s->global_state.active_client_index) {
 		s->global_state.active_client_index = index;
+		update_server_state_locked(s);
 	}
 
 	return XRT_SUCCESS;
@@ -762,9 +763,6 @@ ipc_server_activate_session(volatile struct ipc_client_state *ics)
 	} else {
 		// Update active client
 		set_active_client_locked(s, ics->client_state.id);
-
-		// For new active regular sessions update all clients.
-		update_server_state_locked(s);
 	}
 
 	os_mutex_unlock(&s->global_state.lock);
