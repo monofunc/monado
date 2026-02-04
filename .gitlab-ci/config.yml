@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: CC0-1.0
-# SPDX-FileCopyrightText: 2018-2025, Collabora, Ltd. and the Monado contributors
+# SPDX-FileCopyrightText: 2018-2026, Collabora, Ltd. and the Monado contributors
 
 # Please run the following from the repo root after modifying this file:
 #   make -f .gitlab-ci/ci-scripts.mk
 
-fdo_ci_templates_sha: fb9d50ccb3cbbb4c6dc5f9ef53a0ad3cb0d8a177
+fdo_ci_templates_sha: 5cc6ded703fc990f9d055f0d948ffd4460a9ca40
 
 # These are a mapping, instead of a list/array, so we can merge.
 .default_debian_packages:

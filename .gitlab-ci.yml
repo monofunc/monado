@@ -19,7 +19,7 @@ variables:
 
 include:
   - project: "freedesktop/ci-templates"
-    ref: fb9d50ccb3cbbb4c6dc5f9ef53a0ad3cb0d8a177
+    ref: 5cc6ded703fc990f9d055f0d948ffd4460a9ca40
     file:
       - "/templates/debian.yml"
       - "/templates/ubuntu.yml"
