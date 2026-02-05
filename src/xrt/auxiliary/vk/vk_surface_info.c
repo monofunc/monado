@@ -85,11 +85,35 @@ vk_surface_info_fill_in(struct vk_bundle *vk, struct vk_surface_info *info, VkSu
 	    &info->present_modes);                //
 	VK_CHK_WITH_GOTO(ret, "vk_enumerate_surface_present_modes", error);
 
-	ret = vk->vkGetPhysicalDeviceSurfaceCapabilitiesKHR( //
-	    vk->physical_device,                             //
-	    surface,                                         //
-	    &info->caps);                                    //
-	VK_CHK_WITH_GOTO(ret, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", error);
+#if defined(VK_KHR_get_surface_capabilities2)
+	VkPhysicalDeviceSurfaceInfo2KHR surface_info = {
+	    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR,
+	    .pNext = NULL,
+	    .surface = surface,
+	};
+
+	VkSurfaceCapabilities2KHR khr_caps2 = {
+	    .sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR,
+	    .pNext = NULL,
+	};
+
+	if (vk->has_KHR_get_surface_capabilities2) {
+		ret = vk->vkGetPhysicalDeviceSurfaceCapabilities2KHR( //
+		    vk->physical_device,                              //
+		    &surface_info,                                    //
+		    &khr_caps2);                                      //
+		VK_CHK_WITH_GOTO(ret, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", error);
+		info->caps = khr_caps2.surfaceCapabilities;
+	}
+#endif
+
+	if (!vk->has_KHR_get_surface_capabilities2) {
+		ret = vk->vkGetPhysicalDeviceSurfaceCapabilitiesKHR( //
+		    vk->physical_device,                             //
+		    surface,                                         //
+		    &info->caps);                                    //
+		VK_CHK_WITH_GOTO(ret, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", error);
+	}
 
 #ifdef VK_EXT_display_surface_counter
 	if (vk->has_EXT_display_control) {
