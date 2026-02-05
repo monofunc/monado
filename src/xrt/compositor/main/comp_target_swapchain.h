@@ -75,6 +75,7 @@ struct comp_target_swapchain
 #ifdef VK_EXT_display_surface_counter
 		VkSurfaceCounterFlagsEXT surface_counter_flags;
 #endif
+		bool present_wait2;
 	} surface;
 
 	struct

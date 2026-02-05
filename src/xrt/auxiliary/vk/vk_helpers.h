@@ -865,6 +865,7 @@ struct vk_device_features
 	bool ext_fmt_resolve;
 	bool storage_buffer_8bit_access;
 	bool present_wait;
+	bool present_wait2;
 	bool video_maintenance_1;
 };
 

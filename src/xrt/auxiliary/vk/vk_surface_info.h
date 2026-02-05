@@ -36,6 +36,7 @@ struct vk_surface_info
 #ifdef VK_EXT_display_surface_counter
 	VkSurfaceCapabilities2EXT caps2;
 #endif
+	bool present_wait2;
 };
 
 

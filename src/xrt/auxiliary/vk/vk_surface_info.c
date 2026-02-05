@@ -70,6 +70,7 @@ vk_surface_info_fill_in(struct vk_bundle *vk, struct vk_surface_info *info, VkSu
 	assert(info->format_count == 0);
 	assert(info->present_modes == NULL);
 	assert(info->present_mode_count == 0);
+	assert(info->present_wait2 == false);
 
 	ret = vk_enumerate_surface_formats( //
 	    vk,                             //
@@ -97,6 +98,28 @@ vk_surface_info_fill_in(struct vk_bundle *vk, struct vk_surface_info *info, VkSu
 	    .pNext = NULL,
 	};
 
+#if defined(VK_KHR_present_id2)
+	VkSurfaceCapabilitiesPresentId2KHR present_id2 = {
+	    .sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR,
+	    .pNext = NULL,
+	};
+
+	if (vk->has_KHR_present_id2) {
+		vk_append_to_pnext_chain((VkBaseInStructure *)&khr_caps2, (VkBaseInStructure *)&present_id2);
+	}
+#endif
+
+#if defined(VK_KHR_present_wait2)
+	VkSurfaceCapabilitiesPresentWait2KHR present_wait2 = {
+	    .sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_WAIT_2_KHR,
+	    .pNext = NULL,
+	};
+
+	if (vk->has_KHR_present_wait2) {
+		vk_append_to_pnext_chain((VkBaseInStructure *)&khr_caps2, (VkBaseInStructure *)&present_wait2);
+	}
+#endif
+
 	if (vk->has_KHR_get_surface_capabilities2) {
 		ret = vk->vkGetPhysicalDeviceSurfaceCapabilities2KHR( //
 		    vk->physical_device,                              //
@@ -104,6 +127,12 @@ vk_surface_info_fill_in(struct vk_bundle *vk, struct vk_surface_info *info, VkSu
 		    &khr_caps2);                                      //
 		VK_CHK_WITH_GOTO(ret, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", error);
 		info->caps = khr_caps2.surfaceCapabilities;
+
+#if defined(VK_KHR_present_wait2)
+		if (vk->has_KHR_present_id2 && vk->has_KHR_present_wait2) {
+			info->present_wait2 = present_id2.presentId2Supported && present_wait2.presentWait2Supported;
+		}
+#endif
 	}
 #endif
 
@@ -170,6 +199,8 @@ vk_print_surface_info(struct vk_bundle *vk, struct vk_surface_info *info, enum u
 		PNTT("[format = %s, colorSpace = %s]", vk_format_string(f->format),
 		     vk_color_space_string(f->colorSpace));
 	}
+
+	PNT("present_wait2: %d", info->present_wait2);
 
 	U_LOG_IFL(log_level, vk->log_level, "%s", sink.buffer);
 }
