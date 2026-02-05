@@ -1708,7 +1708,7 @@ ipc_handle_system_toggle_io_client(volatile struct ipc_client_state *_ics, uint3
 {
 	struct ipc_server *s = _ics->server;
 
-	IPC_INFO(s, "System toggling io for client %u.", client_id);
+	IPC_DEBUG(s, "System toggling io for client %u.", client_id);
 
 	return ipc_server_toggle_io_client(s, client_id);
 }
@@ -1720,14 +1720,14 @@ ipc_handle_system_set_client_io_blocks(volatile struct ipc_client_state *_ics,
 {
 	struct ipc_server *s = _ics->server;
 
-	IPC_INFO(s,
-	         "System setting io blocks for client %u. (block_poses=%s block_hand_tracking=%s block_inputs=%s "
-	         "block_outputs=%s)",
-	         client_id,                                      //
-	         blocks->block_poses ? "true" : "false",         //
-	         blocks->block_hand_tracking ? "true" : "false", //
-	         blocks->block_inputs ? "true" : "false",        //
-	         blocks->block_outputs ? "true" : "false");
+	IPC_DEBUG(s,
+	          "System setting io blocks for client %u. (block_poses=%s block_hand_tracking=%s block_inputs=%s "
+	          "block_outputs=%s)",
+	          client_id,                                      //
+	          blocks->block_poses ? "true" : "false",         //
+	          blocks->block_hand_tracking ? "true" : "false", //
+	          blocks->block_inputs ? "true" : "false",        //
+	          blocks->block_outputs ? "true" : "false");
 
 	return ipc_server_set_client_io_blocks(s, client_id, blocks);
 }
