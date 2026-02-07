@@ -29,6 +29,7 @@
 #include "oxr_handle.h"
 #include "oxr_chain.h"
 #include "oxr_roles.h"
+#include "oxr_haptic.h"
 
 
 XRAPI_ATTR XrResult XRAPI_CALL
@@ -487,29 +488,6 @@ oxr_xrRequestDisplayRefreshRateFB(XrSession session, float displayRefreshRate)
 
 #ifdef OXR_HAVE_FB_haptic_pcm
 
-static bool
-get_action_output_pcm_sample_rate(struct oxr_session *sess, struct oxr_action_cache *cache, float *sample_rate)
-{
-	for (uint32_t i = 0; i < cache->output_count; i++) {
-		struct oxr_action_output *output = &cache->outputs[i];
-		struct xrt_device *xdev = output->xdev;
-
-		struct xrt_output_limits output_limits;
-		xrt_result_t result = xrt_device_get_output_limits(xdev, &output_limits);
-		if (result != XRT_SUCCESS) {
-			// default to something sane
-			output_limits = (struct xrt_output_limits){0};
-		}
-
-		(*sample_rate) = output_limits.haptic_pcm_sample_rate;
-		if (output_limits.haptic_pcm_sample_rate > 0) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
 XRAPI_ATTR XrResult XRAPI_CALL
 oxr_xrGetDeviceSampleRateFB(XrSession session,
                             const XrHapticActionInfo *hapticActionInfo,
@@ -549,20 +527,12 @@ oxr_xrGetDeviceSampleRateFB(XrSession session,
 		return oxr_error(&log, XR_ERROR_ACTIONSET_NOT_ATTACHED, "Action has not been attached to this session");
 	}
 
-	// find any device with a valid sample rate, and return it
-#define GET_SAMPLE_RATE(X)                                                                                             \
-	if (subaction_paths.X || subaction_paths.any) {                                                                \
-		if (get_action_output_pcm_sample_rate(sess, &act_attached->X, &deviceSampleRate->sampleRate))          \
-			return oxr_session_success_focused_result(sess);                                               \
+	ret = oxr_haptic_get_attachment_pcm_sample_rate(act_attached, subaction_paths, &deviceSampleRate->sampleRate);
+	if (ret != XR_SUCCESS) {
+		return ret;
 	}
 
-	OXR_FOR_EACH_SUBACTION_PATH(GET_SAMPLE_RATE)
-#undef GET_SAMPLE_RATE
-
-	// no devices found
-	deviceSampleRate->sampleRate = 0;
-
-	return XR_SUCCESS;
+	return oxr_session_success_focused_result(sess);
 }
 
 #endif
