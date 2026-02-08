@@ -13,6 +13,9 @@ add_library(
 	st_oxr STATIC
 	common/oxr_defines.h
 	common/oxr_forward_declarations.h
+	path/oxr_path_store.c
+	path/oxr_path_store.h
+	path/oxr_path_wrappers.h
 	oxr_api_action.c
 	oxr_api_funcs.h
 	oxr_api_instance.c
@@ -39,7 +42,6 @@ add_library(
 	oxr_logger.c
 	oxr_logger.h
 	oxr_objects.h
-	oxr_path.c
 	oxr_pretty_print.c
 	oxr_pretty_print.h
 	oxr_roles.c

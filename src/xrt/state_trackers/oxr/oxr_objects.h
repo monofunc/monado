@@ -36,6 +36,8 @@
 #include "oxr_frame_sync.h"
 #include "oxr_forward_declarations.h"
 
+#include "path/oxr_path_store.h"
+
 #if defined(XRT_HAVE_D3D11) || defined(XRT_HAVE_D3D12)
 #include <dxgi.h>
 #include <d3dcommon.h>
@@ -272,75 +274,6 @@ oxr_instance_convert_win32perfcounter_to_time(struct oxr_logger *log,
                                               XrTime *time);
 
 #endif // XR_USE_PLATFORM_WIN32
-
-/*!
- * @}
- */
-
-/*!
- *
- * @name oxr_path.c
- * @{
- *
- */
-
-/*!
- * Initialize the path system.
- * @private @memberof oxr_instance
- */
-XrResult
-oxr_path_init(struct oxr_logger *log, struct oxr_instance *inst);
-
-/*!
- * @public @memberof oxr_instance
- */
-bool
-oxr_path_is_valid(struct oxr_logger *log, struct oxr_instance *inst, XrPath path);
-
-/*!
- * @public @memberof oxr_instance
- */
-void *
-oxr_path_get_attached(struct oxr_logger *log, struct oxr_instance *inst, XrPath path);
-
-/*!
- * Get the path for the given string if it exists, or create it if it does not.
- *
- * @public @memberof oxr_instance
- */
-XrResult
-oxr_path_get_or_create(
-    struct oxr_logger *log, struct oxr_instance *inst, const char *str, size_t length, XrPath *out_path);
-
-/*!
- * Only get the path for the given string if it exists.
- *
- * @public @memberof oxr_instance
- */
-XrResult
-oxr_path_only_get(struct oxr_logger *log, struct oxr_instance *inst, const char *str, size_t length, XrPath *out_path);
-
-/*!
- * Get a pointer and length of the internal string.
- *
- * The pointer has the same life time as the instance. The length is the number
- * of valid characters, not including the null termination character (but an
- * extra null byte is always reserved at the end so can strings can be given
- * to functions expecting null terminated strings).
- *
- * @public @memberof oxr_instance
- */
-XrResult
-oxr_path_get_string(
-    struct oxr_logger *log, const struct oxr_instance *inst, XrPath path, const char **out_str, size_t *out_length);
-
-/*!
- * Destroy the path system and all paths that the instance has created.
- *
- * @private @memberof oxr_instance
- */
-void
-oxr_path_destroy(struct oxr_logger *log, struct oxr_instance *inst);
 
 /*!
  * @}
@@ -1615,14 +1548,8 @@ struct oxr_instance
 		struct u_hashset *loc_store;
 	} action_sets;
 
-	//! Path store, for looking up paths.
-	struct u_hashset *path_store;
-	//! Mapping from ID to path.
-	struct oxr_path **path_array;
-	//! Total length of path array.
-	size_t path_array_length;
-	//! Number of paths in the array (0 is always null).
-	size_t path_num;
+	//! Path store for managing paths.
+	struct oxr_path_store path_store;
 
 	// Event queue.
 	struct
@@ -1723,6 +1650,15 @@ struct oxr_instance
 	enum xrt_android_lifecycle_event activity_state;
 #endif // XRT_OS_ANDROID
 };
+
+/*
+ * This includes needs to be here because it has static inline functions that
+ * de-references the oxr_instance object. This refactor was made mid-patchset
+ * so doing too many changes to other files would have been really disruptive
+ * but this include will be removed soon.
+ */
+#include "path/oxr_path_wrappers.h"
+
 
 /*!
  * Object that client program interact with.

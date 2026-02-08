@@ -82,7 +82,7 @@ oxr_instance_destroy(struct oxr_logger *log, struct oxr_handle_base *hb)
 
 	oxr_binding_destroy_all(log, inst);
 
-	oxr_path_destroy(log, inst);
+	oxr_path_store_fini(&inst->path_store);
 
 	u_hashset_destroy(&inst->action_sets.name_store);
 	u_hashset_destroy(&inst->action_sets.loc_store);
@@ -287,9 +287,9 @@ oxr_instance_create(struct oxr_logger *log,
 	u_debug_gui_create(&udgci, &inst->debug_ui);
 #endif
 
-	ret = oxr_path_init(log, inst);
+	ret = oxr_path_store_init(&inst->path_store);
 	if (ret != XR_SUCCESS) {
-		return ret;
+		return oxr_error(log, ret, "Failed to init path store");
 	}
 
 	h_ret = u_hashset_create(&inst->action_sets.name_store);

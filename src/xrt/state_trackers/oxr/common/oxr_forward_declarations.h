@@ -26,12 +26,17 @@ extern "C" {
 struct xrt_instance;
 struct xrt_device;
 
+struct u_hashset;
+struct u_hashmap_int;
+
 struct time_state;
 
 struct oxr_logger;
 struct oxr_sink_logger;
 struct oxr_extension_status;
 struct oxr_instance;
+struct oxr_path;
+struct oxr_path_store;
 struct oxr_system;
 struct oxr_session;
 struct oxr_roles;
