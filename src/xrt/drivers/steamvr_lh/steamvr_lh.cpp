@@ -29,10 +29,51 @@
 #include "util/u_system_helpers.h"
 #include "vive/vive_bindings.h"
 #include "util/u_device.h"
+#include "xrt/xrt_config_arch.h"
 
 #include "math/m_api.h"
 
 namespace {
+
+// based on the logic at
+// <https://github.com/ValveSoftware/openvr/blob/ae46a8dd0172580648c8922658a100439115d3eb/src/vrcore/pathtools_public.h#L143-L153>.
+#if defined(XRT_OS_WINDOWS)
+#error "steamvr_lh does not yet support windows!"
+#define OVR_PLAT_EXT ".dll"
+
+#if defined(XRT_ARCH_X86_64)
+#define OVR_PLAT_SUBDIR "win64"
+#elif defined(XRT_ARCH_X86)
+#define OVR_PLAT_SUBDIR "win32"
+#else
+#error "steamvr_lh: Unknown Windows Architecture"
+#endif
+
+#elif defined(XRT_OS_OSX)
+#define OVR_PLAT_EXT ".dylib"
+// contains all architectures in a universal binary
+#define OVR_PLAT_SUBDIR "osx32"
+
+#elif defined(XRT_OS_LINUX)
+#define OVR_PLAT_EXT ".so"
+
+#if defined(XRT_ARCH_X86)
+#define OVR_PLAT_SUBDIR "linux32"
+#elif defined(XRT_OS_ANDROID) && defined(XRT_ARCH_ARM)
+#define OVR_PLAT_SUBDIR "androidarm32"
+#elif defined(XRT_OS_ANDROID) && defined(XRT_ARCH_ARM64)
+#define OVR_PLAT_SUBDIR "androidarm64"
+#elif defined(XRT_ARCH_ARM64)
+#define OVR_PLAT_SUBDIR "linuxarm64"
+#elif defined(XRT_ARCH_X86_64)
+#define OVR_PLAT_SUBDIR "linux64"
+#else
+#error "steamvr_lh: Unknown Linux Architecture"
+#endif
+
+#else
+#error "steamvr_lh: Unknown OS"
+#endif
 
 DEBUG_GET_ONCE_LOG_OPTION(lh_log, "LIGHTHOUSE_LOG", U_LOGGING_INFO)
 DEBUG_GET_ONCE_BOOL_OPTION(lh_load_slimevr, "LH_LOAD_SLIMEVR", false)
@@ -877,10 +918,10 @@ steamvr_lh_create_devices(struct xrt_prober *xp, struct xrt_system_devices **out
 		}
 		return true;
 	};
-	if (!loadDriver("/drivers/lighthouse/bin/linux64/driver_lighthouse.so", true))
+	if (!loadDriver("/drivers/lighthouse/bin/" OVR_PLAT_SUBDIR "/driver_lighthouse" OVR_PLAT_EXT, true))
 		return xrt_result::XRT_ERROR_DEVICE_CREATION_FAILED;
 	if (debug_get_bool_option_lh_load_slimevr() &&
-	    !loadDriver("/drivers/slimevr/bin/linux64/driver_slimevr.so", false))
+	    !loadDriver("/drivers/slimevr/bin/" OVR_PLAT_SUBDIR "/driver_slimevr" OVR_PLAT_EXT, false))
 		return xrt_result::XRT_ERROR_DEVICE_CREATION_FAILED;
 	svrs->ctx = Context::create(STEAM_INSTALL_DIR, steamvr, std::move(drivers));
 	if (svrs->ctx == nullptr)
