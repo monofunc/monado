@@ -59,7 +59,7 @@ struct u_extension_list_builder
  *
  */
 
-enum class ExtensionType
+enum class ExtensionType : std::uint8_t
 {
 	KHR = 0,         // Khronos extensions
 	EXT = 1,         // Multi-vendor extensions
