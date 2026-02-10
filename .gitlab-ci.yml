@@ -161,7 +161,7 @@ win:container_prep:
 # Variables for build and usage of Arch image
 .monado.variables.arch:
   variables:
-    FDO_DISTRIBUTION_TAG: "2025-12-09"
+    FDO_DISTRIBUTION_TAG: "2026-02-11"
 
 # Variables for build and usage of Alpine image
 .monado.variables.alpine:
@@ -238,7 +238,7 @@ arch:container_prep:
     - .fdo.container-build@arch # from ci-templates
 
   variables:
-    FDO_DISTRIBUTION_PACKAGES: 'base-devel bc bluez-libs boost check clang cmake diffutils doxygen eigen fmt gcc git glew glfw-x11 glslang glu graphviz gtest gtk3 hidapi libbsd libusb libxrandr mesa meson ninja opencv patch pipewire-jack pkgconfig python-attrs python-setuptools python3 qt6-base v4l-utils vulkan-headers vulkan-icd-loader wayland wget wireplumber'
+    FDO_DISTRIBUTION_PACKAGES: 'base-devel bluez-libs check cjson clang cmake diffutils doxygen eigen gcc git glfw-x11 glslang glu graphviz gtk3 hidapi libbsd libusb libxrandr mesa meson ninja onnxruntime-cpu opencv patch pipewire-jack pkgconfig python-attrs python-setuptools python3 qt6-base v4l-utils vulkan-headers vulkan-icd-loader wayland wget wireplumber'
     FDO_DISTRIBUTION_EXEC: 'env FDO_CI_CONCURRENT=${FDO_CI_CONCURRENT} bash .gitlab-ci/install-arch-additional-deps.sh'
 
 # Make Alpine image
