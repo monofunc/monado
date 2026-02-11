@@ -54,6 +54,15 @@ oxr_session_binding_destroy_all(struct oxr_logger *log, struct oxr_session *sess
  */
 
 /*!
+ * Destroy an interaction profile.
+ *
+ * @param profile Interaction profile to destroy
+ * @public @memberof oxr_interaction_profile
+ */
+void
+oxr_interaction_profile_destroy(struct oxr_interaction_profile *profile);
+
+/*!
  * Find the best matching profile for the given @ref xrt_device.
  *
  * @param      log   Logger.

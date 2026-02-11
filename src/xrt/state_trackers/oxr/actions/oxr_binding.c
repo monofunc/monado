@@ -507,6 +507,40 @@ oxr_get_profile_for_device_name(struct oxr_logger *log,
  */
 
 void
+oxr_interaction_profile_destroy(struct oxr_interaction_profile *profile)
+{
+	if (profile == NULL) {
+		return;
+	}
+
+	for (size_t y = 0; y < profile->binding_count; y++) {
+		struct oxr_binding *b = &profile->bindings[y];
+
+		reset_binding_keys(b);
+		free(b->paths);
+		b->paths = NULL;
+		b->path_count = 0;
+		b->input = 0;
+		b->output = 0;
+	}
+
+	for (size_t y = 0; y < profile->dpad_count; ++y) {
+		struct oxr_dpad_emulation *d = &profile->dpads[y];
+		free(d->paths);
+	}
+
+	free(profile->bindings);
+	profile->bindings = NULL;
+	profile->binding_count = 0;
+
+	free(profile->dpads);
+
+	oxr_dpad_state_deinit(&profile->dpad_state);
+
+	free(profile);
+}
+
+void
 oxr_find_profile_for_device(struct oxr_logger *log,
                             struct oxr_session *sess,
                             struct xrt_device *xdev,
@@ -664,32 +698,7 @@ oxr_destroy_profiles(struct oxr_interaction_profile **profiles, const size_t pro
 
 	for (size_t x = 0; x < profile_count; x++) {
 		struct oxr_interaction_profile *p = profiles[x];
-
-		for (size_t y = 0; y < p->binding_count; y++) {
-			struct oxr_binding *b = &p->bindings[y];
-
-			reset_binding_keys(b);
-			free(b->paths);
-			b->paths = NULL;
-			b->path_count = 0;
-			b->input = 0;
-			b->output = 0;
-		}
-
-		for (size_t y = 0; y < p->dpad_count; ++y) {
-			struct oxr_dpad_emulation *d = &p->dpads[y];
-			free(d->paths);
-		}
-
-		free(p->bindings);
-		p->bindings = NULL;
-		p->binding_count = 0;
-
-		free(p->dpads);
-
-		oxr_dpad_state_deinit(&p->dpad_state);
-
-		free(p);
+		oxr_interaction_profile_destroy(p);
 	}
 
 	free(profiles);
