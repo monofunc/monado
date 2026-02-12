@@ -40,6 +40,7 @@
 
 #include "actions/oxr_subaction.h"
 #include "actions/oxr_dpad_state.h"
+#include "actions/oxr_session_action_context.h"
 #include "actions/oxr_interaction_profile_array.h"
 #include "actions/oxr_instance_path_cache.h"
 #include "actions/oxr_instance_action_context.h"
@@ -1410,63 +1411,9 @@ struct oxr_session
 	struct os_precise_sleeper sleeper;
 
 	/*!
-	 * An array of action set attachments that this session owns.
-	 *
-	 * If non-null, this means action sets have been attached to this
-	 * session.
+	 * Holds all the action state that belongs on the session level.
 	 */
-	struct oxr_action_set_attachment *act_set_attachments;
-
-	/*!
-	 * Length of @ref oxr_session::act_set_attachments.
-	 */
-	size_t action_set_attachment_count;
-
-	/*!
-	 * A map of action set key to action set attachments.
-	 *
-	 * If non-null, this means action sets have been attached to this
-	 * session, since this map points to elements of
-	 * oxr_session::act_set_attachments
-	 */
-	struct u_hashmap_int *act_sets_attachments_by_key;
-
-	/*!
-	 * A map of action key to action attachment.
-	 *
-	 * The action attachments are actually owned by the action set
-	 * attachments, but we own the action set attachments, so this is OK.
-	 *
-	 * If non-null, this means action sets have been attached to this
-	 * session, since this map points to @p oxr_action_attachment members of
-	 * @ref oxr_session::act_set_attachments elements.
-	 */
-	struct u_hashmap_int *act_attachments_by_key;
-
-	/*!
-	 * Clone of all suggested binding profiles at the point of action set/session attachment.
-	 * @ref oxr_session_attach_action_sets
-	 */
-	struct oxr_interaction_profile_array profiles_on_attachment;
-
-	//! Cache of the last known system roles generation_id
-	uint64_t dynamic_roles_generation_id;
-
-	//! Protects access to dynamic_roles_generation_id during sync actions
-	struct os_mutex sync_actions_mutex;
-
-	/*!
-	 * Currently bound interaction profile.
-	 * @{
-	 */
-
-#define OXR_PATH_MEMBER(X) XrPath X;
-
-	OXR_FOR_EACH_VALID_SUBACTION_PATH(OXR_PATH_MEMBER)
-#undef OXR_PATH_MEMBER
-	/*!
-	 * @}
-	 */
+	struct oxr_session_action_context action_context;
 
 	/*!
 	 * IPD, to be expanded to a proper 3D relation.

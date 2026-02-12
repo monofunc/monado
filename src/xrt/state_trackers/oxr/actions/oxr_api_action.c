@@ -21,6 +21,7 @@
 #include "oxr_input.h"
 #include "oxr_binding.h"
 #include "oxr_haptic.h"
+#include "oxr_session_action_context.h"
 
 #include "../oxr_api_verify.h"
 #include "../oxr_objects.h"
@@ -178,7 +179,7 @@ oxr_xrAttachSessionActionSets(XrSession session, const XrSessionActionSetsAttach
 	OXR_VERIFY_SESSION_NOT_LOST(&log, sess);
 	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, bindInfo, XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO);
 
-	if (sess->act_set_attachments != NULL) {
+	if (oxr_session_action_context_has_attached_act_sets(&sess->action_context)) {
 		return oxr_error(&log, XR_ERROR_ACTIONSETS_ALREADY_ATTACHED,
 		                 "(session) has already had action sets "
 		                 "attached, can only attach action sets once.");
@@ -423,10 +424,12 @@ oxr_xrGetCurrentInteractionProfile(XrSession session,
 		                 str);
 	}
 
+	OXR_SESSION_CHECK_ATTACHED_AND_RET(sess, &log);
+
 	XrResult ret = oxr_action_get_current_interaction_profile( //
 	    &log,                                                  //
 	    &inst->path_cache,                                     //
-	    sess,                                                  //
+	    &sess->action_context,                                 //
 	    topLevelUserPath,                                      //
 	    interactionProfile);                                   //
 	if (ret == XR_SUCCESS) {
@@ -454,10 +457,7 @@ oxr_xrGetInputSourceLocalizedName(XrSession session,
 	// Short hand.
 	inst = sess->sys->inst;
 
-	if (sess->act_set_attachments == NULL) {
-		return oxr_error(&log, XR_ERROR_ACTIONSET_NOT_ATTACHED,
-		                 "ActionSet(s) have not been attached to this session");
-	}
+	OXR_SESSION_CHECK_ATTACHED_AND_RET(sess, &log);
 
 	if (getInfo->sourcePath == XR_NULL_PATH) {
 		return oxr_error(&log, XR_ERROR_PATH_INVALID,
@@ -487,7 +487,7 @@ oxr_xrGetInputSourceLocalizedName(XrSession session,
 	XrResult ret = oxr_action_get_input_source_localized_name( //
 	    &log,                                                  //
 	    &inst->path_store,                                     //
-	    sess,                                                  //
+	    &sess->action_context,                                 //
 	    getInfo,                                               //
 	    bufferCapacityInput,                                   //
 	    bufferCountOutput,                                     //
@@ -805,11 +805,7 @@ oxr_xrEnumerateBoundSourcesForAction(XrSession session,
 	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, enumerateInfo, XR_TYPE_BOUND_SOURCES_FOR_ACTION_ENUMERATE_INFO);
 	OXR_VERIFY_ACTION_NOT_NULL(&log, enumerateInfo->action, act);
 
-	if (sess->act_set_attachments == NULL) {
-		return oxr_error(&log, XR_ERROR_ACTIONSET_NOT_ATTACHED,
-		                 "(session) xrAttachSessionActionSets has not "
-		                 "been called on this session.");
-	}
+	OXR_SESSION_CHECK_ATTACHED_AND_RET(sess, &log);
 
 	return oxr_action_enumerate_bound_sources(&log, sess, act->act_key, sourceCapacityInput, sourceCountOutput,
 	                                          sources);

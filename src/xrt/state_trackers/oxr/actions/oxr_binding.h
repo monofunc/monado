@@ -90,11 +90,12 @@ oxr_action_suggest_interaction_profile_bindings(struct oxr_logger *log,
 
 /*!
  * Get the currently active interaction profile for a top-level user path
- * on the session (e.g. /user/hand/left). Requires action sets to be attached.
+ * on the session action context (e.g. /user/hand/left). Requires action sets to
+ * be attached.
  *
  * @param log Logger
  * @param cache Instance path cache
- * @param sess Session
+ * @param action_context Action context
  * @param topLevelUserPath Top-level user path (e.g. left hand)
  * @param interactionProfile Output interaction profile state
  * @return XR_SUCCESS on success
@@ -103,7 +104,7 @@ oxr_action_suggest_interaction_profile_bindings(struct oxr_logger *log,
 XrResult
 oxr_action_get_current_interaction_profile(struct oxr_logger *log,
                                            const struct oxr_instance_path_cache *cache,
-                                           struct oxr_session *sess,
+                                           const struct oxr_session_action_context *action_context,
                                            XrPath topLevelUserPath,
                                            XrInteractionProfileState *interactionProfile);
 
@@ -112,7 +113,7 @@ oxr_action_get_current_interaction_profile(struct oxr_logger *log,
  *
  * @param log Logger
  * @param path_store Needed to look up path strings.
- * @param sess Session.
+ * @param action_context Action context
  * @param getInfo Input source localized name get info
  * @param bufferCapacityInput Buffer capacity
  * @param bufferCountOutput Buffer count output
@@ -123,7 +124,7 @@ oxr_action_get_current_interaction_profile(struct oxr_logger *log,
 XrResult
 oxr_action_get_input_source_localized_name(struct oxr_logger *log,
                                            const struct oxr_path_store *store,
-                                           struct oxr_session *sess,
+                                           const struct oxr_session_action_context *action_context,
                                            const XrInputSourceLocalizedNameGetInfo *getInfo,
                                            uint32_t bufferCapacityInput,
                                            uint32_t *bufferCountOutput,

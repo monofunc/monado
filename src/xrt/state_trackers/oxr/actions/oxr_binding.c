@@ -15,12 +15,12 @@
 #include "oxr_subaction.h"
 #include "oxr_generated_bindings.h"
 #include "oxr_dpad_state.h"
+#include "oxr_session_action_context.h"
 #include "oxr_interaction_profile_array.h"
 
 #include "../oxr_objects.h"
 #include "../oxr_logger.h"
 #include "../oxr_two_call.h"
-
 
 #include <stdio.h>
 
@@ -354,11 +354,12 @@ get_subaction_path_str(enum oxr_subaction_path subaction_path)
 }
 
 static XrPath
-get_interaction_bound_to_sub_path(struct oxr_session *sess, enum oxr_subaction_path subaction_path)
+get_interaction_bound_to_sub_path(const struct oxr_session_action_context *action_context,
+                                  enum oxr_subaction_path subaction_path)
 {
 	switch (subaction_path) {
 #define OXR_PATH_MEMBER(lower, CAP, _)                                                                                 \
-	case OXR_SUB_ACTION_PATH_##CAP: return sess->lower;
+	case OXR_SUB_ACTION_PATH_##CAP: return action_context->lower;
 
 		OXR_FOR_EACH_VALID_SUBACTION_PATH_DETAILED(OXR_PATH_MEMBER)
 #undef OXR_PATH_MEMBER
@@ -610,18 +611,15 @@ out:
 XrResult
 oxr_action_get_current_interaction_profile(struct oxr_logger *log,
                                            const struct oxr_instance_path_cache *cache,
-                                           struct oxr_session *sess,
+                                           const struct oxr_session_action_context *action_context,
                                            XrPath topLevelUserPath,
                                            XrInteractionProfileState *interactionProfile)
 {
-	if (sess->act_set_attachments == NULL) {
-		return oxr_error(log, XR_ERROR_ACTIONSET_NOT_ATTACHED,
-		                 "xrAttachSessionActionSets has not been "
-		                 "called on this session.");
-	}
+	// Action sets attachment is checked in the API function.
+
 #define IDENTIFY_TOP_LEVEL_PATH(X)                                                                                     \
 	if (topLevelUserPath == cache->X) {                                                                            \
-		interactionProfile->interactionProfile = sess->X;                                                      \
+		interactionProfile->interactionProfile = action_context->X;                                            \
 	} else
 
 	OXR_FOR_EACH_VALID_SUBACTION_PATH(IDENTIFY_TOP_LEVEL_PATH)
@@ -636,7 +634,7 @@ oxr_action_get_current_interaction_profile(struct oxr_logger *log,
 XrResult
 oxr_action_get_input_source_localized_name(struct oxr_logger *log,
                                            const struct oxr_path_store *store,
-                                           struct oxr_session *sess,
+                                           const struct oxr_session_action_context *action_context,
                                            const XrInputSourceLocalizedNameGetInfo *getInfo,
                                            uint32_t bufferCapacityInput,
                                            uint32_t *bufferCountOutput,
@@ -653,7 +651,7 @@ oxr_action_get_input_source_localized_name(struct oxr_logger *log,
 	}
 
 	// Get the interaction profile bound to this subaction_path.
-	XrPath path = get_interaction_bound_to_sub_path(sess, subaction_path);
+	XrPath path = get_interaction_bound_to_sub_path(action_context, subaction_path);
 	if (path == XR_NULL_PATH) {
 		return oxr_error(log, XR_ERROR_VALIDATION_FAILURE,
 		                 "(getInfo->sourcePath) no interaction profile "
@@ -663,7 +661,7 @@ oxr_action_get_input_source_localized_name(struct oxr_logger *log,
 	// Find the interaction profile.
 	struct oxr_interaction_profile *oip = NULL;
 	//! @todo: If we ever rebind a profile that has not been suggested by the client, it will not be found.
-	oxr_interaction_profile_array_find_by_path(&sess->profiles_on_attachment, path, &oip);
+	oxr_interaction_profile_array_find_by_path(&action_context->profiles_on_attachment, path, &oip);
 	if (oip == NULL) {
 		return oxr_error(log, XR_ERROR_RUNTIME_FAILURE, "no interaction profile found");
 	}

@@ -93,18 +93,32 @@ print_profiles(struct oxr_logger *log,
 	oxr_log_slog(log, &slog);
 }
 
+/*!
+ * Given an Action Set handle, return the @ref oxr_action_set and the
+ * associated @ref oxr_action_set_attachment in the given Session.
+ */
+static void
+get_action_set_attachment(struct oxr_session_action_context *sess_context,
+                          XrActionSet actionSet,
+                          struct oxr_action_set_attachment **out_act_set_attached,
+                          struct oxr_action_set **out_act_set)
+{
+	struct oxr_action_set *act_set = XRT_CAST_OXR_HANDLE_TO_PTR(struct oxr_action_set *, actionSet);
+
+	// Make sure all are set.
+	*out_act_set = act_set;
+	*out_act_set_attached = NULL;
+
+	// Safe to call even if nothing has been attached.
+	oxr_session_action_context_find_set(sess_context, act_set->act_set_key, out_act_set_attached);
+}
+
 
 /*
  *
  * Pre declare functions.
  *
  */
-
-static void
-oxr_session_get_action_set_attachment(struct oxr_session *sess,
-                                      XrActionSet actionSet,
-                                      struct oxr_action_set_attachment **act_set_attached,
-                                      struct oxr_action_set **act_set);
 
 static void
 oxr_action_cache_update(struct oxr_logger *log,
@@ -218,7 +232,7 @@ static void
 oxr_action_attachment_teardown(struct oxr_action_attachment *act_attached)
 {
 	struct oxr_session *sess = act_attached->sess;
-	u_hashmap_int_erase(sess->act_attachments_by_key, act_attached->act_key);
+	u_hashmap_int_erase(sess->action_context.act_attachments_by_key, act_attached->act_key);
 
 #define CACHE_TEARDOWN(X) oxr_action_cache_teardown(&(act_attached->X));
 	OXR_FOR_EACH_SUBACTION_PATH(CACHE_TEARDOWN)
@@ -242,7 +256,7 @@ oxr_action_attachment_init(struct oxr_logger *log,
 	struct oxr_session *sess = act_set_attached->sess;
 	act_attached->sess = sess;
 	act_attached->act_set_attached = act_set_attached;
-	u_hashmap_int_insert(sess->act_attachments_by_key, act->act_key, act_attached);
+	u_hashmap_int_insert(sess->action_context.act_attachments_by_key, act->act_key, act_attached);
 
 	// Reference this action's refcounted data
 	act_attached->act_ref = act->data;
@@ -275,7 +289,7 @@ oxr_action_set_attachment_init(struct oxr_logger *log,
 	act_set_attached->act_set_ref = act_set->data;
 	oxr_refcounted_ref(&act_set_attached->act_set_ref->base);
 
-	u_hashmap_int_insert(sess->act_sets_attachments_by_key, act_set->act_set_key, act_set_attached);
+	u_hashmap_int_insert(sess->action_context.act_sets_attachments_by_key, act_set->act_set_key, act_set_attached);
 
 	// Copy this for efficiency.
 	act_set_attached->act_set_key = act_set->act_set_key;
@@ -294,7 +308,7 @@ oxr_action_set_attachment_teardown(struct oxr_action_set_attachment *act_set_att
 	act_set_attached->action_attachment_count = 0;
 
 	struct oxr_session *sess = act_set_attached->sess;
-	u_hashmap_int_erase(sess->act_sets_attachments_by_key, act_set_attached->act_set_key);
+	u_hashmap_int_erase(sess->action_context.act_sets_attachments_by_key, act_set_attached->act_set_key);
 
 	// Unref this action set's refcounted data
 	oxr_refcounted_unref(&act_set_attached->act_set_ref->base);
@@ -1088,7 +1102,7 @@ oxr_input_supressed(struct oxr_session *sess,
 
 		struct oxr_action_set *other_act_set = NULL;
 		struct oxr_action_set_attachment *other_act_set_attached = NULL;
-		oxr_session_get_action_set_attachment(sess, set, &other_act_set_attached, &other_act_set);
+		get_action_set_attachment(&sess->action_context, set, &other_act_set_attached, &other_act_set);
 
 		if (other_act_set_attached == NULL) {
 			continue;
@@ -1814,34 +1828,6 @@ oxr_action_bind_io(struct oxr_logger *log,
  *
  */
 
-/*!
- * Given an Action Set handle, return the @ref oxr_action_set and the
- * associated
- * @ref oxr_action_set_attachment in the given Session.
- *
- * @private @memberof oxr_session
- */
-static void
-oxr_session_get_action_set_attachment(struct oxr_session *sess,
-                                      XrActionSet actionSet,
-                                      struct oxr_action_set_attachment **act_set_attached,
-                                      struct oxr_action_set **act_set)
-{
-	void *ptr = NULL;
-	*act_set = XRT_CAST_OXR_HANDLE_TO_PTR(struct oxr_action_set *, actionSet);
-	*act_set_attached = NULL;
-
-	// In case no action_sets have been attached.
-	if (sess->act_sets_attachments_by_key == NULL) {
-		return;
-	}
-
-	int ret = u_hashmap_int_find(sess->act_sets_attachments_by_key, (*act_set)->act_set_key, &ptr);
-	if (ret == 0) {
-		*act_set_attached = (struct oxr_action_set_attachment *)ptr;
-	}
-}
-
 void
 oxr_session_get_action_attachment(struct oxr_session *sess,
                                   uint32_t act_key,
@@ -1849,7 +1835,7 @@ oxr_session_get_action_attachment(struct oxr_session *sess,
 {
 	void *ptr = NULL;
 
-	int ret = u_hashmap_int_find(sess->act_attachments_by_key, act_key, &ptr);
+	int ret = u_hashmap_int_find(sess->action_context.act_attachments_by_key, act_key, &ptr);
 	if (ret == 0) {
 		*out_act_attached = (struct oxr_action_attachment *)ptr;
 	}
@@ -1875,22 +1861,23 @@ oxr_session_attach_action_sets(struct oxr_logger *log,
 	struct oxr_instance *inst = sess->sys->inst;
 
 	const struct oxr_instance_action_context *inst_context = inst->action_context;
+	struct oxr_session_action_context *sess_context = &sess->action_context;
 
-	oxr_interaction_profile_array_clone(&inst_context->suggested_profiles, &sess->profiles_on_attachment);
+	oxr_interaction_profile_array_clone(&inst_context->suggested_profiles, &sess_context->profiles_on_attachment);
 
 	// Allocate room for list. No need to check if anything has been
 	// attached the API function does that.
-	sess->action_set_attachment_count = bindInfo->countActionSets;
-	sess->act_set_attachments =
-	    U_TYPED_ARRAY_CALLOC(struct oxr_action_set_attachment, sess->action_set_attachment_count);
+	sess->action_context.action_set_attachment_count = bindInfo->countActionSets;
+	sess->action_context.act_set_attachments =
+	    U_TYPED_ARRAY_CALLOC(struct oxr_action_set_attachment, sess->action_context.action_set_attachment_count);
 
 	// Set up the per-session data for these action sets.
-	for (uint32_t i = 0; i < sess->action_set_attachment_count; i++) {
+	for (uint32_t i = 0; i < sess->action_context.action_set_attachment_count; i++) {
 		struct oxr_action_set *act_set =
 		    XRT_CAST_OXR_HANDLE_TO_PTR(struct oxr_action_set *, bindInfo->actionSets[i]);
 		struct oxr_action_set_ref *act_set_ref = act_set->data;
 		act_set_ref->ever_attached = true;
-		struct oxr_action_set_attachment *act_set_attached = &sess->act_set_attachments[i];
+		struct oxr_action_set_attachment *act_set_attached = &sess->action_context.act_set_attachments[i];
 		oxr_action_set_attachment_init(log, sess, act_set, act_set_attached);
 
 		// Allocate the action attachments for this set.
@@ -1924,13 +1911,14 @@ oxr_session_attach_action_sets(struct oxr_logger *log,
 static XrResult
 session_update_action_bindings(struct oxr_logger *log,
                                struct oxr_instance *inst,
-                               struct oxr_session *sess,
-                               const struct oxr_roles *roles)
+                               struct oxr_session_action_context *action_context,
+                               const struct oxr_roles *roles,
+                               bool *out_interaction_profile_changed)
 {
 	// Convenience.
 	const struct oxr_path_store *store = &inst->path_store;
 	const struct oxr_instance_path_cache *cache = &inst->path_cache;
-	const struct oxr_interaction_profile_array *array = &sess->profiles_on_attachment;
+	const struct oxr_interaction_profile_array *array = &action_context->profiles_on_attachment;
 
 	struct oxr_profiles_per_subaction profiles = {0};
 	find_profiles_from_roles(cache, array, roles, &profiles);
@@ -1940,13 +1928,15 @@ session_update_action_bindings(struct oxr_logger *log,
 		print_profiles(log, store, &profiles);
 	}
 
-	for (size_t i = 0; i < sess->action_set_attachment_count; i++) {
-		struct oxr_action_set_attachment *act_set_attached = &sess->act_set_attachments[i];
+	for (size_t i = 0; i < action_context->action_set_attachment_count; i++) {
+		struct oxr_action_set_attachment *act_set_attached = &action_context->act_set_attachments[i];
 		for (size_t k = 0; k < act_set_attached->action_attachment_count; k++) {
 			struct oxr_action_attachment *act_attached = &act_set_attached->act_attachments[k];
 			oxr_action_attachment_bind(log, inst, act_attached, roles, &profiles);
 		}
 	}
+
+	bool interaction_profile_changed = false;
 
 	/*
 	 * This code will only send events (and update the bindings) if there
@@ -1960,15 +1950,17 @@ session_update_action_bindings(struct oxr_logger *log,
 		if (path == XR_NULL_PATH) {                                                                            \
 			break; /* Only update on "active" interaction profiles per sub-action path. */                 \
 		}                                                                                                      \
-		if (sess->X != path) {                                                                                 \
-			sess->X = path;                                                                                \
-			oxr_event_push_XrEventDataInteractionProfileChanged(log, sess);                                \
+		if (action_context->X != path) {                                                                       \
+			action_context->X = path;                                                                      \
+			interaction_profile_changed = true;                                                            \
 		}                                                                                                      \
 	} while (false);
 	OXR_FOR_EACH_VALID_SUBACTION_PATH(POPULATE_PROFILE)
 #undef POPULATE_PROFILE
 
-	return oxr_session_success_result(sess);
+	*out_interaction_profile_changed = interaction_profile_changed;
+
+	return XR_SUCCESS;
 }
 
 XrResult
@@ -1978,6 +1970,9 @@ oxr_action_sync_data(struct oxr_logger *log,
                      const XrActiveActionSet *actionSets,
                      const XrActiveActionSetPrioritiesEXT *activePriorities)
 {
+	struct oxr_session_action_context *sess_context = &sess->action_context;
+	struct oxr_instance *inst = sess->sys->inst;
+
 	struct oxr_action_set *act_set = NULL;
 	struct oxr_action_set_attachment *act_set_attached = NULL;
 
@@ -1988,7 +1983,7 @@ oxr_action_sync_data(struct oxr_logger *log,
 
 	// Check that all action sets has been attached.
 	for (uint32_t i = 0; i < countActionSets; i++) {
-		oxr_session_get_action_set_attachment(sess, actionSets[i].actionSet, &act_set_attached, &act_set);
+		get_action_set_attachment(sess_context, actionSets[i].actionSet, &act_set_attached, &act_set);
 		if (act_set_attached == NULL) {
 			return oxr_error(log, XR_ERROR_ACTIONSET_NOT_ATTACHED,
 			                 "(actionSets[%i].actionSet) action set '%s' has "
@@ -2019,12 +2014,23 @@ oxr_action_sync_data(struct oxr_logger *log,
 
 	// Should we redo the bindings?
 	{
-		os_mutex_lock(&sess->sync_actions_mutex);
-		if (sess->dynamic_roles_generation_id < roles.roles.generation_id) {
-			sess->dynamic_roles_generation_id = roles.roles.generation_id;
-			session_update_action_bindings(log, sess->sys->inst, sess, &roles);
+		bool interaction_profile_changed = false;
+
+		os_mutex_lock(&sess_context->sync_actions_mutex);
+		if (sess_context->dynamic_roles_generation_id < roles.roles.generation_id) {
+			sess_context->dynamic_roles_generation_id = roles.roles.generation_id;
+			session_update_action_bindings(    //
+			    log,                           //
+			    inst,                          //
+			    sess_context,                  //
+			    &roles,                        //
+			    &interaction_profile_changed); //
 		}
-		os_mutex_unlock(&sess->sync_actions_mutex);
+		os_mutex_unlock(&sess_context->sync_actions_mutex);
+
+		if (interaction_profile_changed) {
+			oxr_event_push_XrEventDataInteractionProfileChanged(log, sess);
+		}
 	}
 
 	if (countActionSets == 0) {
@@ -2044,8 +2050,8 @@ oxr_action_sync_data(struct oxr_logger *log,
 	}
 
 	// Reset all action set attachments.
-	for (size_t i = 0; i < sess->action_set_attachment_count; ++i) {
-		act_set_attached = &sess->act_set_attachments[i];
+	for (size_t i = 0; i < sess_context->action_set_attachment_count; ++i) {
+		act_set_attached = &sess_context->act_set_attachments[i];
 		U_ZERO(&act_set_attached->requested_subaction_paths);
 	}
 
@@ -2054,7 +2060,7 @@ oxr_action_sync_data(struct oxr_logger *log,
 	//! @todo can be listed more than once with different paths!
 	for (uint32_t i = 0; i < countActionSets; i++) {
 		struct oxr_subaction_paths subaction_paths;
-		oxr_session_get_action_set_attachment(sess, actionSets[i].actionSet, &act_set_attached, &act_set);
+		get_action_set_attachment(sess_context, actionSets[i].actionSet, &act_set_attached, &act_set);
 		assert(act_set_attached != NULL);
 
 		if (!oxr_classify_subaction_paths(log, sess->sys->inst, 1, &actionSets[i].subactionPath,
@@ -2090,10 +2096,9 @@ oxr_action_sync_data(struct oxr_logger *log,
 	}
 
 	// Now, update all action attachments
-	for (size_t i = 0; i < sess->action_set_attachment_count; ++i) {
-		act_set_attached = &sess->act_set_attachments[i];
+	for (size_t i = 0; i < sess_context->action_set_attachment_count; ++i) {
+		act_set_attached = &sess_context->act_set_attachments[i];
 		struct oxr_subaction_paths subaction_paths = act_set_attached->requested_subaction_paths;
-
 
 		for (uint32_t k = 0; k < act_set_attached->action_attachment_count; k++) {
 			struct oxr_action_attachment *act_attached = &act_set_attached->act_attachments[k];

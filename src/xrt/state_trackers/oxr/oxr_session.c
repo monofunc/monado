@@ -49,6 +49,7 @@
 #include "oxr_xret.h"
 #include "oxr_roles.h"
 #include "actions/oxr_input.h"
+#include "actions/oxr_session_action_context.h"
 #include "actions/oxr_binding.h"
 
 #include <stdio.h>
@@ -1062,21 +1063,7 @@ oxr_session_destroy(struct oxr_logger *log, struct oxr_handle_base *hb)
 
 	XrResult ret = oxr_event_remove_session_events(log, sess);
 
-	oxr_interaction_profile_array_clear(&sess->profiles_on_attachment);
-
-	for (size_t i = 0; i < sess->action_set_attachment_count; ++i) {
-		oxr_action_set_attachment_teardown(&sess->act_set_attachments[i]);
-	}
-	free(sess->act_set_attachments);
-	sess->act_set_attachments = NULL;
-	sess->action_set_attachment_count = 0;
-
-	// If we tore everything down correctly, these are empty now.
-	assert(sess->act_sets_attachments_by_key == NULL || u_hashmap_int_empty(sess->act_sets_attachments_by_key));
-	assert(sess->act_attachments_by_key == NULL || u_hashmap_int_empty(sess->act_attachments_by_key));
-
-	u_hashmap_int_destroy(&sess->act_sets_attachments_by_key);
-	u_hashmap_int_destroy(&sess->act_attachments_by_key);
+	oxr_session_action_context_fini(&sess->action_context);
 
 	xrt_comp_destroy(&sess->compositor);
 	xrt_comp_native_destroy(&sess->xcn);
@@ -1085,7 +1072,6 @@ oxr_session_destroy(struct oxr_logger *log, struct oxr_handle_base *hb)
 	os_precise_sleeper_deinit(&sess->sleeper);
 	oxr_frame_sync_fini(&sess->frame_sync);
 	os_mutex_destroy(&sess->active_wait_frames_lock);
-	os_mutex_destroy(&sess->sync_actions_mutex);
 
 	free(sess);
 
@@ -1099,7 +1085,14 @@ oxr_session_allocate_and_init(struct oxr_logger *log,
                               struct oxr_session **out_session)
 {
 	struct oxr_session *sess = NULL;
+	XrResult ret;
 	OXR_ALLOCATE_HANDLE_OR_RETURN(log, sess, OXR_XR_DEBUG_SESSION, oxr_session_destroy, &sys->inst->handle);
+
+	// Needs to happen early due to mutex.
+	ret = oxr_session_action_context_init(&sess->action_context);
+	if (ret != XR_SUCCESS) {
+		return oxr_error(log, ret, "Failed to initialize action context");
+	}
 
 	// What graphics API type was this created with.
 	sess->gfx_ext = gfx_ext;
@@ -1116,18 +1109,10 @@ oxr_session_allocate_and_init(struct oxr_logger *log,
 	sess->active_wait_frames = 0;
 	os_mutex_init(&sess->active_wait_frames_lock);
 
-	// Initialize dynamic roles generation_id and mutex
-	sess->dynamic_roles_generation_id = 0;
-	os_mutex_init(&sess->sync_actions_mutex);
-
 	// Debug and user options.
 	sess->ipd_meters = debug_get_num_option_ipd() / 1000.0f;
 	sess->frame_timing_spew = debug_get_bool_option_frame_timing_spew();
 	sess->frame_timing_wait_sleep_ms = debug_get_num_option_wait_frame_sleep();
-
-	// Action system hashmaps.
-	u_hashmap_int_create(&sess->act_sets_attachments_by_key);
-	u_hashmap_int_create(&sess->act_attachments_by_key);
 
 	// This is set to something valid in begin session, used in xrEndFrame.
 	sess->current_view_config_type = XR_VIEW_CONFIGURATION_TYPE_MAX_ENUM;

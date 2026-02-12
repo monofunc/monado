@@ -33,6 +33,8 @@ add_library(
 	actions/oxr_instance_path_cache.h
 	actions/oxr_interaction_profile_array.c
 	actions/oxr_interaction_profile_array.h
+	actions/oxr_session_action_context.c
+	actions/oxr_session_action_context.h
 	actions/oxr_set_haptic.c
 	actions/oxr_set_haptic.h
 	common/oxr_defines.h
