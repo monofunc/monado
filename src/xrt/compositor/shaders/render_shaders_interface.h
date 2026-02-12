@@ -44,8 +44,10 @@ struct render_shaders
 	VkShaderModule layer_equirect2_frag;
 
 	VkShaderModule layer_projection_vert;
+	VkShaderModule layer_projection_frag;
+
 	VkShaderModule layer_quad_vert;
-	VkShaderModule layer_shared_frag;
+	VkShaderModule layer_quad_frag;
 };
 
 /*!

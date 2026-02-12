@@ -413,7 +413,7 @@ do_projection_layer(struct render_gfx *render,
 	    &data.post_transform); // out_norm_rect
 
 	// Used to go from UV to tangent space.
-	render_calc_uv_to_tangent_lengths_rect(&vd->fov, &data.to_tanget);
+	render_calc_uv_to_tangent_lengths_rect(&vd->fov, &data.to_tangent);
 
 	// Create MVP matrix, rotation only so we get 3dof timewarp.
 	struct xrt_vec3 scale = {1, 1, 1};

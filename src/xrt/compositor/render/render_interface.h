@@ -941,7 +941,7 @@ struct render_gfx_layer_equirect2_data
 struct render_gfx_layer_projection_data
 {
 	struct xrt_normalized_rect post_transform;
-	struct xrt_normalized_rect to_tanget;
+	struct xrt_normalized_rect to_tangent;
 	struct xrt_matrix_4x4 mvp;
 	struct xrt_colour_rgba_f32 color_scale;
 	struct xrt_colour_rgba_f32 color_bias;

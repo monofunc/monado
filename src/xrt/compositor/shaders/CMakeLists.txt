@@ -18,8 +18,9 @@ set(SHADERS
     layer_equirect2.frag
     layer_equirect2.vert
     layer_projection.vert
+    layer_projection.frag
     layer_quad.vert
-    layer_shared.frag
+    layer_quad.frag
 	)
 
 spirv_shaders(
