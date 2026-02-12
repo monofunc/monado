@@ -102,14 +102,14 @@ do_cs_cylinder_layer(const struct comp_layer *layer,
 	src_image_views[cur_image] = get_image_view(image, layer_data->flags, array_index);
 
 	// Used for Subimage and OpenGL flip.
-	set_post_transform_rect(                    //
-	    layer_data,                             // data
-	    &c->sub.norm_rect,                      // src_norm_rect
-	    false,                                  // invert_flip
-	    &ubo_data->post_transforms[cur_layer]); // out_norm_rect
+	set_post_transform_rect(                           //
+	    layer_data,                                    // data
+	    &c->sub.norm_rect,                             // src_norm_rect
+	    false,                                         // invert_flip
+	    &ubo_data->layers[cur_layer].post_transforms); // out_norm_rect
 
-	ubo_data->cylinder_data[cur_layer].central_angle = c->central_angle;
-	ubo_data->cylinder_data[cur_layer].aspect_ratio = c->aspect_ratio;
+	ubo_data->layers[cur_layer].cylinder_data.central_angle = c->central_angle;
+	ubo_data->layers[cur_layer].cylinder_data.aspect_ratio = c->aspect_ratio;
 
 	struct xrt_vec3 scale = {1.f, 1.f, 1.f};
 
@@ -124,19 +124,19 @@ do_cs_cylinder_layer(const struct comp_layer *layer,
 	struct xrt_matrix_4x4 v_inv;
 	math_matrix_4x4_inverse(v, &v_inv);
 
-	math_matrix_4x4_multiply(&model_inv, &v_inv, &ubo_data->mv_inverse[cur_layer]);
+	math_matrix_4x4_multiply(&model_inv, &v_inv, &ubo_data->layers[cur_layer].mv_inverse);
 
 	// Simplifies the shader.
 	if (c->radius >= INFINITY) {
-		ubo_data->cylinder_data[cur_layer].radius = 0.f;
+		ubo_data->layers[cur_layer].cylinder_data.radius = 0.f;
 	} else {
-		ubo_data->cylinder_data[cur_layer].radius = c->radius;
+		ubo_data->layers[cur_layer].cylinder_data.radius = c->radius;
 	}
 
-	ubo_data->cylinder_data[cur_layer].central_angle = c->central_angle;
-	ubo_data->cylinder_data[cur_layer].aspect_ratio = c->aspect_ratio;
+	ubo_data->layers[cur_layer].cylinder_data.central_angle = c->central_angle;
+	ubo_data->layers[cur_layer].cylinder_data.aspect_ratio = c->aspect_ratio;
 
-	ubo_data->image_info[cur_layer].color_image_index = cur_image;
+	ubo_data->layers[cur_layer].image_info.color_image_index = cur_image;
 	cur_image++;
 
 	*out_cur_image = cur_image;
@@ -167,11 +167,11 @@ do_cs_equirect2_layer(const struct comp_layer *layer,
 	src_image_views[cur_image] = get_image_view(image, layer_data->flags, array_index);
 
 	// Used for Subimage and OpenGL flip.
-	set_post_transform_rect(                    //
-	    layer_data,                             // data
-	    &eq2->sub.norm_rect,                    // src_norm_rect
-	    false,                                  // invert_flip
-	    &ubo_data->post_transforms[cur_layer]); // out_norm_rect
+	set_post_transform_rect(                           //
+	    layer_data,                                    // data
+	    &eq2->sub.norm_rect,                           // src_norm_rect
+	    false,                                         // invert_flip
+	    &ubo_data->layers[cur_layer].post_transforms); // out_norm_rect
 
 	struct xrt_vec3 scale = {1.f, 1.f, 1.f};
 
@@ -186,20 +186,20 @@ do_cs_equirect2_layer(const struct comp_layer *layer,
 	struct xrt_matrix_4x4 v_inv;
 	math_matrix_4x4_inverse(v, &v_inv);
 
-	math_matrix_4x4_multiply(&model_inv, &v_inv, &ubo_data->mv_inverse[cur_layer]);
+	math_matrix_4x4_multiply(&model_inv, &v_inv, &ubo_data->layers[cur_layer].mv_inverse);
 
 	// Simplifies the shader.
 	if (eq2->radius >= INFINITY) {
-		ubo_data->eq2_data[cur_layer].radius = 0.f;
+		ubo_data->layers[cur_layer].eq2_data.radius = 0.f;
 	} else {
-		ubo_data->eq2_data[cur_layer].radius = eq2->radius;
+		ubo_data->layers[cur_layer].eq2_data.radius = eq2->radius;
 	}
 
-	ubo_data->eq2_data[cur_layer].central_horizontal_angle = eq2->central_horizontal_angle;
-	ubo_data->eq2_data[cur_layer].upper_vertical_angle = eq2->upper_vertical_angle;
-	ubo_data->eq2_data[cur_layer].lower_vertical_angle = eq2->lower_vertical_angle;
+	ubo_data->layers[cur_layer].eq2_data.central_horizontal_angle = eq2->central_horizontal_angle;
+	ubo_data->layers[cur_layer].eq2_data.upper_vertical_angle = eq2->upper_vertical_angle;
+	ubo_data->layers[cur_layer].eq2_data.lower_vertical_angle = eq2->lower_vertical_angle;
 
-	ubo_data->image_info[cur_layer].color_image_index = cur_image;
+	ubo_data->layers[cur_layer].image_info.color_image_index = cur_image;
 	cur_image++;
 
 	*out_cur_image = cur_image;
@@ -237,7 +237,7 @@ do_cs_projection_layer(const struct comp_layer *layer,
 	// Color
 	src_samplers[cur_image] = clamp_to_border_black;
 	src_image_views[cur_image] = get_image_view(image, layer_data->flags, array_index);
-	ubo_data->image_info[cur_layer + 0].color_image_index = cur_image++;
+	ubo_data->layers[cur_layer + 0].image_info.color_image_index = cur_image++;
 
 	// Depth
 	if (layer_data->type == XRT_LAYER_PROJECTION_DEPTH) {
@@ -247,22 +247,22 @@ do_cs_projection_layer(const struct comp_layer *layer,
 
 		src_samplers[cur_image] = clamp_to_edge; // Edge to keep depth stable at edges.
 		src_image_views[cur_image] = get_image_view(d_image, layer_data->flags, d_array_index);
-		ubo_data->image_info[cur_layer + 0].depth_image_index = cur_image++;
+		ubo_data->layers[cur_layer + 0].image_info.depth_image_index = cur_image++;
 	}
 
-	set_post_transform_rect(                    //
-	    layer_data,                             // data
-	    &vd->sub.norm_rect,                     // src_norm_rect
-	    false,                                  // invert_flip
-	    &ubo_data->post_transforms[cur_layer]); // out_norm_rect
+	set_post_transform_rect(                           //
+	    layer_data,                                    // data
+	    &vd->sub.norm_rect,                            // src_norm_rect
+	    false,                                         // invert_flip
+	    &ubo_data->layers[cur_layer].post_transforms); // out_norm_rect
 
 	// unused if timewarp is off
 	if (do_timewarp) {
-		render_calc_time_warp_matrix(                   //
-		    &vd->pose,                                  //
-		    &vd->fov,                                   //
-		    world_pose_scanout_begin,                   //
-		    &ubo_data->transforms_timewarp[cur_layer]); //
+		render_calc_time_warp_matrix(                          //
+		    &vd->pose,                                         //
+		    &vd->fov,                                          //
+		    world_pose_scanout_begin,                          //
+		    &ubo_data->layers[cur_layer].transforms_timewarp); //
 	}
 
 	*out_cur_image = cur_image;
@@ -341,12 +341,12 @@ do_cs_quad_layer(const struct comp_layer *layer,
 	math_matrix_4x4_inverse(&plane_transform_view_space, &inverse_quad_transform);
 
 	// Write all of the UBO data.
-	ubo_data->post_transforms[cur_layer] = post_transform;
-	ubo_data->quad_extent[cur_layer].val = layer_data->quad.size;
-	ubo_data->quad_position[cur_layer].val = quad_position;
-	ubo_data->quad_normal[cur_layer].val = normal_view_space;
-	ubo_data->inverse_quad_transform[cur_layer] = inverse_quad_transform;
-	ubo_data->image_info[cur_layer].color_image_index = cur_image;
+	ubo_data->layers[cur_layer].post_transforms = post_transform;
+	ubo_data->layers[cur_layer].quad_extent.val = layer_data->quad.size;
+	ubo_data->layers[cur_layer].quad_position.val = quad_position;
+	ubo_data->layers[cur_layer].quad_normal.val = normal_view_space;
+	ubo_data->layers[cur_layer].inverse_quad_transform = inverse_quad_transform;
+	ubo_data->layers[cur_layer].image_info.color_image_index = cur_image;
 	cur_image++;
 
 	*out_cur_image = cur_image;
@@ -683,11 +683,11 @@ comp_render_cs_layer(struct render_compute *render,
 			continue;
 		}
 
-		ubo_data->layer_data[cur_layer].layer_type = xrt_layer_to_cs_layer_type(data);
-		ubo_data->layer_data[cur_layer].unpremultiplied_alpha = is_layer_unpremultiplied(data);
+		ubo_data->layers[cur_layer].layer_data.layer_type = xrt_layer_to_cs_layer_type(data);
+		ubo_data->layers[cur_layer].layer_data.unpremultiplied_alpha = is_layer_unpremultiplied(data);
 
-		apply_bias_and_scale_from_layer(data, &ubo_data->color_scale[cur_layer],
-		                                &ubo_data->color_bias[cur_layer]);
+		apply_bias_and_scale_from_layer(data, &ubo_data->layers[cur_layer].color_scale,
+		                                &ubo_data->layers[cur_layer].color_bias);
 
 		// Finally okay to increment the current layer.
 		cur_layer++;
@@ -697,7 +697,7 @@ comp_render_cs_layer(struct render_compute *render,
 	ubo_data->layer_count.value = cur_layer;
 
 	for (uint32_t i = cur_layer; i < RENDER_MAX_LAYERS; i++) {
-		ubo_data->layer_data[i].layer_type = LAYER_COMP_TYPE_NOOP; // Explicit no-op.
+		ubo_data->layers[i].layer_data.layer_type = LAYER_COMP_TYPE_NOOP; // Explicit no-op.
 	}
 
 	//! @todo: If Vulkan 1.2, use VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT and skip this

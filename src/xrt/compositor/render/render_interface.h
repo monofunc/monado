@@ -1193,104 +1193,111 @@ struct render_compute_layer_ubo_data
 	struct
 	{
 		uint32_t value;
-		uint32_t padding[3]; // Padding up to a vec4.
+		uint32_t padding0; // Padding up to a vec4.
+		uint32_t padding1;
+		uint32_t padding2;
 	} layer_count;
 
 	struct xrt_normalized_rect pre_transform;
-	struct xrt_normalized_rect post_transforms[RENDER_MAX_LAYERS];
 
-	/*!
-	 * Corresponds to enum xrt_layer_type and unpremultiplied alpha.
-	 *
-	 * std140 uvec2, because it is an array it gets padded to vec4.
-	 */
 	struct
 	{
-		uint32_t layer_type;
-		uint32_t unpremultiplied_alpha;
-		uint32_t _padding0;
-		uint32_t _padding1;
-	} layer_data[RENDER_MAX_LAYERS];
+		struct xrt_normalized_rect post_transforms;
 
-	/*!
-	 * Which image/sampler(s) correspond to each layer.
-	 *
-	 * std140 uvec2, because it is an array it gets padded to vec4.
-	 */
-	struct
-	{
-		uint32_t color_image_index;
-		uint32_t depth_image_index;
+		/*!
+		 * Corresponds to enum xrt_layer_type and unpremultiplied alpha.
+		 *
+		 * std140 uvec2, because it is an array it gets padded to vec4.
+		 */
+		struct
+		{
+			uint32_t layer_type;
+			uint32_t unpremultiplied_alpha;
+			uint32_t _padding0;
+			uint32_t _padding1;
+		} layer_data;
 
-		//! @todo Implement separated samplers and images (and change to samplers[2])
-		uint32_t _padding0;
-		uint32_t _padding1;
-	} image_info[RENDER_MAX_LAYERS];
+		/*!
+		 * Which image/sampler(s) correspond to each layer.
+		 *
+		 * std140 uvec2, because it is an array it gets padded to vec4.
+		 */
+		struct
+		{
+			uint32_t color_image_index;
+			uint32_t depth_image_index;
 
-	//! Shared between cylinder and equirect2.
-	struct xrt_matrix_4x4 mv_inverse[RENDER_MAX_LAYERS];
+			//! @todo Implement separated samplers and images (and change to samplers[2])
+			uint32_t _padding0;
+			uint32_t _padding1;
+		} image_info;
 
-
-	/*!
-	 * For cylinder layer
-	 */
-	struct
-	{
-		float radius;
-		float central_angle;
-		float aspect_ratio;
-		float padding;
-	} cylinder_data[RENDER_MAX_LAYERS];
+		//! Shared between cylinder and equirect2.
+		struct xrt_matrix_4x4 mv_inverse;
 
 
-	/*!
-	 * For equirect2 layers
-	 */
-	struct
-	{
-		float radius;
-		float central_horizontal_angle;
-		float upper_vertical_angle;
-		float lower_vertical_angle;
-	} eq2_data[RENDER_MAX_LAYERS];
+		/*!
+		 * For cylinder layer
+		 */
+		struct
+		{
+			float radius;
+			float central_angle;
+			float aspect_ratio;
+			float padding;
+		} cylinder_data;
 
 
-	/*!
-	 * For projection layers
-	 */
+		/*!
+		 * For equirect2 layers
+		 */
+		struct
+		{
+			float radius;
+			float central_horizontal_angle;
+			float upper_vertical_angle;
+			float lower_vertical_angle;
+		} eq2_data;
 
-	//! Timewarp matrices
-	struct xrt_matrix_4x4 transforms_timewarp[RENDER_MAX_LAYERS];
 
-	/*!
-	 * For quad layers
-	 */
+		/*!
+		 * For projection layers
+		 */
 
-	//! All quad transforms and coordinates are in view space
-	struct
-	{
-		struct xrt_vec3 val;
-		float padding;
-	} quad_position[RENDER_MAX_LAYERS];
-	struct
-	{
-		struct xrt_vec3 val;
-		float padding;
-	} quad_normal[RENDER_MAX_LAYERS];
-	struct xrt_matrix_4x4 inverse_quad_transform[RENDER_MAX_LAYERS];
+		//! Timewarp matrices
+		struct xrt_matrix_4x4 transforms_timewarp;
 
-	//! Quad extent in world scale
-	struct
-	{
-		struct xrt_vec2 val;
-		float padding[XRT_MAX_VIEWS];
-	} quad_extent[RENDER_MAX_LAYERS];
+		/*!
+		 * For quad layers
+		 */
 
-	/*!
-	 * Color scale and bias for all layers
-	 */
-	struct xrt_colour_rgba_f32 color_scale[RENDER_MAX_LAYERS];
-	struct xrt_colour_rgba_f32 color_bias[RENDER_MAX_LAYERS];
+		//! All quad transforms and coordinates are in view space
+		struct
+		{
+			struct xrt_vec3 val;
+			float padding;
+		} quad_position;
+		struct
+		{
+			struct xrt_vec3 val;
+			float padding;
+		} quad_normal;
+		struct xrt_matrix_4x4 inverse_quad_transform;
+
+		//! Quad extent in world scale
+		struct
+		{
+			struct xrt_vec2 val;
+			float padding0;
+			float padding1;
+		} quad_extent;
+
+		/*!
+		 * Color scale and bias for all layers
+		 */
+		struct xrt_colour_rgba_f32 color_scale;
+		struct xrt_colour_rgba_f32 color_bias;
+	} layers[RENDER_MAX_LAYERS];
 };
 
 /*!
