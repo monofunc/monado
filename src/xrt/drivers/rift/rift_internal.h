@@ -507,6 +507,43 @@ struct rift_radio_report
 	struct rift_radio_report_message messages[2];
 };
 
+enum rift_tracking_flags
+{
+	// enable the tracking LED exposure and updating
+	RIFT_TRACKING_ENABLE = 1 << 0,
+	// automatically increment the pattern index after each exposure
+	RIFT_TRACKING_AUTO_INCREMENT = 1 << 1,
+	// modulate the tracking LEDs at 85kHz to allow wireless sync, defaults to on
+	RIFT_TRACKING_USE_CARRIER = 1 << 2,
+	// trigger LED exposure using a rising edge of GPIO1, else triggered on a timer
+	RIFT_TRACKING_SYNC_INPUT = 1 << 3,
+	// trigger LED exposure on each vsync rather than an internal or external timer
+	RIFT_TRACKING_VSYNC_LOCK = 1 << 4,
+	// use the custom pattern given to the headset
+	RIFT_TRACKING_CUSTOM_PATTERN = 1 << 5,
+};
+
+struct rift_tracking_report
+{
+	uint16_t command_id;
+	// the index of the current pattern being flashed, pattern 255 is reserved for "all high"
+	uint8_t pattern_idx;
+	// the enabled tracking flags, see rift_tracking_flags
+	uint16_t flags;
+	// the amount of time to enable the LEDs for during an exposure, sync output also follows this length, cannot be
+	// longer than frame_interval, and has a minimum of 10 microseconds
+	uint16_t exposure_length;
+	// when SYNCINPUT and VSYNC_LOCK are false, the tracking LEDs are exposed on the interval set here, in
+	// microseconds
+	uint16_t frame_interval;
+	// when VSYNC_LOCK is true, this gives a fixed microsecond offset from the vsync to when the LEDs are triggered
+	uint16_t vsync_offset;
+	// the duty cycle of the 85kHz modulation, defaults to 128, resulting in a 50% duty cycle
+	uint8_t duty_cycle;
+};
+
+SIZE_ASSERT(struct rift_tracking_report, 12);
+
 #pragma pack(pop)
 
 /*

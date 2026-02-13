@@ -134,6 +134,28 @@ rift_set_config(struct rift_hmd *hmd, struct rift_config_report *config)
 	return rift_send_report(hmd, false, FEATURE_REPORT_CONFIG, config, sizeof(*config));
 }
 
+int
+rift_get_tracking_report(struct rift_hmd *hmd, struct rift_tracking_report *tracking_report)
+{
+	uint8_t buf[REPORT_MAX_SIZE] = {0};
+
+	int result = rift_get_report(hmd, false, FEATURE_REPORT_TRACKING, buf, sizeof(buf));
+	if (result < 0) {
+		return result;
+	}
+
+	// FIXME: handle endianness
+	memcpy(tracking_report, buf + 1, sizeof(*tracking_report));
+
+	return 0;
+}
+
+int
+rift_set_tracking(struct rift_hmd *hmd, struct rift_tracking_report *tracking)
+{
+	return rift_send_report(hmd, false, FEATURE_REPORT_TRACKING, tracking, sizeof(*tracking));
+}
+
 static float
 rift_decode_fixed_point_uint16(uint16_t value, uint16_t zero_value, int fractional_bits)
 {

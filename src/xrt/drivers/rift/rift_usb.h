@@ -26,6 +26,12 @@ int
 rift_set_config(struct rift_hmd *hmd, struct rift_config_report *config);
 
 int
+rift_get_tracking_report(struct rift_hmd *hmd, struct rift_tracking_report *tracking_report);
+
+int
+rift_set_tracking(struct rift_hmd *hmd, struct rift_tracking_report *tracking);
+
+int
 rift_get_display_info(struct rift_hmd *hmd, struct rift_display_info_report *display_info);
 
 int

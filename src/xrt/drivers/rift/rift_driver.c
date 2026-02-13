@@ -602,6 +602,33 @@ rift_devices_create(struct os_hid_device *hmd_dev,
 		rift_fill_in_default_distortions(hmd);
 	}
 
+	struct rift_tracking_report tracking;
+	result = rift_get_tracking_report(hmd, &tracking);
+	if (result == 0) {
+		tracking.flags = RIFT_TRACKING_ENABLE | RIFT_TRACKING_USE_CARRIER;
+		tracking.pattern_idx = 0xff;
+
+		tracking.vsync_offset = 0;
+		tracking.duty_cycle = 0x7f;
+
+		switch (hmd->variant) {
+		default:
+		case RIFT_VARIANT_DK2:
+			tracking.exposure_length = 350;
+			tracking.frame_interval = 16666;
+			break;
+		case RIFT_VARIANT_CV1:
+			tracking.exposure_length = 399;
+			tracking.frame_interval = 19200;
+			break;
+		}
+
+		result = rift_set_tracking(hmd, &tracking);
+		if (result < 0) {
+			HMD_ERROR(hmd, "Failed to enable tracking.");
+		}
+	}
+
 	// fill in extra display info about the headset
 
 	switch (hmd->variant) {
@@ -843,4 +870,16 @@ rift_devices_create(struct os_hid_device *hmd_dev,
 error:
 	rift_hmd_destroy(&hmd->base);
 	return -1;
+}
+
+bool
+rift_get_radio_id(struct rift_hmd *hmd, uint8_t out_radio_id[5])
+{
+	if (hmd->variant != RIFT_VARIANT_CV1) {
+		return false;
+	}
+
+	memcpy(out_radio_id, hmd->radio_address, sizeof(hmd->radio_address));
+
+	return true;
 }

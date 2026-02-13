@@ -71,6 +71,9 @@ rift_devices_create(struct os_hid_device *hmd_dev,
                     struct rift_hmd **out_hmd,
                     struct xrt_device **out_xdevs);
 
+bool
+rift_get_radio_id(struct rift_hmd *hmd, uint8_t out_radio_id[5]);
+
 /*!
  * @dir drivers/rift
  *
