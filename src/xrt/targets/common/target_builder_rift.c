@@ -9,6 +9,7 @@
 
 #include "xrt/xrt_config_drivers.h"
 #include "xrt/xrt_prober.h"
+#include "xrt/xrt_frameserver.h"
 
 #include "util/u_builders.h"
 #include "util/u_debug.h"
@@ -16,6 +17,8 @@
 #include "util/u_logging.h"
 #include "util/u_system_helpers.h"
 #include "util/u_trace_marker.h"
+#include "util/u_var.h"
+#include "util/u_sink.h"
 
 #include "rift/rift_interface.h"
 
@@ -39,6 +42,8 @@ struct rift_builder
 
 #ifdef XRT_BUILD_DRIVER_RIFT_SENSOR
 	struct rift_sensor_context *sensor_context;
+	struct rift_sensor **sensors;
+	size_t num_sensors;
 #endif
 };
 
@@ -221,6 +226,40 @@ rift_open_system_impl(struct xrt_builder *xb,
 	if (ret != 0) {
 		RIFT_WARN(rb, "Rift sensor context creation failed with code %d", ret);
 	}
+
+	uint8_t radio_id[5] = {0};
+	if (rb->hmd) {
+		rift_get_radio_id(rb->hmd, radio_id);
+	}
+
+	if (rb->sensor_context) {
+		ret = rift_sensor_context_start(rb->sensor_context);
+		if (ret != 0) {
+			RIFT_WARN(rb, "Rift sensor context start failed with code %d", ret);
+		}
+
+		ssize_t num_sensors = rift_sensor_context_get_sensors(rb->sensor_context, &rb->sensors);
+		if (num_sensors < 0) {
+			RIFT_WARN(rb, "Rift sensor context get sensors failed with code %d", (int)num_sensors);
+		}
+		rb->num_sensors = (size_t)num_sensors;
+
+		for (ssize_t i = 0; i < num_sensors; i++) {
+			struct rift_sensor *sensor = rb->sensors[i];
+
+			struct xrt_fs *fs = rift_sensor_get_frame_server(sensor);
+			if (!xrt_fs_stream_start(fs, NULL, XRT_FS_CAPTURE_TYPE_TRACKING, 0)) {
+				RIFT_WARN(rb, "Failed to start Rift sensor frame server stream for sensor %zd", i);
+				continue;
+			}
+		}
+
+		// @note radio_id may be null on DK2, but DK2 doesn't use the radio ID so this is fine.
+		ret = rift_sensor_context_enable_exposure_sync(rb->sensor_context, radio_id);
+		if (ret != 0) {
+			RIFT_WARN(rb, "Rift sensor context exposure sync enable failed with code %d", ret);
+		}
+	}
 #endif
 
 	return XRT_SUCCESS;
@@ -245,7 +284,13 @@ rift_destroy(struct xrt_builder *xb)
 	if (rb->sensor_context) {
 		rift_sensor_context_destroy(rb->sensor_context);
 	}
+
+	if (rb->sensors) {
+		free(rb->sensors);
+	}
 #endif
+
+	u_var_remove_root(rb);
 
 	free(xb);
 }
@@ -275,6 +320,9 @@ rift_builder_create(void)
 
 	// u_builder fields.
 	rb->base.open_system_static_roles = rift_open_system_impl;
+
+	u_var_add_root(rb, "Rift Builder", false);
+	u_var_add_log_level(rb, &rb->log_level, "Log Level");
 
 	return &rb->base.base;
 }
