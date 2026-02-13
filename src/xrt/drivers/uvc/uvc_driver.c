@@ -260,7 +260,9 @@ process_payload(struct uvc_fs *stream, unsigned char *payload, size_t len)
 
 	if (stream->frame_collected == stream->frame_size || is_eof) {
 		stream->cur_frame->size = stream->frame_collected;
-		xrt_sink_push_frame(stream->sink, stream->cur_frame);
+		if (stream->sink) {
+			xrt_sink_push_frame(stream->sink, stream->cur_frame);
+		}
 		u_sink_debug_push_frame(&stream->usd, stream->cur_frame);
 		stream->frame_collected = 0;
 		xrt_frame_reference(&stream->cur_frame, NULL);
