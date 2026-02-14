@@ -34,11 +34,13 @@
 
 namespace {
 
+DEBUG_GET_ONCE_OPTION(lh_wait_for_serials, "LH_WAIT_FOR_SERIALS", NULL)
 DEBUG_GET_ONCE_LOG_OPTION(lh_log, "LIGHTHOUSE_LOG", U_LOGGING_INFO)
 DEBUG_GET_ONCE_BOOL_OPTION(lh_load_slimevr, "LH_LOAD_SLIMEVR", false)
 DEBUG_GET_ONCE_NUM_OPTION(lh_discover_wait_ms, "LH_DISCOVER_WAIT_MS", 3000)
 
 static constexpr size_t MAX_CONTROLLERS = 16;
+static constexpr int POLLING_INTERVAL_MS = 20;
 
 
 struct steamvr_lh_system
@@ -883,22 +885,117 @@ steamvr_lh_create_devices(struct xrt_prober *xp, struct xrt_system_devices **out
 	    !loadDriver("/drivers/slimevr/bin/linux64/driver_slimevr.so", false))
 		return xrt_result::XRT_ERROR_DEVICE_CREATION_FAILED;
 	svrs->ctx = Context::create(STEAM_INSTALL_DIR, steamvr, std::move(drivers));
-	if (svrs->ctx == nullptr)
+	if (svrs->ctx == nullptr) {
 		return xrt_result::XRT_ERROR_DEVICE_CREATION_FAILED;
+	}
 
-	U_LOG_IFL_I(level, "Lighthouse initialization complete, giving time to setup connected devices...");
+	U_LOG_IFL_I(level, "Lighthouse initialization complete, starting device discovery...");
+
+	// Parse the serial numbers to wait for
+	std::vector<std::string> serials_to_wait;
+	const char *wait_serials_env = debug_get_option_lh_wait_for_serials();
+	int wait_ms = debug_get_num_option_lh_discover_wait_ms();
+	bool wait_indefinitely = (wait_ms == -1);
+
+	// If wait_ms is -1 but no devices are specified, use a default timeout value
+	int actual_wait_ms = wait_ms;
+	if (wait_indefinitely && (!wait_serials_env || strlen(wait_serials_env) == 0)) {
+		actual_wait_ms = 3000; // Default to 3 seconds if waiting indefinitely with no device list
+		wait_indefinitely = false;
+		U_LOG_IFL_W(level,
+		            "LH_DISCOVER_WAIT_MS is -1 but no devices specified in LH_WAIT_FOR_SERIALS, using default "
+		            "3000ms timeout instead");
+	}
+
+	if (wait_serials_env && strlen(wait_serials_env) > 0) {
+		std::string serials_str(wait_serials_env);
+		size_t pos = 0;
+		std::string token;
+		while ((pos = serials_str.find(':')) != std::string::npos) {
+			token = serials_str.substr(0, pos);
+			serials_to_wait.push_back(token);
+			serials_str.erase(0, pos + 1);
+		}
+		if (!serials_str.empty()) {
+			serials_to_wait.push_back(serials_str);
+		}
+
+		U_LOG_IFL_I(level, "Waiting for the following devices:");
+		for (const auto &serial : serials_to_wait) {
+			U_LOG_IFL_I(level, "  - %s", serial.c_str());
+		}
+
+		if (wait_indefinitely) {
+			U_LOG_IFL_I(level, "Will wait indefinitely (LH_DISCOVER_WAIT_MS=-1) for all specified devices");
+		} else {
+			U_LOG_IFL_I(level, "Will wait up to %d ms for all specified devices", actual_wait_ms);
+		}
+	}
+
 	// RunFrame needs to be called to detect controllers
 	using namespace std::chrono_literals;
-	auto end_time = std::chrono::steady_clock::now() + 1ms * debug_get_num_option_lh_discover_wait_ms();
+	auto start_time = std::chrono::steady_clock::now();
+	auto end_time = start_time + 1ms * (actual_wait_ms > 0 ? actual_wait_ms : 3000);
+	bool all_found = false;
+	int progress_counter = 0;
+
 	while (true) {
 		svrs->ctx->run_frame();
+
+		// Check if all required devices are found
+		if (!serials_to_wait.empty()) {
+			all_found = true;
+			for (const auto &serial : serials_to_wait) {
+				bool found = false;
+
+				// Check if serial is in HMD
+				if (svrs->ctx->hmd && strcmp(svrs->ctx->hmd->serial, serial.c_str()) == 0) {
+					found = true;
+				}
+
+				// Check if serial is in controllers
+				for (size_t i = 0; i < MAX_CONTROLLERS; i++) {
+					if (svrs->ctx->controller[i] &&
+					    strcmp(svrs->ctx->controller[i]->serial, serial.c_str()) == 0) {
+						found = true;
+						break;
+					}
+				}
+
+				if (!found) {
+					all_found = false;
+					break;
+				}
+			}
+
+			if (all_found) {
+				U_LOG_IFL_I(level, "All specified devices have been found.");
+				break;
+			}
+		}
+
 		auto cur_time = std::chrono::steady_clock::now();
-		if (cur_time > end_time) {
+
+		// Check timeout for normal operation
+		if (!wait_indefinitely && cur_time > end_time) {
+			if (!serials_to_wait.empty()) {
+				U_LOG_IFL_W(level, "Timeout reached but not all specified devices were found.");
+			}
 			break;
 		}
-		std::this_thread::sleep_for(20ms);
+
+		// Print a progress indicator every ~1 second
+		progress_counter++;
+		if (progress_counter >= 1000 / POLLING_INTERVAL_MS) {
+			progress_counter = 0;
+			auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+			                   std::chrono::steady_clock::now() - start_time)
+			                   .count();
+			U_LOG_IFL_I(level, "Still searching for devices... (elapsed: %ld seconds)", elapsed);
+		}
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(POLLING_INTERVAL_MS));
 	}
-	U_LOG_IFL_I(level, "Device search time complete.");
 
 	if (out_xsysd == NULL || *out_xsysd != NULL) {
 		U_LOG_IFL_E(level, "Invalid output system pointer");

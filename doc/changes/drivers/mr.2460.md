@@ -1,0 +1,1 @@
+d/steamvr_lh: Introduce LH_WAIT_FOR_SERIALS to specify desired devices to block driver init until timeout or exit timeout early and LH_WAIT_INDEFINITELY to allow the driver to block forever until all devices are located.
