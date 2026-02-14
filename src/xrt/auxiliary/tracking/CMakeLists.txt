@@ -14,6 +14,7 @@ add_library(
 	t_imu.h
 	t_openvr_tracker.cpp
 	t_openvr_tracker.h
+	t_rift_blobwatch.c
 	t_tracking.h
 	)
 target_link_libraries(
