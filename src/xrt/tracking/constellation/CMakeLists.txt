@@ -12,6 +12,8 @@ add_library(
 	pose_metrics.h
 	pose_optimize.cpp
 	pose_optimize.h
+	t_constellation_tracker.cpp
+	t_constellation_tracker.h
 	t_rift_blobwatch.c
 	t_rift_blobwatch.h
 	lambdatwist/cubic.h
