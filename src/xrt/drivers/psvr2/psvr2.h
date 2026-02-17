@@ -9,7 +9,7 @@
  *
  * @author Jan Schmidt <jan@centricular.com>
  * @author Jakob Bornecrantz <jakob@collabora.com>
- * @author Ryan Pavlik <ryan.pavlik@collabora.com>
+ * @author Rylie Pavlik <rylie.pavlik@collabora.com>
  * @author Joel Valenciano <joelv1907@gmail.com>
  * @author Beyley Cardellio <ep1cm1n10n123@gmail.com>
  * @ingroup drv_psvr2
