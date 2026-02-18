@@ -1811,6 +1811,33 @@ ipc_handle_system_set_client_io_blocks(volatile struct ipc_client_state *_ics,
 }
 
 xrt_result_t
+ipc_handle_system_set_client_resolution_scale(volatile struct ipc_client_state *_ics,
+                                              uint32_t client_id,
+                                              uint32_t view,
+                                              float scale)
+{
+	struct ipc_server *s = _ics->server;
+
+	IPC_DEBUG(s, "Setting resolution scale for view %u on client %u to %f", view, client_id, scale);
+
+	return ipc_server_set_client_resolution_scale(s, client_id, view, scale);
+}
+
+xrt_result_t
+ipc_handle_system_get_client_view_resolution(volatile struct ipc_client_state *_ics,
+                                             uint32_t client_id,
+                                             uint32_t view,
+                                             float *out_scale,
+                                             struct xrt_size *out_resolution)
+{
+	struct ipc_server *s = _ics->server;
+
+	IPC_DEBUG(s, "Requesting recommended view resolution for view %u on client %u.", view, client_id);
+
+	return ipc_server_get_client_view_resolution(s, client_id, view, out_scale, out_resolution);
+}
+
+xrt_result_t
 ipc_handle_swapchain_get_properties(volatile struct ipc_client_state *ics,
                                     const struct xrt_swapchain_create_info *info,
                                     struct xrt_swapchain_create_properties *xsccp)

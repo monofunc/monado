@@ -75,5 +75,24 @@
 		"out": [
 			{"name": "info", "type": "struct xrt_system_compositor_info"}
 		]
+	},
+
+	"system_set_client_resolution_scale": {
+		"in": [
+			{"name": "id", "type": "uint32_t"},
+			{"name": "view", "type": "uint32_t"},
+			{"name": "scale", "type": "float"}
+		]
+	},
+
+	"system_get_client_view_resolution": {
+		"in": [
+			{"name": "id", "type": "uint32_t"},
+			{"name": "view", "type": "uint32_t"}
+		],
+		"out": [
+			{"name": "scale", "type": "float"},
+			{"name": "resolution", "type": "struct xrt_size"}
+		]
 	}
 }

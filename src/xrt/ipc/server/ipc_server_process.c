@@ -694,7 +694,7 @@ set_client_resolution_scale(struct ipc_server *s, uint32_t client_id, uint32_t v
 }
 
 static xrt_result_t
-get_client_recommended_view_resolution(
+get_client_view_resolution(
     struct ipc_server *s, uint32_t client_id, uint32_t view, float *out_scale, struct xrt_size *out_resolution)
 {
 	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
@@ -793,6 +793,27 @@ ipc_server_set_client_io_blocks(struct ipc_server *s, uint32_t client_id, const 
 {
 	os_mutex_lock(&s->global_state.lock);
 	xrt_result_t xret = set_client_io_blocks_locked(s, client_id, blocks);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_set_client_resolution_scale(struct ipc_server *s, uint32_t client_id, uint32_t view, float scale)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = set_client_resolution_scale(s, client_id, view, scale);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_get_client_view_resolution(
+    struct ipc_server *s, uint32_t client_id, uint32_t view, float *out_scale, struct xrt_size *out_resolution)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = get_client_view_resolution(s, client_id, view, out_scale, out_resolution);
 	os_mutex_unlock(&s->global_state.lock);
 
 	return xret;
