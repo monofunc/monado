@@ -23,6 +23,7 @@
 #include "oxr_dpad_state.h"
 #include "oxr_input_transform.h"
 #include "oxr_generated_bindings.h"
+#include "oxr_nv_action_context.h"
 
 #include "../oxr_objects.h"
 #include "../oxr_logger.h"

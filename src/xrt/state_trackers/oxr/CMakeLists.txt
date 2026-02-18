@@ -13,6 +13,8 @@ add_library(
 	st_oxr STATIC
 	actions/oxr_api_action.c
 	actions/oxr_api_action.h
+	actions/oxr_api_nv_action_context.c
+	actions/oxr_api_nv_action_context.h
 	actions/oxr_binding.c
 	actions/oxr_binding.h
 	actions/oxr_dpad_state.c
@@ -27,6 +29,8 @@ add_library(
 	actions/oxr_input_transform.h
 	actions/oxr_instance_action_context.c
 	actions/oxr_instance_action_context.h
+	actions/oxr_nv_action_context.c
+	actions/oxr_nv_action_context.h
 	actions/oxr_pair_hashset.c
 	actions/oxr_pair_hashset.h
 	actions/oxr_instance_path_cache.c

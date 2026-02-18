@@ -21,6 +21,7 @@
 
 #include "actions/oxr_subaction.h"
 #include "actions/oxr_input.h"
+#include "actions/oxr_session_attached_actions.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -441,6 +442,7 @@ XrResult
 oxr_verify_action_sets_array(struct oxr_logger *log,
                              uint32_t countActionSets,
                              const XrActionSet *actionSets,
+                             struct oxr_instance_action_context *expected_inst_context,
                              const char *variable_name)
 {
 	if (countActionSets == 0 || actionSets == NULL) {
@@ -460,6 +462,17 @@ oxr_verify_action_sets_array(struct oxr_logger *log,
 		if (act_set->handle.state != OXR_HANDLE_STATE_LIVE) {
 			return oxr_error(log, XR_ERROR_HANDLE_INVALID, "(%s[%u]) is not live", variable_name, i);
 		}
+
+		if (act_set->inst_context != expected_inst_context) {
+#if defined(OXR_HAVE_NVX1_action_context)
+			const XrResult ret = XR_ERROR_ACTION_SETS_DIFFERENT_INSTANCE_ACTION_CONTEXT_NV;
+#else
+			// This should not happen without the NVX1_action_context extension.
+			const XrResult ret = XR_ERROR_RUNTIME_FAILURE;
+#endif
+			return oxr_error(log, ret, "(%s[%u]) does not belong to the expected instance action context",
+			                 variable_name, i);
+		}
 	}
 
 	return XR_SUCCESS;
@@ -470,6 +483,7 @@ oxr_verify_active_action_sets_sync(struct oxr_logger *log,
                                    const struct oxr_instance *inst,
                                    uint32_t countActiveActionSets,
                                    const XrActiveActionSet *activeActionSets,
+                                   struct oxr_instance_action_context *expected_inst_context,
                                    const char *variable_name)
 {
 	for (uint32_t i = 0; i < countActiveActionSets; i++) {
@@ -488,6 +502,18 @@ oxr_verify_active_action_sets_sync(struct oxr_logger *log,
 			                 i);
 		}
 
+		if (act_set->inst_context != expected_inst_context) {
+#if defined(OXR_HAVE_NVX1_action_context)
+			const XrResult ret = XR_ERROR_ACTION_SETS_DIFFERENT_INSTANCE_ACTION_CONTEXT_NV;
+#else
+			// This should not happen without the NVX1_action_context extension.
+			const XrResult ret = XR_ERROR_RUNTIME_FAILURE;
+#endif
+			return oxr_error(log, ret,
+			                 "(%s[%u].actionSet) does not belong to the expected instance action context",
+			                 variable_name, i);
+		}
+
 		XrResult res = oxr_verify_subaction_path_sync(log, inst, act_set, activeActionSets[i].subactionPath, i);
 		if (res != XR_SUCCESS) {
 			return res;
@@ -496,6 +522,35 @@ oxr_verify_active_action_sets_sync(struct oxr_logger *log,
 
 	return XR_SUCCESS;
 }
+
+#if defined(OXR_HAVE_NVX1_action_context)
+XrResult
+oxr_verify_not_already_attached_to_session(struct oxr_logger *log,
+                                           struct oxr_session *sess,
+                                           const XrActionSet *action_sets,
+                                           uint32_t action_set_count,
+                                           const char *variable_name)
+{
+	for (uint32_t i = 0; i < action_set_count; i++) {
+		struct oxr_action_set *act_set = XRT_CAST_OXR_HANDLE_TO_PTR(struct oxr_action_set *, action_sets[i]);
+		for (uint32_t k = 0; k < XRT_MAX_HANDLE_CHILDREN; k++) {
+			struct oxr_action *act = (struct oxr_action *)act_set->handle.children[k];
+			if (act == NULL) {
+				continue;
+			}
+			struct oxr_action_attachment *existing = NULL;
+			oxr_session_attached_actions_find(&sess->attached_actions, act->data->act_key, &existing);
+			if (existing != NULL) {
+				return oxr_error(
+				    log, XR_ERROR_ACTION_SET_ALREADY_ATTACHED_TO_SESSION_CONTEXT_NV,
+				    "(%s[%u]) action set already attached to another session action context",
+				    variable_name, i);
+			}
+		}
+	}
+	return XR_SUCCESS;
+}
+#endif
 
 XrResult
 oxr_verify_view_config_type(struct oxr_logger *log,

@@ -13,6 +13,7 @@
 
 #include "oxr_extension_support.h"
 #include "actions/oxr_api_action.h"
+#include "actions/oxr_api_nv_action_context.h"
 
 
 #ifdef __cplusplus

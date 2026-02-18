@@ -30,6 +30,10 @@
 #include "../oxr_chain.h"
 #include "../oxr_roles.h"
 
+#ifdef OXR_HAVE_NVX1_action_context
+#include "oxr_nv_action_context.h"
+#endif
+
 #include <stdio.h>
 
 
@@ -157,6 +161,7 @@ oxr_xrSyncActions(XrSession session, const XrActionsSyncInfo *syncInfo)
 	    sess->sys->inst,                               //
 	    syncInfo->countActiveActionSets,               //
 	    syncInfo->activeActionSets,                    //
+	    sess->sys->inst->action_context,               //
 	    "syncInfo->activeActionSets");                 //
 	if (ret != XR_SUCCESS) {
 		return ret;
@@ -179,9 +184,25 @@ oxr_xrAttachSessionActionSets(XrSession session, const XrSessionActionSetsAttach
 	OXR_VERIFY_SESSION_NOT_LOST(&log, sess);
 	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, bindInfo, XR_TYPE_SESSION_ACTION_SETS_ATTACH_INFO);
 
-	// Convenience
-	struct oxr_instance_action_context *inst_context = sess->sys->inst->action_context;
-	struct oxr_session_action_context *sess_context = &sess->action_context;
+	struct oxr_instance_action_context *inst_context = NULL;
+	struct oxr_session_action_context *sess_context = NULL;
+
+#ifdef OXR_HAVE_NVX1_action_context
+	struct oxr_session_action_context_nv *sess_ctx_nv = NULL;
+	ret = oxr_resolve_session_action_context_from_chain( //
+	    &log,                                            //
+	    sess,                                            //
+	    bindInfo->next,                                  //
+	    &inst_context,                                   //
+	    &sess_context,                                   //
+	    &sess_ctx_nv);                                   //
+	if (ret != XR_SUCCESS) {
+		return ret;
+	}
+#else
+	sess_context = &sess->action_context;
+	inst_context = sess->sys->inst->action_context;
+#endif
 
 	if (oxr_session_action_context_has_attached_act_sets(sess_context)) {
 		return oxr_error(&log, XR_ERROR_ACTIONSETS_ALREADY_ATTACHED,
@@ -199,10 +220,25 @@ oxr_xrAttachSessionActionSets(XrSession session, const XrSessionActionSetsAttach
 	    &log,                           //
 	    bindInfo->countActionSets,      //
 	    bindInfo->actionSets,           //
+	    inst_context,                   //
 	    "bindInfo->actionSets");        //
 	if (ret != XR_SUCCESS) {
 		return ret;
 	}
+
+#ifdef OXR_HAVE_NVX1_action_context
+	if (sess_ctx_nv != NULL) {
+		ret = oxr_verify_not_already_attached_to_session( //
+		    &log,                                         //
+		    sess,                                         //
+		    bindInfo->actionSets,                         //
+		    bindInfo->countActionSets,                    //
+		    "bindInfo->actionSets");                      //
+		if (ret != XR_SUCCESS) {
+			return ret;
+		}
+	}
+#endif
 
 	ret = oxr_session_attach_action_sets(  //
 	    &log,                              //
@@ -235,6 +271,21 @@ oxr_xrSuggestInteractionProfileBindings(XrInstance instance,
 		                 "(suggestedBindings->countSuggestedBindings "
 		                 "== 0) cannot suggest 0 bindings");
 	}
+
+	struct oxr_instance_action_context *inst_context = NULL;
+#ifdef OXR_HAVE_NVX1_action_context
+	struct oxr_instance_action_context_nv *nv_ctx = NULL;
+	ret =
+	    oxr_resolve_instance_action_context_from_chain(&log, inst, suggestedBindings->next, &inst_context, &nv_ctx);
+	if (ret != XR_SUCCESS) {
+		return ret;
+	}
+	if (nv_ctx != NULL && nv_ctx->immutable) {
+		return oxr_error(&log, XR_ERROR_VALIDATION_FAILURE, "instanceActionContext is immutable");
+	}
+#else
+	inst_context = inst->action_context;
+#endif
 
 	XrPath ip = suggestedBindings->interactionProfile;
 	const char *ip_str = NULL;
@@ -393,7 +444,7 @@ oxr_xrSuggestInteractionProfileBindings(XrInstance instance,
 	    &log,                                               //
 	    &inst->path_store,                                  //
 	    &inst->path_cache,                                  //
-	    inst->action_context,                               //
+	    inst_context,                                       //
 	    suggestedBindings,                                  //
 	    &dpad_state);                                       //
 }
@@ -548,10 +599,26 @@ oxr_xrCreateActionSet(XrInstance instance, const XrActionSetCreateInfo *createIn
 
 
 	/*
-	 * Action context.
+	 * Action context (default or from XrInstanceActionContextInfoNV chain).
 	 */
 
+#ifdef OXR_HAVE_NVX1_action_context
+	struct oxr_instance_action_context_nv *nv_ctx = NULL;
+
+	ret = oxr_resolve_instance_action_context_from_chain(&log, inst, createInfo->next, &inst_context, &nv_ctx);
+	if (ret != XR_SUCCESS) {
+		return ret;
+	}
+	if (nv_ctx != NULL && nv_ctx->immutable) {
+		return oxr_error(&log, XR_ERROR_VALIDATION_FAILURE, "instanceActionContext is immutable");
+	}
+#else
 	inst_context = inst->action_context;
+#endif
+	/* Defensive: resolver always returns a context; default inst->action_context is never NULL. */
+	if (inst_context == NULL) {
+		return oxr_error(&log, XR_ERROR_RUNTIME_FAILURE, "inst_context is NULL");
+	}
 
 
 	/*
