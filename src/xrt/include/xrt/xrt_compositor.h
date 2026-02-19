@@ -2431,6 +2431,14 @@ struct xrt_multi_compositor_control
 	                                               struct xrt_compositor *xc,
 	                                               float from_display_refresh_rate_hz,
 	                                               float to_display_refresh_rate_hz);
+
+	/*!
+	 * This function returns the current view type of the active session. Returns XRT_ERROR_SESSION_NOT_BEGUN when
+	 * no session was begun.
+	 */
+	xrt_result_t (*session_get_view_type)(struct xrt_system_compositor *xsc,
+	                                      struct xrt_compositor *xc,
+	                                      enum xrt_view_type *out_view_type);
 };
 
 /*!
@@ -2606,6 +2614,28 @@ xrt_syscomp_notify_display_refresh_changed(struct xrt_system_compositor *xsc,
 
 	return xsc->xmcc->notify_display_refresh_changed(xsc, xc, from_display_refresh_rate_hz,
 	                                                 to_display_refresh_rate_hz);
+}
+
+/*!
+ * @copydoc xrt_multi_compositor_control::notify_display_refresh_changed
+ *
+ * Helper for calling through the function pointer.
+ *
+ * If the system compositor @p xsc does not implement @ref xrt_multi_composition_control,
+ * this returns @ref XRT_ERROR_MULTI_SESSION_NOT_IMPLEMENTED.
+ *
+ * @public @memberof xrt_system_compositor
+ */
+XRT_NONNULL_ALL static inline xrt_result_t
+xrt_syscomp_session_get_view_type(struct xrt_system_compositor *xsc,
+                                  struct xrt_compositor *xc,
+                                  enum xrt_view_type *out_view_type)
+{
+	if (xsc->xmcc == NULL) {
+		return XRT_ERROR_MULTI_SESSION_NOT_IMPLEMENTED;
+	}
+
+	return xsc->xmcc->session_get_view_type(xsc, xc, out_view_type);
 }
 
 /*!

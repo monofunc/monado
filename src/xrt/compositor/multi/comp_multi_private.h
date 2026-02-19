@@ -126,6 +126,7 @@ struct multi_compositor
 		int64_t z_order;
 
 		bool session_active;
+		enum xrt_view_type session_view_type;
 	} state;
 
 	struct

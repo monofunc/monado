@@ -262,4 +262,9 @@ typedef enum xrt_result
 	 * C++ code threw an exception that wasn't caught.
 	 */
 	XRT_ERROR_UNCAUGHT_EXCEPTION = -43,
+
+	/*!
+	 * A session was not begun beforehand.
+	 */
+	XRT_ERROR_SESSION_NOT_BEGUN = -44,
 } xrt_result_t;
