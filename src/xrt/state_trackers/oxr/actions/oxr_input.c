@@ -1857,6 +1857,7 @@ oxr_session_attach_action_sets(struct oxr_logger *log,
                                const XrSessionActionSetsAttachInfo *bindInfo)
 {
 	struct oxr_instance *inst = sess->sys->inst;
+	XrResult ret = XR_SUCCESS;
 
 	const struct oxr_instance_action_context *inst_context = inst->action_context;
 	struct oxr_session_attached_actions *attached_actions = &sess->attached_actions;
@@ -1876,13 +1877,28 @@ oxr_session_attach_action_sets(struct oxr_logger *log,
 		    XRT_CAST_OXR_HANDLE_TO_PTR(struct oxr_action_set *, bindInfo->actionSets[i]);
 		struct oxr_action_set_ref *act_set_ref = act_set->data;
 		act_set_ref->ever_attached = true;
+
 		struct oxr_action_set_attachment *act_set_attached = &sess->action_context.act_set_attachments[i];
-		oxr_action_set_attachment_init(log, act_set_attached, sess_context, act_set->data);
+		ret = oxr_action_set_attachment_init( //
+		    log,                              //
+		    act_set_attached,                 //
+		    sess_context,                     //
+		    act_set->data);                   //
+		if (ret != XR_SUCCESS) {
+			// @todo: unwind the loop and free the attachments.
+			assert(false);
+			return oxr_error(log, XR_ERROR_RUNTIME_FAILURE, "oxr_action_set_attachment_init failed");
+		}
 
 		// Allocate the action attachments for this set.
 		act_set_attached->action_attachment_count = oxr_handle_base_get_num_children(&act_set->handle);
 		act_set_attached->act_attachments =
 		    U_TYPED_ARRAY_CALLOC(struct oxr_action_attachment, act_set_attached->action_attachment_count);
+		if (act_set_attached->act_attachments == NULL) {
+			// @todo: unwind the loop and free the attachments.
+			assert(false);
+			return oxr_error(log, XR_ERROR_RUNTIME_FAILURE, "Failed to allocate action attachments");
+		}
 
 		// Set up the per-session data for the actions.
 		uint32_t child_index = 0;
@@ -1893,7 +1909,18 @@ oxr_session_attach_action_sets(struct oxr_logger *log,
 			}
 
 			struct oxr_action_attachment *act_attached = &act_set_attached->act_attachments[child_index];
-			oxr_action_attachment_init(log, act_attached, attached_actions, act_set_attached, act->data);
+			ret = oxr_action_attachment_init( //
+			    log,                          //
+			    act_attached,                 //
+			    attached_actions,             //
+			    act_set_attached,             //
+			    act->data);                   //
+			if (ret != XR_SUCCESS) {
+				// @todo: unwind the loop and free the attachments.
+				assert(false);
+				return oxr_error(log, XR_ERROR_RUNTIME_FAILURE, "oxr_action_attachment_init failed");
+			}
+
 			++child_index;
 		}
 	}
