@@ -1838,6 +1838,18 @@ ipc_handle_system_get_client_view_resolution(volatile struct ipc_client_state *_
 }
 
 xrt_result_t
+ipc_handle_system_get_client_view_type(volatile struct ipc_client_state *_ics,
+                                       uint32_t client_id,
+                                       enum xrt_view_type *out_view_type)
+{
+	struct ipc_server *s = _ics->server;
+
+	IPC_DEBUG(s, "Getting client view type for client %u", client_id);
+
+	return ipc_server_get_client_view_type(s, client_id, out_view_type);
+}
+
+xrt_result_t
 ipc_handle_swapchain_get_properties(volatile struct ipc_client_state *ics,
                                     const struct xrt_swapchain_create_info *info,
                                     struct xrt_swapchain_create_properties *xsccp)

@@ -144,6 +144,17 @@ typedef enum mnd_io_block_flags
 	MND_IO_BLOCK_OUTPUTS = (1u << 3u),
 } mnd_io_block_flags_t;
 
+/*!
+ * Represents a type of view configuration.
+ *
+ * Supported in version 1.7.0 and above.
+ */
+typedef enum mnd_view_type
+{
+	MND_VIEW_TYPE_MONO = 0,
+	MND_VIEW_TYPE_STEREO = 1,
+} mnd_view_type_t;
+
 /*
  *
  * Functions
@@ -329,6 +340,18 @@ mnd_root_get_client_view_resolution(
  */
 mnd_result_t
 mnd_root_set_client_resolution_scale(mnd_root_t *root, uint32_t client_id, uint32_t view, float scale);
+
+/*!
+ * Get the view configuration type of a client.
+ *
+ * Supported in version 1.7 and above.
+ *
+ * @param      root      The libmonado state.
+ * @param      client_id ID of the client.
+ * @param[out] out_scale Pointer to populate with the client's current view type.
+ */
+mnd_result_t
+mnd_root_get_client_view_type(mnd_root_t *root, uint32_t client_id, mnd_view_type_t *out_view_type);
 
 /*!
  * Get the number of devices

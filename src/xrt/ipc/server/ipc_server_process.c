@@ -715,6 +715,21 @@ get_client_view_resolution(
 	return xrt_comp_get_view_resolution(ics->xc, view_type, view, out_scale, out_resolution);
 }
 
+static xrt_result_t
+get_client_view_type(struct ipc_server *s, uint32_t client_id, enum xrt_view_type *out_view_type)
+{
+	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
+	if (ics == NULL) {
+		return XRT_ERROR_IPC_FAILURE;
+	}
+
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	return xrt_syscomp_session_get_view_type(ics->server->xsysc, ics->xc, out_view_type);
+}
+
 
 /*
  *
@@ -814,6 +829,16 @@ ipc_server_get_client_view_resolution(
 {
 	os_mutex_lock(&s->global_state.lock);
 	xrt_result_t xret = get_client_view_resolution(s, client_id, view, out_scale, out_resolution);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_get_client_view_type(struct ipc_server *s, uint32_t client_id, enum xrt_view_type *out_view_type)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = get_client_view_type(s, client_id, out_view_type);
 	os_mutex_unlock(&s->global_state.lock);
 
 	return xret;
