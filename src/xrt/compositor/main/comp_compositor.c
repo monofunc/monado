@@ -351,7 +351,10 @@ static xrt_result_t
 compositor_request_display_refresh_rate(struct xrt_compositor *xc, float display_refresh_rate_hz)
 {
 #ifdef XRT_OS_ANDROID
+	// @todo Remove this when clang-format is updated in CI
+	// clang-format off
 	typedef int32_t (*PF_SETFRAMERATE)(ANativeWindow * window, float frameRate, int8_t compatibility);
+	// clang format-oen
 
 	// Note that this will just increment the reference count, rather than actually load it again,
 	// since we are linked for other symbols too.
@@ -382,6 +385,31 @@ compositor_request_display_refresh_rate(struct xrt_compositor *xc, float display
 		return result;
 	}
 #endif
+	return XRT_SUCCESS;
+}
+
+static xrt_result_t
+compositor_get_view_resolution(struct xrt_compositor *xc,
+                               enum xrt_view_type view_type,
+                               uint32_t view,
+                               float *out_scale,
+                               struct xrt_size *out_resolution)
+{
+	struct comp_compositor *c = comp_compositor(xc);
+
+	if (view > c->xdev->hmd->view_count) {
+		COMP_ERROR(c, "Invalid view resolution was requested for the compositor.");
+		return XRT_ERROR_INVALID_ARGUMENT;
+	}
+
+	const struct xrt_view *view_details = &c->xdev->hmd->views[view];
+
+	*out_scale = (float)c->settings.viewport_scale;
+	*out_resolution = (struct xrt_size){
+	    .w = (int)view_details->display.w_pixels,
+	    .h = (int)view_details->display.h_pixels,
+	};
+
 	return XRT_SUCCESS;
 }
 
@@ -1047,6 +1075,7 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 	iface->layer_commit = compositor_layer_commit;
 	iface->get_display_refresh_rate = compositor_get_display_refresh_rate;
 	iface->request_display_refresh_rate = compositor_request_display_refresh_rate;
+	iface->get_view_resolution = compositor_get_view_resolution;
 	iface->destroy = compositor_destroy;
 	c->frame.waited.id = -1;
 	c->frame.rendering.id = -1;
@@ -1089,11 +1118,6 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 	c->last_frame_time_ns = os_monotonic_get_ns();
 
 	double scale = c->settings.viewport_scale;
-
-	if (scale > 2.0) {
-		scale = 2.0;
-		COMP_DEBUG(c, "Clamped scale to 200%%\n");
-	}
 
 	uint32_t w0 = (uint32_t)(xdev->hmd->views[0].display.w_pixels * scale);
 	uint32_t h0 = (uint32_t)(xdev->hmd->views[0].display.h_pixels * scale);
