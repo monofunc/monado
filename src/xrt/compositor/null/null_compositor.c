@@ -25,6 +25,7 @@
 #include "util/u_verify.h"
 #include "util/u_handles.h"
 #include "util/u_trace_marker.h"
+#include "util/u_compositor_ni.h"
 
 #include "util/comp_vulkan.h"
 
@@ -584,9 +585,11 @@ null_compositor_create_system(struct xrt_device *xdev, struct xrt_system_composi
 	iface->begin_frame = null_compositor_begin_frame;
 	iface->discard_frame = null_compositor_discard_frame;
 	iface->layer_commit = null_compositor_layer_commit;
+	iface->get_reference_bounds_rect = u_compositor_ni_get_reference_bounds_rect;
+	iface->get_view_resolution = u_compositor_ni_get_view_resolution;
+	iface->get_display_refresh_rate = null_compositor_get_display_refresh_rate;
+	iface->request_display_refresh_rate = null_compositor_request_display_refresh_rate;
 	iface->destroy = null_compositor_destroy;
-	c->base.base.base.get_display_refresh_rate = null_compositor_get_display_refresh_rate;
-	c->base.base.base.request_display_refresh_rate = null_compositor_request_display_refresh_rate;
 	c->settings.log_level = debug_get_log_option_log();
 	c->frame.waited.id = -1;
 	c->frame.rendering.id = -1;

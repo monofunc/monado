@@ -947,6 +947,9 @@ struct xrt_compositor_info
 
 	//! Max texture size that GPU supports (size of a single dimension), zero means any size.
 	uint32_t max_texture_size;
+
+	//! Is xrt_compositor::get_recommended_view_resolution supported.
+	bool supported_get_view_resolution;
 };
 
 /*!
@@ -1913,10 +1916,6 @@ xrt_comp_get_reference_bounds_rect(struct xrt_compositor *xc,
                                    enum xrt_reference_space_type reference_space_type,
                                    struct xrt_vec2 *bounds)
 {
-	if (xc->get_reference_bounds_rect == NULL) {
-		return XRT_ERROR_NOT_IMPLEMENTED;
-	}
-
 	return xc->get_reference_bounds_rect(xc, reference_space_type, bounds);
 }
 
@@ -1934,10 +1933,6 @@ xrt_comp_get_view_resolution(struct xrt_compositor *xc,
                              float *out_scale,
                              struct xrt_size *out_resolution)
 {
-	if (xc->get_view_resolution == NULL) {
-		return XRT_ERROR_NOT_IMPLEMENTED;
-	}
-
 	return xc->get_view_resolution(xc, view_type, view, out_scale, out_resolution);
 }
 

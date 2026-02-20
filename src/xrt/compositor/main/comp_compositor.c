@@ -62,6 +62,7 @@
 #include "util/u_pretty_print.h"
 #include "util/u_distortion_mesh.h"
 #include "util/u_verify.h"
+#include "util/u_compositor_ni.h"
 
 #include "util/comp_vulkan.h"
 #include "main/comp_compositor.h"
@@ -1076,10 +1077,13 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 	iface->get_display_refresh_rate = compositor_get_display_refresh_rate;
 	iface->request_display_refresh_rate = compositor_request_display_refresh_rate;
 	iface->get_view_resolution = compositor_get_view_resolution;
+	iface->get_reference_bounds_rect = u_compositor_ni_get_reference_bounds_rect;
 	iface->destroy = compositor_destroy;
 	c->frame.waited.id = -1;
 	c->frame.rendering.id = -1;
 	c->xdev = xdev;
+
+	iface->info.supported_get_view_resolution = true;
 
 	xrt_result_t xret = XRT_SUCCESS;
 

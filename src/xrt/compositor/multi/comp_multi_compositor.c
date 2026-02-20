@@ -22,6 +22,7 @@
 #include "util/u_handles.h"
 #include "util/u_trace_marker.h"
 #include "util/u_distortion_mesh.h"
+#include "util/u_compositor_ni.h"
 
 #include "math/m_api.h"
 
@@ -1047,9 +1048,12 @@ multi_compositor_create(struct multi_system_compositor *msc,
 	mc->base.base.get_display_refresh_rate = multi_compositor_get_display_refresh_rate;
 	mc->base.base.request_display_refresh_rate = multi_compositor_request_display_refresh_rate;
 	mc->base.base.get_view_resolution = multi_compositor_get_view_resolution;
+	mc->base.base.get_reference_bounds_rect = u_compositor_ni_get_reference_bounds_rect;
 	mc->msc = msc;
 	mc->xses = xses;
 	mc->xsi = *xsi;
+
+	mc->base.base.info.supported_get_view_resolution = true;
 
 	for (uint32_t i = 0; i < XRT_MAX_VIEWS; i++) {
 		mc->resolution_scale[i] = 1.0f;

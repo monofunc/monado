@@ -1675,6 +1675,11 @@ oxr_session_get_recommended_layer_resolution_meta(struct oxr_logger *log,
 		return XR_SUCCESS;
 	}
 
+	// Unsupported by this compositor
+	if (!xc->info.supported_get_view_resolution) {
+		return XR_SUCCESS;
+	}
+
 	// Any strictly invalid layers have already been weeded out, so we can safely just provide "no suggestion" for
 	// all unhandled layer types here.
 	switch (info->layer->type) {
@@ -1686,11 +1691,6 @@ oxr_session_get_recommended_layer_resolution_meta(struct oxr_logger *log,
 		struct xrt_size view_resolution;
 		xrt_result_t xret = xrt_comp_get_view_resolution(
 		    xc, xr_view_type_to_xrt(sess->current_view_config_type), 0, &view_scale, &view_resolution);
-
-		// Unsupported on this compositor
-		if (xret == XRT_ERROR_FEATURE_NOT_SUPPORTED) {
-			break;
-		}
 
 		OXR_CHECK_XRET(log, sess, xret, xrt_comp_get_view_resolution);
 
