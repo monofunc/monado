@@ -187,6 +187,8 @@ struct multi_compositor
 	struct u_pacing_app *upa;
 
 	float current_refresh_rate_hz;
+
+	float resolution_scale[XRT_MAX_VIEWS];
 };
 
 /*!
