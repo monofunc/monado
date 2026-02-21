@@ -90,6 +90,17 @@
 		]
 	},
 
+	"compositor_get_view_resolution": {
+		"in": [
+			{"name": "view_type", "type": "enum xrt_view_type"},
+			{"name": "view", "type": "uint32_t"}
+		],
+		"out": [
+			{"name": "out_scale", "type": "float"},
+			{"name": "out_resolution", "type": "struct xrt_size"}
+		]
+	},
+
 	"compositor_create_passthrough": {
 		"in": [
 			{"name": "info", "type": "struct xrt_passthrough_create_info"}

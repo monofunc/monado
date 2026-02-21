@@ -885,3 +885,73 @@ oxr_xrGetPlanePolygonBufferEXT(XrPlaneDetectorEXT planeDetector,
 }
 
 #endif // OXR_HAVE_EXT_plane_detection
+
+#ifdef OXR_HAVE_META_recommended_layer_resolution
+
+XRAPI_ATTR XrResult XRAPI_CALL
+oxr_xrGetRecommendedLayerResolutionMETA(XrSession session,
+                                        const XrRecommendedLayerResolutionGetInfoMETA *info,
+                                        XrRecommendedLayerResolutionMETA *resolution)
+{
+	struct oxr_session *sess;
+	struct oxr_logger log;
+	OXR_VERIFY_SESSION_AND_INIT_LOG(&log, session, sess, "xrGetRecommendedLayerResolutionMETA");
+	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, info, XR_TYPE_RECOMMENDED_LAYER_RESOLUTION_GET_INFO_META);
+	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, resolution, XR_TYPE_RECOMMENDED_LAYER_RESOLUTION_META);
+	OXR_VERIFY_EXTENSION(&log, sess->sys->inst, META_recommended_layer_resolution);
+
+	// layer must be a pointer to a valid XrCompositionLayerBaseHeader-based structure.
+	OXR_VERIFY_ARG_NOT_NULL(&log, info->layer);
+
+	// If predictedDisplayTime is older than the predicted display time returned from most recent xrWaitFrame then,
+	// the runtime must return XR_ERROR_TIME_INVALID.
+	if (info->predictedDisplayTime < sess->last_converted_wait_frame_time) {
+		return oxr_error(&log, XR_ERROR_TIME_INVALID,
+		                 "(predictedDisplayTime == %" PRIi64
+		                 ") is earlier than the last returned display time from xrWaitFrame: %" PRIi64,
+		                 info->predictedDisplayTime, sess->last_converted_wait_frame_time);
+	}
+
+	const XrCompositionLayerBaseHeader *layer = info->layer;
+	XrResult res;
+	switch (layer->type) {
+	case XR_TYPE_COMPOSITION_LAYER_PROJECTION:
+		res = oxr_verify_projection_layer(sess, &log, 0, (XrCompositionLayerProjection *)layer, false);
+		break;
+	case XR_TYPE_COMPOSITION_LAYER_QUAD:
+		res = oxr_verify_quad_layer(sess, &log, 0, (XrCompositionLayerQuad *)layer, false);
+		break;
+	case XR_TYPE_COMPOSITION_LAYER_CUBE_KHR:
+		res = oxr_verify_cube_layer(sess, &log, 0, (XrCompositionLayerCubeKHR *)layer, false);
+		break;
+	case XR_TYPE_COMPOSITION_LAYER_CYLINDER_KHR:
+		res = oxr_verify_cylinder_layer(sess, &log, 0, (XrCompositionLayerCylinderKHR *)layer, false);
+		break;
+	case XR_TYPE_COMPOSITION_LAYER_EQUIRECT_KHR:
+		res = oxr_verify_equirect1_layer(sess, &log, 0, (XrCompositionLayerEquirectKHR *)layer, false);
+		break;
+	case XR_TYPE_COMPOSITION_LAYER_EQUIRECT2_KHR:
+		res = oxr_verify_equirect2_layer(sess, &log, 0, (XrCompositionLayerEquirect2KHR *)layer, false);
+		break;
+	case XR_TYPE_COMPOSITION_LAYER_PASSTHROUGH_FB:
+		res = oxr_verify_passthrough_layer(&log, 0, (XrCompositionLayerPassthroughFB *)layer);
+		break;
+	default:
+		return oxr_error(&log, XR_ERROR_LAYER_INVALID, "(info->layer->type) layer type not supported (%u)",
+		                 layer->type);
+	}
+
+	if (res != XR_SUCCESS) {
+		return res;
+	}
+
+
+	XrResult ret = oxr_session_get_recommended_layer_resolution_meta(&log, sess, info, resolution);
+	if (ret != XR_SUCCESS) {
+		return oxr_error(&log, ret, "Failed to get recommended layer resolution");
+	}
+
+	return oxr_session_success_result(sess);
+}
+
+#endif // OXR_HAVE_META_recommended_layer_resolution

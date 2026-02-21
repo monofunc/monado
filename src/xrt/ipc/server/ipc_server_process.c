@@ -672,6 +672,49 @@ allocate_id_locked(struct ipc_server *s)
 	return id;
 }
 
+static xrt_result_t
+set_client_resolution_scale(struct ipc_server *s, uint32_t client_id, uint32_t view, float scale)
+{
+	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
+	if (ics == NULL) {
+		return XRT_ERROR_IPC_FAILURE;
+	}
+
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	enum xrt_view_type view_type;
+	xrt_result_t xret = xrt_syscomp_session_get_view_type(ics->server->xsysc, ics->xc, &view_type);
+	if (xret != XRT_SUCCESS) {
+		return xret;
+	}
+
+	return xrt_syscomp_set_resolution_scale(ics->server->xsysc, ics->xc, view_type, view, scale);
+}
+
+static xrt_result_t
+get_client_recommended_view_resolution(
+    struct ipc_server *s, uint32_t client_id, uint32_t view, float *out_scale, struct xrt_size *out_resolution)
+{
+	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
+	if (ics == NULL) {
+		return XRT_ERROR_IPC_FAILURE;
+	}
+
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	enum xrt_view_type view_type;
+	xrt_result_t xret = xrt_syscomp_session_get_view_type(ics->server->xsysc, ics->xc, &view_type);
+	if (xret != XRT_SUCCESS) {
+		return xret;
+	}
+
+	return xrt_comp_get_view_resolution(ics->xc, view_type, view, out_scale, out_resolution);
+}
+
 
 /*
  *

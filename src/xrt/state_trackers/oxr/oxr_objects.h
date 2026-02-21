@@ -506,6 +506,14 @@ oxr_session_set_perf_level(struct oxr_logger *log,
                            XrPerfSettingsLevelEXT level);
 #endif // OXR_HAVE_EXT_performance_settings
 
+#ifdef OXR_HAVE_META_recommended_layer_resolution
+XrResult
+oxr_session_get_recommended_layer_resolution_meta(struct oxr_logger *log,
+                                                  struct oxr_session *sess,
+                                                  const XrRecommendedLayerResolutionGetInfoMETA *info,
+                                                  XrRecommendedLayerResolutionMETA *resolution);
+#endif // OXR_HAVE_META_recommended_layer_resolution
+
 /*
  *
  * oxr_space.c
@@ -1497,6 +1505,12 @@ struct oxr_session
 	// struct xrt_space_relation local_space_pure_relation;
 
 	bool has_lost;
+
+	/*!
+	 * Used to verify that the XrTime passed into xrGetRecommendedLayerResolutionMETA is not less than the latest
+	 * wait frame time, as per spec
+	 */
+	XrTime last_converted_wait_frame_time;
 };
 
 /*!

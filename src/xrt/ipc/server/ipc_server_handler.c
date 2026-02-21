@@ -1639,6 +1639,22 @@ ipc_handle_compositor_get_reference_bounds_rect(volatile struct ipc_client_state
 }
 
 xrt_result_t
+ipc_handle_compositor_get_view_resolution(volatile struct ipc_client_state *ics,
+                                          enum xrt_view_type view_type,
+                                          uint32_t view,
+                                          float *out_scale,
+                                          struct xrt_size *out_resolution)
+{
+	IPC_TRACE_MARKER();
+
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_SESSION_NOT_CREATED;
+	}
+
+	return xrt_comp_get_view_resolution(ics->xc, view_type, view, out_scale, out_resolution);
+}
+
+xrt_result_t
 ipc_handle_system_get_clients(volatile struct ipc_client_state *_ics, struct ipc_client_list *list)
 {
 	struct ipc_server *s = _ics->server;

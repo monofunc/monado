@@ -306,7 +306,7 @@ oxr_session_begin(struct oxr_logger *log, struct oxr_session *sess, const XrSess
 		const struct oxr_extension_status *extensions = &sess->sys->inst->extensions;
 
 		const struct xrt_begin_session_info begin_session_info = {
-		    .view_type = (enum xrt_view_type)beginInfo->primaryViewConfigurationType,
+		    .view_type = xr_view_type_to_xrt(beginInfo->primaryViewConfigurationType),
 #ifdef OXR_HAVE_EXT_hand_tracking
 		    .ext_hand_tracking_enabled = extensions->EXT_hand_tracking,
 #endif
@@ -980,6 +980,7 @@ oxr_session_frame_wait(struct oxr_logger *log, struct oxr_session *sess, XrFrame
 	os_mutex_lock(&sess->active_wait_frames_lock);
 	sess->active_wait_frames++;
 	sess->frame_id.waited = frame_id;
+	sess->last_converted_wait_frame_time = converted_time;
 	os_mutex_unlock(&sess->active_wait_frames_lock);
 
 	frameState->shouldRender = should_render(sess->state);
@@ -1655,3 +1656,81 @@ oxr_session_set_perf_level(struct oxr_logger *log,
 	return XR_SUCCESS;
 }
 #endif // OXR_HAVE_EXT_performance_settings
+
+#ifdef OXR_HAVE_META_recommended_layer_resolution
+XrResult
+oxr_session_get_recommended_layer_resolution_meta(struct oxr_logger *log,
+                                                  struct oxr_session *sess,
+                                                  const XrRecommendedLayerResolutionGetInfoMETA *info,
+                                                  XrRecommendedLayerResolutionMETA *resolution)
+{
+	// Default "no recommendation" to applications.
+	resolution->isValid = false;
+	resolution->recommendedImageDimensions = (XrExtent2Di){0};
+
+	struct xrt_compositor *xc = &sess->xcn->base;
+
+	// We have no compositor, so let's just early-return
+	if (xc == NULL) {
+		return XR_SUCCESS;
+	}
+
+	// Any strictly invalid layers have already been weeded out, so we can safely just provide "no suggestion" for
+	// all unhandled layer types here.
+	switch (info->layer->type) {
+	case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
+		const XrCompositionLayerProjection *projection_layer =
+		    (const XrCompositionLayerProjection *)info->layer;
+
+		float view_scale;
+		struct xrt_size view_resolution;
+		xrt_result_t xret = xrt_comp_get_view_resolution(
+		    xc, xr_view_type_to_xrt(sess->current_view_config_type), 0, &view_scale, &view_resolution);
+
+		// Unsupported on this compositor
+		if (xret == XRT_ERROR_FEATURE_NOT_SUPPORTED) {
+			break;
+		}
+
+		OXR_CHECK_XRET(log, sess, xret, xrt_comp_get_view_resolution);
+
+		resolution->recommendedImageDimensions = (XrExtent2Di){
+		    .width = (int32_t)((float)view_resolution.w * view_scale),
+		    .height = (int32_t)((float)view_resolution.h * view_scale),
+		};
+		resolution->isValid = true;
+
+		// If the XrRecommendedLayerResolutionGetInfoMETA::layer attribute of the info argument of the function
+		// contains valid swapchain handles in all fields where required, the runtime must return a resolution
+		// recommendation which is less than or equal to the size of that swapchain
+		bool clamp = true;
+		struct xrt_size clamp_size = {.w = INT32_MAX, .h = INT32_MAX};
+		for (uint32_t i = 0; i < projection_layer->viewCount; i++) {
+			XrSwapchain xr_swapchain = projection_layer->views[i].subImage.swapchain;
+			if (xr_swapchain == NULL) {
+				clamp = false;
+				break;
+			} else {
+				struct oxr_swapchain *swapchain =
+				    XRT_CAST_OXR_HANDLE_TO_PTR(struct oxr_swapchain *, xr_swapchain);
+
+				clamp_size.w = MIN(clamp_size.w, (int)swapchain->width);
+				clamp_size.h = MIN(clamp_size.h, (int)swapchain->height);
+			}
+		}
+
+		if (clamp) {
+			resolution->recommendedImageDimensions.width =
+			    MIN(resolution->recommendedImageDimensions.width, (int32_t)clamp_size.w);
+			resolution->recommendedImageDimensions.height =
+			    MIN(resolution->recommendedImageDimensions.height, (int32_t)clamp_size.h);
+		}
+
+		break;
+	}
+	default: break;
+	}
+
+	return XR_SUCCESS;
+}
+#endif // OXR_HAVE_META_recommended_layer_resolution

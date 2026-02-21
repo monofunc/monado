@@ -347,6 +347,14 @@ oxr_xrThermalGetTemperatureTrendEXT(XrSession session,
                                     float *tempSlope);
 #endif // OXR_HAVE_EXT_thermal_query
 
+#ifdef OXR_HAVE_META_recommended_layer_resolution
+//! OpenXR API function @ep{xrGetRecommendedLayerResolutionMETA}
+XRAPI_ATTR XrResult XRAPI_CALL
+oxr_xrGetRecommendedLayerResolutionMETA(XrSession session,
+                                        const XrRecommendedLayerResolutionGetInfoMETA *info,
+                                        XrRecommendedLayerResolutionMETA *resolution);
+#endif // OXR_HAVE_META_recommended_layer_resolution
+
 
 
 /*

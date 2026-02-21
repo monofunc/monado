@@ -366,3 +366,17 @@ xrt_view_type_to_xr(enum xrt_view_type view_type)
 	assert(false && "Invalid view type");
 	return XR_VIEW_CONFIGURATION_TYPE_MAX_ENUM;
 }
+
+static inline enum xrt_view_type
+xr_view_type_to_xrt(enum XrViewConfigurationType view_type)
+{
+	switch (view_type) {
+	case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO: return XRT_VIEW_TYPE_MONO;
+	case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO: return XRT_VIEW_TYPE_STEREO;
+	default: break;
+	}
+
+	// Used as default, to get warnings.
+	assert(false && "Invalid view type");
+	return XRT_VIEW_TYPE_STEREO;
+}
