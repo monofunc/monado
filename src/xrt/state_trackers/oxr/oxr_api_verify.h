@@ -12,6 +12,7 @@
 #pragma once
 
 #include "oxr_frame_sync.h" // iwyu pragma: keep
+#include "oxr_objects.h"
 
 #include <stddef.h>
 
@@ -380,7 +381,7 @@ struct oxr_subaction_paths;
 
 /*
  *
- * Implementation in oxr_verify.cpp
+ * Implementation in oxr_verify.c
  *
  */
 
@@ -509,6 +510,59 @@ oxr_verify_XrInteractionProfileDpadBindingEXT(struct oxr_logger *,
 XrResult
 oxr_verify_XrHandTrackingDataSourceInfoEXT(struct oxr_logger *, const XrHandTrackingDataSourceInfoEXT *);
 #endif // XR_EXT_hand_tracking_data_source
+
+/*
+ *
+ * Layer functions
+ *
+ */
+
+XrResult
+oxr_verify_quad_layer(struct oxr_session *sess,
+                      struct oxr_logger *log,
+                      uint32_t layer_index,
+                      XrCompositionLayerQuad *quad,
+                      bool verify_swapchian);
+
+XrResult
+oxr_verify_projection_layer(struct oxr_session *sess,
+                            struct oxr_logger *log,
+                            uint32_t layer_index,
+                            XrCompositionLayerProjection *proj,
+                            bool verify_swapchain);
+
+XrResult
+oxr_verify_cube_layer(struct oxr_session *sess,
+                      struct oxr_logger *log,
+                      uint32_t layer_index,
+                      const XrCompositionLayerCubeKHR *cube,
+                      bool verify_swapchain);
+
+XrResult
+oxr_verify_cylinder_layer(struct oxr_session *sess,
+                          struct oxr_logger *log,
+                          uint32_t layer_index,
+                          const XrCompositionLayerCylinderKHR *cylinder,
+                          bool verify_swapchain);
+
+XrResult
+oxr_verify_equirect1_layer(struct oxr_session *sess,
+                           struct oxr_logger *log,
+                           uint32_t layer_index,
+                           const XrCompositionLayerEquirectKHR *equirect,
+                           bool verify_swapchain);
+
+XrResult
+oxr_verify_equirect2_layer(struct oxr_session *sess,
+                           struct oxr_logger *log,
+                           uint32_t layer_index,
+                           const XrCompositionLayerEquirect2KHR *equirect,
+                           bool verify_swapchain);
+
+XrResult
+oxr_verify_passthrough_layer(struct oxr_logger *log,
+                             uint32_t layer_index,
+                             const XrCompositionLayerPassthroughFB *passthrough);
 
 /*!
  * @}
