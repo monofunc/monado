@@ -262,4 +262,9 @@ typedef enum xrt_result
 	 * C++ code threw an exception that wasn't caught.
 	 */
 	XRT_ERROR_UNCAUGHT_EXCEPTION = -43,
+
+	/*!
+	 * Failed to allocate system memory required for the operation.
+	 */
+	XRT_ERROR_OUT_OF_MEMORY = -44,
 } xrt_result_t;
