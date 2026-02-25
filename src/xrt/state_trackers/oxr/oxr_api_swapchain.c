@@ -106,9 +106,12 @@ oxr_xrCreateSwapchain(XrSession session, const XrSwapchainCreateInfo *createInfo
 	}
 
 	if ((createInfo->usageFlags & ~flags) != 0) {
-		return oxr_error(&log, XR_ERROR_VALIDATION_FAILURE,
-		                 "(createInfo->usageFlags == 0x%04" PRIx64 ") contains invalid flags",
-		                 createInfo->usageFlags);
+		if (!inst->quirks.ignore_invalid_swapchain_usage_bits)
+			return oxr_error(&log, XR_ERROR_VALIDATION_FAILURE,
+			                 "(createInfo->usageFlags == 0x%04" PRIx64 ") contains invalid flags",
+			                 createInfo->usageFlags);
+		oxr_warn(&log, "(createInfo->usageFlags == 0x%04" PRIX64 ") contains invalid flags",
+		         createInfo->usageFlags);
 	}
 
 

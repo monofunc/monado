@@ -1315,6 +1315,9 @@ struct oxr_instance
 		 * causing most of the game to render as black, only showing glowing parts of the image.
 		 */
 		bool no_texture_source_alpha;
+
+		//! Metro Awakening sets XR_SWAPCHAIN_USAGE_INPUT_ATTACHMENT_BIT_KHR without requesting the extension.
+		bool ignore_invalid_swapchain_usage_bits;
 	} quirks;
 
 	//! Debug messengers
