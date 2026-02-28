@@ -354,6 +354,7 @@ option_with_deps(XRT_BUILD_DRIVER_PSSENSE "Enable PlayStation Sense driver" DEPE
 option_with_deps(XRT_BUILD_DRIVER_PSVR "Enable PSVR HMD driver" DEPENDS XRT_HAVE_HIDAPI)
 option_with_deps(XRT_BUILD_DRIVER_PSVR2 "Enable PS VR2 HMD driver" DEPENDS XRT_HAVE_INTERNAL_HID XRT_HAVE_LIBUSB)
 option_with_deps(XRT_BUILD_DRIVER_QWERTY "Enable Qwerty driver" DEPENDS XRT_HAVE_SDL2)
+option_with_deps(XRT_BUILD_DRIVER_RAYNEO "Enable RayNeo AR glasses driver" DEPENDS XRT_HAVE_LIBUSB)
 option_with_deps(XRT_BUILD_DRIVER_REALSENSE "Enable RealSense device driver" DEPENDS XRT_HAVE_REALSENSE)
 option_with_deps(XRT_BUILD_DRIVER_REMOTE "Enable remote debugging driver" DEPENDS "XRT_HAVE_LINUX OR ANDROID OR WIN32")
 option_with_deps(XRT_BUILD_DRIVER_RIFT "Enable Oculus Rift (DK2/CV1) device driver" DEPENDS XRT_HAVE_INTERNAL_HID)
@@ -470,6 +471,7 @@ list(
 	"RIFT"
 	"RIFT_SENSOR"
 	"RIFT_S"
+	"RAYNEO"
 	"ROKID"
 	"SURVIVE"
 	"V4L2"
@@ -714,6 +716,7 @@ message(STATUS "#    DRIVER_PSSENSE:              ${XRT_BUILD_DRIVER_PSSENSE}")
 message(STATUS "#    DRIVER_PSVR:                 ${XRT_BUILD_DRIVER_PSVR}")
 message(STATUS "#    DRIVER_PSVR2:                ${XRT_BUILD_DRIVER_PSVR2}")
 message(STATUS "#    DRIVER_QWERTY:               ${XRT_BUILD_DRIVER_QWERTY}")
+message(STATUS "#    DRIVER_RAYNEO:               ${XRT_BUILD_DRIVER_RAYNEO}")
 message(STATUS "#    DRIVER_REALSENSE:            ${XRT_BUILD_DRIVER_REALSENSE}")
 message(STATUS "#    DRIVER_REMOTE:               ${XRT_BUILD_DRIVER_REMOTE}")
 message(STATUS "#    DRIVER_RIFT:                 ${XRT_BUILD_DRIVER_RIFT}")

@@ -60,6 +60,10 @@
 #include "rokid/rokid_interface.h"
 #endif
 
+#ifdef XRT_BUILD_DRIVER_RAYNEO
+#include "rayneo/rayneo_interface.h"
+#endif
+
 #ifdef XRT_BUILD_DRIVER_HYDRA
 #include "hydra/hydra_interface.h"
 #endif
@@ -220,6 +224,10 @@ struct xrt_prober_entry target_entry_list[] = {
 #ifdef XRT_BUILD_DRIVER_PSVR2
     {PSVR2_VID, PSVR2_PID, psvr2_found, "PlayStation VR2 HMD", "psvr2"},
 #endif // XRT_BUILD_DRIVER_PSVR2
+
+#ifdef XRT_BUILD_DRIVER_RAYNEO
+    {RAYNEO_VID, RAYNEO_PID, rayneo_found, "RayNeo AR glasses", "rayneo"},
+#endif // XRT_BUILD_DRIVER_RAYNEO
 
 #ifdef XRT_BUILD_DRIVER_HYDRA
     {HYDRA_VID, HYDRA_PID, hydra_found, "Razer Hydra", "hydra"},

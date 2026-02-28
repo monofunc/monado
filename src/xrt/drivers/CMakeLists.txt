@@ -236,6 +236,31 @@ if(XRT_BUILD_DRIVER_PSVR2)
 	list(APPEND ENABLED_HEADSET_DRIVERS psvr2)
 endif()
 
+if(XRT_BUILD_DRIVER_RAYNEO)
+	add_library(
+		drv_rayneo STATIC
+		rayneo/rayneo_hmd.c
+		rayneo/rayneo_interface.h
+		rayneo/rayneo_log.c
+		rayneo/rayneo_log.h
+		rayneo/rayneo_usb.c
+		rayneo/rayneo_usb.h
+		rayneo/rayneo_proto.c
+		rayneo/rayneo_proto.h
+		)
+	target_link_libraries(
+		drv_rayneo
+		PRIVATE
+			xrt-interfaces
+			aux_util
+			aux_os
+			aux_math
+			${LIBUSB1_LIBRARIES}
+		)
+	target_include_directories(drv_rayneo PUBLIC ${LIBUSB1_INCLUDE_DIRS})
+	list(APPEND ENABLED_HEADSET_DRIVERS rayneo)
+endif()
+
 if(XRT_BUILD_DRIVER_REALSENSE)
 	add_library(
 		drv_realsense STATIC

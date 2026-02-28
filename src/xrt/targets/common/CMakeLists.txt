@@ -174,6 +174,10 @@ if(XRT_BUILD_DRIVER_ROKID)
 	target_link_libraries(target_lists PRIVATE drv_rokid)
 endif()
 
+if(XRT_BUILD_DRIVER_RAYNEO)
+	target_link_libraries(target_lists PRIVATE drv_rayneo)
+endif()
+
 if(XRT_HAVE_V4L2)
 	target_link_libraries(target_lists PRIVATE drv_v4l2)
 endif()
