@@ -78,6 +78,7 @@ namespace {
 DEBUG_GET_ONCE_LOG_OPTION(lh_log, "LIGHTHOUSE_LOG", U_LOGGING_INFO)
 DEBUG_GET_ONCE_BOOL_OPTION(lh_load_slimevr, "LH_LOAD_SLIMEVR", false)
 DEBUG_GET_ONCE_NUM_OPTION(lh_discover_wait_ms, "LH_DISCOVER_WAIT_MS", 3000)
+DEBUG_GET_ONCE_FLOAT_OPTION(lh_stick_deadzone, "LH_STICK_DEADZONE", 0)
 
 static constexpr size_t MAX_CONTROLLERS = 16;
 
@@ -626,6 +627,32 @@ Context::CreateScalarComponent(vr::PropertyContainerHandle_t ulContainer,
 	return create_component_common(ulContainer, pchName, pHandle);
 }
 
+float
+applyDeadzone(float value)
+{
+	static float deadzone = 0.0f;
+	static bool inited = false;
+
+	if (!inited) {
+		float raw = debug_get_float_option_lh_stick_deadzone();
+		// we apply deadzone to the input's absolute value; valid range is 0..1
+		deadzone = CLAMP(raw, 0.0f, 0.99f);
+		if (raw != deadzone) {
+			U_LOG_W("LH_STICK_DEADZONE value of %f.2 falls outside of expected range 0..1 - clamp to %f.2",
+			        raw, deadzone);
+		}
+		inited = true;
+	}
+
+	float sign = copysignf(1.0f, value);
+	value = fabsf(value);
+	if (value <= deadzone) {
+		return 0.0f;
+	}
+
+	return sign * (value - deadzone) / (1.0f - deadzone);
+}
+
 vr::EVRInputError
 Context::UpdateScalarComponent(vr::VRInputComponentHandle_t ulComponent, float fNewValue, double fTimeOffset)
 {
@@ -634,9 +661,9 @@ Context::UpdateScalarComponent(vr::VRInputComponentHandle_t ulComponent, float f
 		if (XRT_GET_INPUT_TYPE(input->name) == XRT_INPUT_TYPE_VEC2_MINUS_ONE_TO_ONE) {
 			std::unique_ptr<Vec2Components> &components = vec2_input_to_components.at(input);
 			if (components->x == ulComponent) {
-				input->value.vec2.x = fNewValue;
+				input->value.vec2.x = applyDeadzone(fNewValue);
 			} else if (components->y == ulComponent) {
-				input->value.vec2.y = fNewValue;
+				input->value.vec2.y = applyDeadzone(fNewValue);
 			} else {
 				CTX_WARN("Attempted to update component with handle %" PRIu64
 				         " but it was neither the x nor y "
