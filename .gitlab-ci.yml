@@ -262,6 +262,10 @@ alpine:container_prep:
     - .monado.variables.debian:trixie
     - .fdo.distribution-image@debian # from ci-templates
     - .build-rules
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
 
 
 # Base for using Debian bookworm image
@@ -270,6 +274,10 @@ alpine:container_prep:
     - .monado.variables.debian:bookworm
     - .fdo.distribution-image@debian # from ci-templates
     - .build-rules
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
 
 
 # Base for using Debian trixie-ndk image
@@ -278,6 +286,10 @@ alpine:container_prep:
     - .monado.variables.debian:trixie-ndk
     - .fdo.suffixed-image@debian # from ci-templates
     - .build-rules
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
 
 
 # Base for using Ubuntu jammy image
@@ -286,6 +298,10 @@ alpine:container_prep:
     - .monado.variables.ubuntu:jammy
     - .fdo.distribution-image@ubuntu # from ci-templates
     - .build-rules
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
 
 
 # Base for using Ubuntu noble image
@@ -294,6 +310,10 @@ alpine:container_prep:
     - .monado.variables.ubuntu:noble
     - .fdo.distribution-image@ubuntu # from ci-templates
     - .build-rules
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
 
 
 # Base for using Arch image
@@ -302,6 +322,10 @@ alpine:container_prep:
     - .monado.variables.arch
     - .fdo.distribution-image@arch # from ci-templates
     - .build-rules
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
 
 
 # Base for using Alpine image
@@ -310,6 +334,10 @@ alpine:container_prep:
     - .monado.variables.alpine
     - .fdo.distribution-image@alpine # from ci-templates
     - .build-rules
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
 
 
 
