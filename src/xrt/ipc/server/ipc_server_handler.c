@@ -12,6 +12,7 @@
 
 #include "util/u_misc.h"
 #include "util/u_handles.h"
+#include "util/u_metrics.h"
 #include "util/u_pretty_print.h"
 #include "util/u_visibility_mask.h"
 #include "util/u_trace_marker.h"
@@ -494,6 +495,20 @@ ipc_handle_system_compositor_get_info(volatile struct ipc_client_state *ics,
 
 	*out_info = ics->server->xsysc->info;
 
+	return XRT_SUCCESS;
+}
+
+xrt_result_t
+ipc_handle_system_add_metrics_file_handle(volatile struct ipc_client_state *ics,
+                                          bool early_flush,
+                                          const xrt_file_handle_t *handles,
+                                          const uint32_t handle_count)
+{
+	IPC_TRACE_MARKER();
+
+	for (uint32_t i = 0; i < handle_count; i++) {
+		u_metrics_add_file_handle(handles[i], early_flush);
+	}
 	return XRT_SUCCESS;
 }
 

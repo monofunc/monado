@@ -566,6 +566,18 @@ mnd_root_get_device_brightness(mnd_root_t *root, uint32_t device_index, float *o
 mnd_result_t
 mnd_root_set_device_brightness(mnd_root_t *root, uint32_t device_index, float brightness, bool relative);
 
+/*!
+ * @brief Add a file descriptor to the set of fds to write metrics to.
+ *
+ * @param root              The libmonado state.
+ * @param[in] fd            The file descriptor to write metrics to.
+ * @param[in] early_flush   Whether to buffer metrics (false) or not (true).
+ *
+ * @return MND_SUCCESS on success
+ */
+mnd_result_t
+mnd_root_push_metrics_fd(mnd_root_t *root, int fd, bool early_flush);
+
 #ifdef __cplusplus
 }
 #endif
