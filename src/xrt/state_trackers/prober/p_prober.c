@@ -1,4 +1,5 @@
 // Copyright 2019-2024, Collabora, Ltd.
+// Copyright 2024-2025, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -1219,6 +1220,11 @@ p_open_hid_interface(struct xrt_prober *xp,
 	(void)pdev;
 	(void)ret;
 	U_LOG_E("HID devices not yet supported on Windows, cannot open interface (%i)", hid_iface);
+	return -1;
+#elif defined(XRT_OS_OSX)
+	(void)pdev;
+	(void)ret;
+	U_LOG_E("HID devices not yet supported on OSX, cannot open interface (%i)", hid_iface);
 	return -1;
 #else
 #error "no port of hid code"

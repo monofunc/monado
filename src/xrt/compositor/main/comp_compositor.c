@@ -1,5 +1,5 @@
 // Copyright 2019-2024, Collabora, Ltd.
-// Copyright 2025, NVIDIA CORPORATION.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -273,6 +273,10 @@ can_do_one_projection_layer_fast_path(struct comp_compositor *c)
 	}
 
 	struct comp_layer *layer = &c->base.layer_accum.layers[0];
+	if (layer->data.flags & XRT_LAYER_COMPOSITION_COLOR_BIAS_SCALE) {
+		return false;
+	}
+
 	enum xrt_layer_type type = layer->data.type;
 
 	// Handled by the distortion shader.
@@ -352,6 +356,11 @@ compositor_request_display_refresh_rate(struct xrt_compositor *xc, float display
 	// Note that this will just increment the reference count, rather than actually load it again,
 	// since we are linked for other symbols too.
 	void *android_handle = dlopen("libandroid.so", RTLD_NOW);
+	if (android_handle == NULL) {
+		U_LOG_E("failed to open libandroid.so");
+		return XRT_SUCCESS;
+	}
+
 	PF_SETFRAMERATE set_frame_rate = (PF_SETFRAMERATE)dlsym(android_handle, "ANativeWindow_setFrameRate");
 	if (!set_frame_rate) {
 		U_LOG_E("ANativeWindow_setFrameRate not found");
@@ -609,6 +618,20 @@ static const char *optional_device_extensions[] = {
 };
 
 static bool
+select_instances_extensions(struct comp_compositor *c,
+                            struct u_extension_list_builder *required_builder,
+                            struct u_extension_list_builder *optional_builder)
+{
+#ifdef XRT_FEATURE_WINDOW_PEEK
+	if (!comp_window_peek_get_vk_instance_exts(required_builder)) {
+		COMP_ERROR(c, "Failed to get required vulkan instance extensions for peek window.");
+		return false;
+	}
+#endif
+	return true;
+}
+
+static bool
 compositor_init_vulkan(struct comp_compositor *c)
 {
 	COMP_TRACE_MARKER();
@@ -622,55 +645,75 @@ compositor_init_vulkan(struct comp_compositor *c)
 	 * Instance extensions.
 	 */
 
-	struct u_string_list *required_instance_ext_list = u_string_list_create();
-	struct u_string_list *optional_instance_ext_list = u_string_list_create();
+	struct u_extension_list_builder *required_instance_ext_builder = u_extension_list_builder_create();
+	struct u_extension_list_builder *optional_instance_ext_builder = u_extension_list_builder_create();
 
 	// Every backend needs at least the common extensions.
-	u_string_list_append_array(                  //
-	    required_instance_ext_list,              //
+	u_extension_list_builder_append_array(       //
+	    required_instance_ext_builder,           //
 	    instance_extensions_common,              //
 	    ARRAY_SIZE(instance_extensions_common)); //
 
 	// Add per target required extensions.
-	u_string_list_append_array(                                //
-	    required_instance_ext_list,                            //
+	u_extension_list_builder_append_array(                     //
+	    required_instance_ext_builder,                         //
 	    c->target_factory->required_instance_extensions,       //
 	    c->target_factory->required_instance_extension_count); //
 
 	// Optional instance extensions.
-	u_string_list_append_array(                    //
-	    optional_instance_ext_list,                //
+	u_extension_list_builder_append_array(         //
+	    optional_instance_ext_builder,             //
 	    optional_instance_extensions,              //
 	    ARRAY_SIZE(optional_instance_extensions)); //
+
+	if (!select_instances_extensions(c, required_instance_ext_builder, optional_instance_ext_builder)) {
+		COMP_ERROR(c, "Failed to select additional instance extensions.");
+		u_extension_list_builder_destroy(&required_instance_ext_builder);
+		u_extension_list_builder_destroy(&optional_instance_ext_builder);
+		return false;
+	}
+
+	// Consumes the builder and returns a new list.
+	struct u_extension_list *required_instance_ext_list =
+	    u_extension_list_builder_build(&required_instance_ext_builder);
+	struct u_extension_list *optional_instance_ext_list =
+	    u_extension_list_builder_build(&optional_instance_ext_builder);
 
 
 	/*
 	 * Device extensions.
 	 */
 
-	struct u_string_list *required_device_extension_list = u_string_list_create();
-	struct u_string_list *optional_device_extension_list = u_string_list_create();
+	struct u_extension_list_builder *required_device_ext_builder = u_extension_list_builder_create();
+	struct u_extension_list_builder *optional_device_ext_builder = u_extension_list_builder_create();
 
 	// Required device extensions.
-	u_string_list_append_array(                  //
-	    required_device_extension_list,          //
+	u_extension_list_builder_append_array(       //
+	    required_device_ext_builder,             //
 	    required_device_extensions,              //
 	    ARRAY_SIZE(required_device_extensions)); //
 
 	// Optional device extensions.
-	u_string_list_append_array(                  //
-	    optional_device_extension_list,          //
+	u_extension_list_builder_append_array(       //
+	    optional_device_ext_builder,             //
 	    optional_device_extensions,              //
 	    ARRAY_SIZE(optional_device_extensions)); //
 
 	// Add per target optional device extensions.
-	u_string_list_append_array(                              //
-	    optional_device_extension_list,                      //
+	u_extension_list_builder_append_array(                   //
+	    optional_device_ext_builder,                         //
 	    c->target_factory->optional_device_extensions,       //
 	    c->target_factory->optional_device_extension_count); //
 
+	// Consumes the builder and returns a new list.
+	struct u_extension_list *required_device_ext_list =
+	    u_extension_list_builder_build(&required_device_ext_builder);
+	struct u_extension_list *optional_device_ext_list =
+	    u_extension_list_builder_build(&optional_device_ext_builder);
+
 	// Select required Vulkan version, suitable for both compositor and target
 	uint32_t required_instance_version = MAX(c->target_factory->required_instance_version, VK_API_VERSION_1_0);
+
 
 	/*
 	 * Create the device.
@@ -681,8 +724,8 @@ compositor_init_vulkan(struct comp_compositor *c)
 	    .required_instance_version = required_instance_version,
 	    .required_instance_extensions = required_instance_ext_list,
 	    .optional_instance_extensions = optional_instance_ext_list,
-	    .required_device_extensions = required_device_extension_list,
-	    .optional_device_extensions = optional_device_extension_list,
+	    .required_device_extensions = required_device_ext_list,
+	    .optional_device_extensions = optional_device_ext_list,
 	    .log_level = c->settings.log_level,
 	    .only_compute_queue = c->settings.use_compute,
 	    .selected_gpu_index = c->settings.selected_gpu_index,
@@ -693,10 +736,10 @@ compositor_init_vulkan(struct comp_compositor *c)
 	struct comp_vulkan_results vk_res = {0};
 	bool bundle_ret = comp_vulkan_init_bundle(vk, &vk_args, &vk_res);
 
-	u_string_list_destroy(&required_instance_ext_list);
-	u_string_list_destroy(&optional_instance_ext_list);
-	u_string_list_destroy(&required_device_extension_list);
-	u_string_list_destroy(&optional_device_extension_list);
+	u_extension_list_destroy(&required_instance_ext_list);
+	u_extension_list_destroy(&optional_instance_ext_list);
+	u_extension_list_destroy(&required_device_ext_list);
+	u_extension_list_destroy(&optional_device_ext_list);
 
 	if (!bundle_ret) {
 		return false;
@@ -987,6 +1030,7 @@ compositor_init_renderer(struct comp_compositor *c)
 xrt_result_t
 comp_main_create_system_compositor(struct xrt_device *xdev,
                                    const struct comp_target_factory *ctf,
+                                   struct u_pacing_app_factory *upaf,
                                    struct xrt_system_compositor **out_xsysc)
 {
 	COMP_TRACE_MARKER();
@@ -1008,11 +1052,24 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 	c->frame.rendering.id = -1;
 	c->xdev = xdev;
 
+	xrt_result_t xret = XRT_SUCCESS;
+
 	COMP_DEBUG(c, "Doing init %p", (void *)c);
 
-	if (xdev->hmd->view_count == 0) {
-		U_LOG_E("Bug detected: HMD \"%s\" does not set xdev->hmd.view_count. Value must be > 0!", xdev->str);
+	uint32_t view_count = xdev->hmd->view_count;
+	enum xrt_view_type view_type = 0; // Invalid
+
+	switch (view_count) {
+	case 0:
+		U_LOG_E("Bug detected: HMD \"%s\" xdev->hmd.view_count must be > 0!", xdev->str);
 		assert(xdev->hmd->view_count > 0);
+		break;
+	case 1: view_type = XRT_VIEW_TYPE_MONO; break;
+	case 2: view_type = XRT_VIEW_TYPE_STEREO; break;
+	default:
+		U_LOG_E("Bug detected: HMD \"%s\" xdev->hmd.view_count must be 1 or 2, not %u!", xdev->str, view_count);
+		assert(view_count == 1 && view_count == 2);
+		break;
 	}
 
 	// Do this as early as possible.
@@ -1055,9 +1112,9 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 	    !compositor_init_vulkan(c) ||
 	    !compositor_init_render_resources(c)) {
 		COMP_ERROR(c, "Failed to init compositor %p", (void *)c);
-		c->base.base.base.destroy(&c->base.base.base);
 
-		return XRT_ERROR_VULKAN;
+		xret = XRT_ERROR_VULKAN;
+		goto error;
 	}
 
 	if (!c->deferred_surface) {
@@ -1065,9 +1122,9 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 		    !compositor_init_swapchain(c) ||
 		    !compositor_init_renderer(c)) {
 			COMP_ERROR(c, "Failed to init compositor %p", (void*)c);
-			c->base.base.base.destroy(&c->base.base.base);
 
-			return XRT_ERROR_VULKAN;
+			xret = XRT_ERROR_VULKAN;
+			goto error;
 		}
 		comp_target_set_title(c->target, WINDOW_TITLE);
 	}
@@ -1100,29 +1157,36 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 	struct xrt_system_compositor_info sys_info_storage = {0};
 	struct xrt_system_compositor_info *sys_info = &sys_info_storage;
 
-	// Required by OpenXR spec.
-	sys_info->max_layers = XRT_MAX_LAYERS;
+	// Required by OpenXR spec (minimum 16).
+	sys_info->max_layers = render_max_layers_capable( //
+	    get_vk(c),                                    //
+	    c->settings.use_compute,                      //
+	    XRT_MAX_LAYERS);                              //
 	sys_info->compositor_vk_deviceUUID = c->settings.selected_gpu_deviceUUID;
 	sys_info->client_vk_deviceUUID = c->settings.client_gpu_deviceUUID;
 	sys_info->client_d3d_deviceLUID = c->settings.client_gpu_deviceLUID;
 	sys_info->client_d3d_deviceLUID_valid = c->settings.client_gpu_deviceLUID_valid;
+	// @note If timewarp is disabled this is not supported.
+	sys_info->supports_fov_mutable = true;
 
 	// clang-format off
-	uint32_t view_count = xdev->hmd->view_count;
 	for (uint32_t i = 0; i < view_count; ++i) {
 		uint32_t w = (uint32_t)(xdev->hmd->views[i].display.w_pixels * scale);
 		uint32_t h = (uint32_t)(xdev->hmd->views[i].display.h_pixels * scale);
 		uint32_t w_2 = xdev->hmd->views[i].display.w_pixels * 2;
 		uint32_t h_2 = xdev->hmd->views[i].display.h_pixels * 2;
 
-		sys_info->views[i].recommended.width_pixels  = w;
-		sys_info->views[i].recommended.height_pixels = h;
-		sys_info->views[i].recommended.sample_count  = 1;
-		sys_info->views[i].max.width_pixels          = w_2;
-		sys_info->views[i].max.height_pixels         = h_2;
-		sys_info->views[i].max.sample_count          = 1;
+		sys_info->view_configs[0].views[i].recommended.width_pixels  = w;
+		sys_info->view_configs[0].views[i].recommended.height_pixels = h;
+		sys_info->view_configs[0].views[i].recommended.sample_count  = 1;
+		sys_info->view_configs[0].views[i].max.width_pixels          = w_2;
+		sys_info->view_configs[0].views[i].max.height_pixels         = h_2;
+		sys_info->view_configs[0].views[i].max.sample_count          = 1;
 	}
 	// clang-format on
+	sys_info->view_configs[0].view_type = view_type;
+	sys_info->view_configs[0].view_count = view_count;
+	sys_info->view_config_count = 1; // Only one view config for now.
 
 	// If we can add e.g. video pass-through capabilities, we may need to change (augment) this list.
 	// Just copying it directly right now.
@@ -1185,10 +1249,23 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 	}
 
 	// Standard app pacer.
-	struct u_pacing_app_factory *upaf = NULL;
-	xrt_result_t xret = u_pa_factory_create(&upaf);
-	assert(xret == XRT_SUCCESS && upaf != NULL);
-	(void)xret;
+	if (upaf == NULL) {
+		xret = u_pa_factory_create(&upaf);
+		if (xret != XRT_SUCCESS || upaf == NULL) {
+			COMP_ERROR(c, "Failed to create app pacing factory");
+			goto error;
+		}
+	}
 
-	return comp_multi_create_system_compositor(&c->base.base, upaf, sys_info, !c->deferred_surface, out_xsysc);
+	xret = comp_multi_create_system_compositor(&c->base.base, upaf, sys_info, !c->deferred_surface, out_xsysc);
+	if (xret == XRT_SUCCESS) {
+		return xret;
+	}
+
+error:
+	if (c != NULL) {
+		c->base.base.base.destroy(&c->base.base.base);
+	}
+	u_paf_destroy(&upaf);
+	return xret;
 }

@@ -28,24 +28,9 @@
 
 #include "xrt/xrt_tracking.h"
 
-enum IndexFinger
-{
-	Invalid = -1,
-	Index = 1,
-	Middle,
-	Ring,
-	Pinky,
-};
-
-struct IndexFingerInput
-{
-	int64_t timestamp;
-	IndexFinger finger;
-	float value;
-};
-
 struct xrt_input;
 class Device;
+class ControllerDevice;
 class Context final : public xrt_tracking_origin,
                       public vr::IVRDriverContext,
                       public vr::IVRServerDriverHost,
@@ -55,7 +40,10 @@ class Context final : public xrt_tracking_origin,
                       public std::enable_shared_from_this<Context>
 
 {
+public:
 	Settings settings;
+
+private:
 	Resources resources;
 	IOBuffer iobuf;
 	DriverManager man;
@@ -67,7 +55,6 @@ class Context final : public xrt_tracking_origin,
 
 	std::vector<vr::VRInputComponentHandle_t> handles;
 	std::unordered_map<vr::VRInputComponentHandle_t, xrt_input *> handle_to_input;
-	std::unordered_map<vr::VRInputComponentHandle_t, IndexFingerInput *> handle_to_finger;
 	struct Vec2Components
 	{
 		vr::VRInputComponentHandle_t x;
@@ -75,6 +62,7 @@ class Context final : public xrt_tracking_origin,
 	};
 	std::unordered_map<vr::VRInputComponentHandle_t, Vec2Components *> vec2_inputs;
 	std::unordered_map<xrt_input *, std::unique_ptr<Vec2Components>> vec2_input_to_components;
+	std::unordered_map<vr::VRInputComponentHandle_t, ControllerDevice *> skeleton_to_controller;
 
 	struct Event
 	{
@@ -135,6 +123,12 @@ public:
 
 	void
 	add_haptic_event(vr::VREvent_HapticVibration_t event);
+
+	void
+	add_vendor_event(vr::EVREventType type, const vr::VREvent_Data_t &data = {})
+	{
+		VendorSpecificEvent(0, type, data, 0);
+	}
 
 	void
 	Log(const char *pchLogMessage) override;

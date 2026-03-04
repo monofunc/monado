@@ -432,7 +432,7 @@ rs_ddev_create(int device_idx)
 {
 	struct rs_ddev *rs = U_DEVICE_ALLOCATE(struct rs_ddev, U_DEVICE_ALLOC_TRACKING_NONE, 1, 0);
 
-	m_relation_history_create(&rs->relation_hist, NULL);
+	m_relation_history_create(&rs->relation_hist);
 
 	rs->enable_mapping = true;
 	rs->enable_pose_jumping = true;
@@ -448,10 +448,7 @@ rs_ddev_create(int device_idx)
 
 	U_LOG_D("Realsense opts are %i %i %i %i %i\n", rs->enable_mapping, rs->enable_pose_jumping,
 	        rs->enable_relocalization, rs->enable_pose_prediction, rs->enable_pose_filtering);
-	rs->base.update_inputs = u_device_noop_update_inputs;
-	rs->base.get_tracked_pose = rs_ddev_get_tracked_pose;
-	rs->base.get_view_poses = u_device_ni_get_view_poses;
-	rs->base.destroy = rs_ddev_destroy;
+	u_device_populate_function_pointers(&rs->base, rs_ddev_get_tracked_pose, rs_ddev_destroy);
 	rs->base.name = XRT_DEVICE_REALSENSE;
 	rs->base.tracking_origin->type = XRT_TRACKING_TYPE_EXTERNAL_SLAM;
 

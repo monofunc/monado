@@ -1,4 +1,5 @@
 // Copyright 2020-2024, Collabora, Ltd.
+// Copyright 2025, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -50,6 +51,18 @@ null_compositor_create_system(struct xrt_device *xdev, struct xrt_system_composi
  * Internal functions.
  *
  */
+
+static xrt_result_t
+t_instance_is_system_available(struct xrt_instance *xinst, bool *out_available)
+{
+	XRT_TRACE_MARKER();
+
+	assert(out_available != NULL);
+
+	*out_available = true;
+
+	return XRT_SUCCESS;
+}
 
 static xrt_result_t
 t_instance_create_system(struct xrt_instance *xinst,
@@ -109,7 +122,7 @@ t_instance_create_system(struct xrt_instance *xinst,
 
 #ifdef XRT_MODULE_COMPOSITOR_MAIN
 	if (xret == XRT_SUCCESS && xsysc == NULL) {
-		xret = comp_main_create_system_compositor(head, NULL, &xsysc);
+		xret = comp_main_create_system_compositor(head, NULL, NULL, &xsysc);
 	}
 #else
 	if (!use_null) {
@@ -168,6 +181,7 @@ xrt_instance_create(struct xrt_instance_info *ii, struct xrt_instance **out_xins
 	}
 
 	struct t_instance *tinst = U_TYPED_CALLOC(struct t_instance);
+	tinst->base.is_system_available = t_instance_is_system_available;
 	tinst->base.create_system = t_instance_create_system;
 	tinst->base.get_prober = t_instance_get_prober;
 	tinst->base.destroy = t_instance_destroy;

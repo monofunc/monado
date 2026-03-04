@@ -18,6 +18,7 @@
 #include <thread>
 
 #include "openvr_driver.h"
+#include "util/u_var.h"
 #include "vdf_parser.hpp"
 #include "steamvr_lh_interface.h"
 #include "interfaces/context.hpp"
@@ -28,10 +29,51 @@
 #include "util/u_system_helpers.h"
 #include "vive/vive_bindings.h"
 #include "util/u_device.h"
+#include "xrt/xrt_config_arch.h"
 
 #include "math/m_api.h"
 
 namespace {
+
+// based on the logic at
+// <https://github.com/ValveSoftware/openvr/blob/ae46a8dd0172580648c8922658a100439115d3eb/src/vrcore/pathtools_public.h#L143-L153>.
+#if defined(XRT_OS_WINDOWS)
+#error "steamvr_lh does not yet support windows!"
+#define OVR_PLAT_EXT ".dll"
+
+#if defined(XRT_ARCH_X86_64)
+#define OVR_PLAT_SUBDIR "win64"
+#elif defined(XRT_ARCH_X86)
+#define OVR_PLAT_SUBDIR "win32"
+#else
+#error "steamvr_lh: Unknown Windows Architecture"
+#endif
+
+#elif defined(XRT_OS_OSX)
+#define OVR_PLAT_EXT ".dylib"
+// contains all architectures in a universal binary
+#define OVR_PLAT_SUBDIR "osx32"
+
+#elif defined(XRT_OS_LINUX)
+#define OVR_PLAT_EXT ".so"
+
+#if defined(XRT_ARCH_X86)
+#define OVR_PLAT_SUBDIR "linux32"
+#elif defined(XRT_OS_ANDROID) && defined(XRT_ARCH_ARM)
+#define OVR_PLAT_SUBDIR "androidarm32"
+#elif defined(XRT_OS_ANDROID) && defined(XRT_ARCH_ARM64)
+#define OVR_PLAT_SUBDIR "androidarm64"
+#elif defined(XRT_ARCH_ARM64)
+#define OVR_PLAT_SUBDIR "linuxarm64"
+#elif defined(XRT_ARCH_X86_64)
+#define OVR_PLAT_SUBDIR "linux64"
+#else
+#error "steamvr_lh: Unknown Linux Architecture"
+#endif
+
+#else
+#error "steamvr_lh: Unknown OS"
+#endif
 
 DEBUG_GET_ONCE_LOG_OPTION(lh_log, "LIGHTHOUSE_LOG", U_LOGGING_INFO)
 DEBUG_GET_ONCE_BOOL_OPTION(lh_load_slimevr, "LH_LOAD_SLIMEVR", false)
@@ -82,7 +124,10 @@ find_steamvr_install()
 		std::shared_ptr<vdf::object> apps = child->childs["apps"];
 		for (auto &[appid, _] : apps->attribs) {
 			if (appid == STEAMVR_APPID) {
-				return child->attribs["path"] + "/steamapps/common/SteamVR";
+				std::string path = child->attribs["path"] + "/steamapps/common/SteamVR";
+				if (std::filesystem::exists(path)) {
+					return path;
+				}
 			}
 		}
 	}
@@ -125,7 +170,7 @@ Context::create(const std::string &steam_install,
 }
 
 Context::Context(const std::string &steam_install, const std::string &steamvr_install, u_logging_level level)
-    : settings(steam_install, steamvr_install), resources(level, steamvr_install), log_level(level)
+    : settings(steam_install, steamvr_install, this), resources(level, steamvr_install), log_level(level)
 {}
 
 Context::~Context()
@@ -139,6 +184,7 @@ Context::~Context()
 void *
 Context::GetGenericInterface(const char *pchInterfaceVersion, vr::EVRInitError *peError)
 {
+	CTX_DEBUG("Requested interface %s", pchInterfaceVersion);
 #define MATCH_INTERFACE(version, interface)                                                                            \
 	if (std::strcmp(pchInterfaceVersion, version) == 0) {                                                          \
 		return interface;                                                                                      \
@@ -148,6 +194,8 @@ Context::GetGenericInterface(const char *pchInterfaceVersion, vr::EVRInitError *
 	// Known interfaces
 	MATCH_INTERFACE_THIS(vr::IVRServerDriverHost);
 	MATCH_INTERFACE_THIS(vr::IVRDriverInput);
+	// This interface is not in a public header yet, but just passing IVRDriverInput_003 seems to work.
+	MATCH_INTERFACE("IVRDriverInput_004", static_cast<vr::IVRDriverInput *>(this));
 	MATCH_INTERFACE_THIS(vr::IVRProperties);
 	MATCH_INTERFACE_THIS(vr::IVRDriverLog);
 	MATCH_INTERFACE(vr::IVRSettings_Version, &settings);
@@ -156,6 +204,9 @@ Context::GetGenericInterface(const char *pchInterfaceVersion, vr::EVRInitError *
 	MATCH_INTERFACE(vr::IVRDriverManager_Version, &man);
 	MATCH_INTERFACE(vr::IVRBlockQueue_Version, &blockqueue);
 	MATCH_INTERFACE(vr::IVRPaths_Version, &paths);
+	// This version of the interface is not in a public header.
+	// Luckily it seems to be compatible with the previous version.
+	MATCH_INTERFACE("IVRPaths_002", &paths);
 
 	// Internal interfaces
 	MATCH_INTERFACE("IVRServer_XXX", &server);
@@ -229,8 +280,22 @@ Context::setup_hmd(const char *serial, vr::ITrackedDeviceServerDriver *driver)
 		fov.angle_down = atanf(tan_top);
 	}
 
+	u_var_add_root(this->hmd, "SteamVR HMD Device", true);
+	u_var_add_f32(this->hmd, &this->hmd->ipd, "IPD");
+
+	u_var_add_f32(this->hmd, &distortion.fov[0].angle_up, "View 0 FovAngleUp");
+	u_var_add_f32(this->hmd, &distortion.fov[0].angle_down, "View 0 FovAngleDown");
+	u_var_add_f32(this->hmd, &distortion.fov[0].angle_left, "View 0 FovAngleLeft");
+	u_var_add_f32(this->hmd, &distortion.fov[0].angle_right, "View 0 FovAngleRight");
+
+	u_var_add_f32(this->hmd, &distortion.fov[1].angle_up, "View 1 FovAngleUp");
+	u_var_add_f32(this->hmd, &distortion.fov[1].angle_down, "View 1 FovAngleDown");
+	u_var_add_f32(this->hmd, &distortion.fov[1].angle_left, "View 1 FovAngleLeft");
+	u_var_add_f32(this->hmd, &distortion.fov[1].angle_right, "View 1 FovAngleRight");
+
 	hmd_parts->display = display;
 	hmd->set_hmd_parts(std::move(hmd_parts));
+
 	return true;
 }
 
@@ -271,6 +336,10 @@ Context::setup_controller(const char *serial, vr::ITrackedDeviceServerDriver *dr
 	case XRT_DEVICE_INDEX_CONTROLLER:
 		controller[device_idx]->binding_profiles = vive_binding_profiles_index;
 		controller[device_idx]->binding_profile_count = vive_binding_profiles_index_count;
+		break;
+	case XRT_DEVICE_FLIPVR:
+		controller[device_idx]->binding_profiles = vive_binding_profiles_flipvr;
+		controller[device_idx]->binding_profile_count = vive_binding_profiles_flipvr_count;
 		break;
 	default: break;
 	}
@@ -356,7 +425,16 @@ Context::VendorSpecificEvent(uint32_t unWhichDevice,
                              vr::EVREventType eventType,
                              const vr::VREvent_Data_t &eventData,
                              double eventTimeOffset)
-{}
+{
+	std::lock_guard lk(event_queue_mut);
+	events.push_back({std::chrono::steady_clock::now(),
+	                  {
+	                      .eventType = eventType,
+	                      .trackedDeviceIndex = unWhichDevice,
+	                      .eventAgeSeconds = {},
+	                      .data = eventData,
+	                  }});
+}
 
 bool
 Context::IsExiting()
@@ -463,18 +541,10 @@ Context::create_component_common(vr::PropertyContainerHandle_t container,
 		return vr::VRInputError_InvalidHandle;
 	}
 	if (xrt_input *input = device->get_input_from_name(name); input) {
-		CTX_DEBUG("creating component %s", name);
+		CTX_DEBUG("creating component %s for %p", name, (void *)device);
 		vr::VRInputComponentHandle_t handle = new_handle();
 		handle_to_input[handle] = input;
 		*pHandle = handle;
-	} else if (device != hmd) {
-		auto *controller = static_cast<ControllerDevice *>(device);
-		if (IndexFingerInput *finger = controller->get_finger_from_name(name); finger) {
-			CTX_DEBUG("creating finger component %s", name);
-			vr::VRInputComponentHandle_t handle = new_handle();
-			handle_to_finger[handle] = finger;
-			*pHandle = handle;
-		}
 	}
 	return vr::VRInputError_None;
 }
@@ -577,21 +647,6 @@ Context::UpdateScalarComponent(vr::VRInputComponentHandle_t ulComponent, float f
 		} else {
 			input->value.vec1.x = fNewValue;
 		}
-	} else {
-		if (ulComponent != vr::k_ulInvalidInputComponentHandle) {
-			if (auto finger_input = handle_to_finger.find(ulComponent);
-			    finger_input != handle_to_finger.end() && finger_input->second) {
-				auto now = std::chrono::steady_clock::now();
-				std::chrono::duration<double, std::chrono::seconds::period> offset_dur(fTimeOffset);
-				std::chrono::duration offset = (now + offset_dur).time_since_epoch();
-				int64_t timestamp =
-				    std::chrono::duration_cast<std::chrono::nanoseconds>(offset).count();
-				finger_input->second->timestamp = timestamp;
-				finger_input->second->value = fNewValue;
-			} else {
-				CTX_WARN("Unmapped component %" PRIu64, ulComponent);
-			}
-		}
 	}
 	return vr::VRInputError_None;
 }
@@ -633,6 +688,33 @@ Context::CreateSkeletonComponent(vr::PropertyContainerHandle_t ulContainer,
                                  uint32_t unGripLimitTransformCount,
                                  vr::VRInputComponentHandle_t *pHandle)
 {
+	std::string_view path(pchSkeletonPath); // should be /skeleton/hand/left or /skeleton/hand/right
+	std::string_view skeleton_pfx("/skeleton/hand/");
+	if (!path.starts_with(skeleton_pfx)) {
+		CTX_ERR("Got invalid skeleton path: %s", std::string(path).c_str());
+		return vr::VRInputError_InvalidSkeleton;
+	}
+
+	if (auto ret = create_component_common(ulContainer, pchSkeletonPath, pHandle); ret != vr::VRInputError_None) {
+		return ret;
+	}
+
+	auto *device = static_cast<ControllerDevice *>(prop_container_to_device(ulContainer));
+	path.remove_prefix(skeleton_pfx.size());
+	xrt_hand hand;
+	if (path == "left") {
+		hand = XRT_HAND_LEFT;
+	} else if (path == "right") {
+		hand = XRT_HAND_RIGHT;
+	} else {
+		CTX_ERR("Got invalid skeleton path suffix: %s", std::string(path).c_str());
+		return vr::VRInputError_InvalidSkeleton;
+	}
+
+	device->set_skeleton(std::span(pGripLimitTransforms, unGripLimitTransformCount), hand,
+	                     eSkeletalTrackingLevel == vr::VRSkeletalTracking_Estimated, pchSkeletonPath);
+	skeleton_to_controller[*pHandle] = device;
+
 	return vr::VRInputError_None;
 }
 
@@ -642,6 +724,22 @@ Context::UpdateSkeletonComponent(vr::VRInputComponentHandle_t ulComponent,
                                  const vr::VRBoneTransform_t *pTransforms,
                                  uint32_t unTransformCount)
 {
+	if (eMotionRange != vr::VRSkeletalMotionRange_WithoutController) {
+		return vr::VRInputError_None;
+	}
+
+	if (!update_component_common(ulComponent, 0)) {
+		return vr::VRInputError_InvalidHandle;
+	}
+
+	auto *device = skeleton_to_controller[ulComponent];
+	if (!device) {
+		CTX_ERR("Got unknown component handle %lu", ulComponent);
+		return vr::VRInputError_InvalidHandle;
+	}
+
+	device->update_skeleton_transforms(std::span(pTransforms, unTransformCount));
+
 	return vr::VRInputError_None;
 }
 
@@ -652,7 +750,12 @@ Context::ReadPropertyBatch(vr::PropertyContainerHandle_t ulContainerHandle,
                            vr::PropertyRead_t *pBatch,
                            uint32_t unBatchEntryCount)
 {
-	return vr::TrackedProp_Success;
+	Device *device = prop_container_to_device(ulContainerHandle);
+	if (!device)
+		return vr::TrackedProp_InvalidContainer;
+	if (!pBatch)
+		return vr::TrackedProp_InvalidOperation; // not verified vs steamvr
+	return device->handle_read_properties(pBatch, unBatchEntryCount);
 }
 
 vr::ETrackedPropertyError
@@ -665,8 +768,7 @@ Context::WritePropertyBatch(vr::PropertyContainerHandle_t ulContainerHandle,
 		return vr::TrackedProp_InvalidContainer;
 	if (!pBatch)
 		return vr::TrackedProp_InvalidOperation; // not verified vs steamvr
-	device->handle_properties(pBatch, unBatchEntryCount);
-	return vr::TrackedProp_Success;
+	return device->handle_properties(pBatch, unBatchEntryCount);
 }
 
 const char *
@@ -720,9 +822,9 @@ xrt_result_t
 get_roles(struct xrt_system_devices *xsysd, struct xrt_system_roles *out_roles)
 {
 	bool update_gen = false;
-	int head, left, right, gamepad;
+	int head, eyes, face, left, right, gamepad;
 
-	u_device_assign_xdev_roles(xsysd->xdevs, xsysd->xdev_count, &head, &left, &right, &gamepad);
+	u_device_assign_xdev_roles(xsysd->xdevs, xsysd->xdev_count, &head, &eyes, &face, &left, &right, &gamepad);
 
 	if (left != out_roles->left || right != out_roles->right || gamepad != out_roles->gamepad) {
 		update_gen = true;
@@ -734,6 +836,16 @@ get_roles(struct xrt_system_devices *xsysd, struct xrt_system_roles *out_roles)
 		out_roles->left = left;
 		out_roles->right = right;
 		out_roles->gamepad = gamepad;
+
+		if (left != XRT_DEVICE_ROLE_UNASSIGNED) {
+			auto *left_dev = static_cast<ControllerDevice *>(xsysd->xdevs[left]);
+			left_dev->set_active_hand(XRT_HAND_LEFT);
+		}
+
+		if (right != XRT_DEVICE_ROLE_UNASSIGNED) {
+			auto *right_dev = static_cast<ControllerDevice *>(xsysd->xdevs[right]);
+			right_dev->set_active_hand(XRT_HAND_RIGHT);
+		}
 	}
 
 	return XRT_SUCCESS;
@@ -751,7 +863,7 @@ destroy(struct xrt_system_devices *xsysd)
 }
 
 extern "C" enum xrt_result
-steamvr_lh_create_devices(struct xrt_system_devices **out_xsysd)
+steamvr_lh_create_devices(struct xrt_prober *xp, struct xrt_system_devices **out_xsysd)
 {
 	u_logging_level level = debug_get_log_option_lh_log();
 	// The driver likes to create a bunch of transient folders -
@@ -781,7 +893,7 @@ steamvr_lh_create_devices(struct xrt_system_devices **out_xsysd)
 	U_LOG_IFL_I(level, "Found SteamVR install: %s", steamvr.c_str());
 
 	std::vector<vr::IServerTrackedDeviceProvider *> drivers = {};
-	const auto loadDriver = [&](std::string soPath, bool require) {
+	const auto loadDriver = [&](const std::string &soPath, bool require) {
 		// TODO: support windows?
 		void *driver_lib = dlopen((steamvr + soPath).c_str(), RTLD_LAZY);
 		if (!driver_lib) {
@@ -806,10 +918,10 @@ steamvr_lh_create_devices(struct xrt_system_devices **out_xsysd)
 		}
 		return true;
 	};
-	if (!loadDriver("/drivers/lighthouse/bin/linux64/driver_lighthouse.so", true))
+	if (!loadDriver("/drivers/lighthouse/bin/" OVR_PLAT_SUBDIR "/driver_lighthouse" OVR_PLAT_EXT, true))
 		return xrt_result::XRT_ERROR_DEVICE_CREATION_FAILED;
 	if (debug_get_bool_option_lh_load_slimevr() &&
-	    !loadDriver("/drivers/slimevr/bin/linux64/driver_slimevr.so", false))
+	    !loadDriver("/drivers/slimevr/bin/" OVR_PLAT_SUBDIR "/driver_slimevr" OVR_PLAT_EXT, false))
 		return xrt_result::XRT_ERROR_DEVICE_CREATION_FAILED;
 	svrs->ctx = Context::create(STEAM_INSTALL_DIR, steamvr, std::move(drivers));
 	if (svrs->ctx == nullptr)
@@ -842,6 +954,10 @@ steamvr_lh_create_devices(struct xrt_system_devices **out_xsysd)
 
 	// Include the HMD
 	if (svrs->ctx->hmd) {
+		if (svrs->ctx->hmd->variant == VIVE_VARIANT_PRO2 && !svrs->ctx->hmd->init_vive_pro_2(xp)) {
+			U_LOG_IFL_W(level, "Found Vive Pro 2, but failed to initialize.");
+		}
+
 		// Always have a head at index 0 and iterate dev count.
 		xsysd->xdevs[xsysd->xdev_count] = svrs->ctx->hmd;
 		xsysd->static_roles.head = xsysd->xdevs[xsysd->xdev_count++];

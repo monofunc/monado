@@ -1,4 +1,5 @@
 // Copyright 2019-2024, Collabora, Ltd.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -27,6 +28,7 @@
 #include "oxr_api_verify.h"
 #include "oxr_handle.h"
 #include "oxr_chain.h"
+#include "oxr_roles.h"
 
 
 XRAPI_ATTR XrResult XRAPI_CALL
@@ -99,6 +101,7 @@ oxr_xrBeginSession(XrSession session, const XrSessionBeginInfo *beginInfo)
 	// in a headless session there is no compositor and primaryViewConfigurationType must be ignored
 	if (sess->compositor != NULL) {
 		OXR_VERIFY_VIEW_CONFIG_TYPE(&log, sess->sys->inst, beginInfo->primaryViewConfigurationType);
+		OXR_VERIFY_VIEW_CONFIG_TYPE_SUPPORTED(&log, sess->sys, beginInfo->primaryViewConfigurationType);
 	}
 
 	// Going to effectively double check this, but this gives us an early out.
@@ -239,6 +242,14 @@ oxr_xrLocateViews(XrSession session,
 	OXR_VERIFY_SPACE_NOT_NULL(&log, viewLocateInfo->space, spc);
 	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, viewState, XR_TYPE_VIEW_STATE);
 	OXR_VERIFY_VIEW_CONFIG_TYPE(&log, sess->sys->inst, viewLocateInfo->viewConfigurationType);
+	OXR_VERIFY_VIEW_CONFIG_TYPE_SUPPORTED(&log, sess->sys, viewLocateInfo->viewConfigurationType);
+
+	if (viewLocateInfo->viewConfigurationType != sess->current_view_config_type) {
+		return oxr_error(&log, XR_ERROR_VALIDATION_FAILURE,
+		                 "(viewLocateInfo->viewConfigurationType == 0x%" PRIx32
+		                 ") is not view configuration passed into xrBeginSession(0x%" PRIx32 ")",
+		                 viewLocateInfo->viewConfigurationType, sess->current_view_config_type);
+	}
 
 	if (viewCapacityInput == 0) {
 		OXR_VERIFY_ARG_NOT_NULL(&log, viewCountOutput);
@@ -253,13 +264,6 @@ oxr_xrLocateViews(XrSession session,
 	if (viewLocateInfo->displayTime <= (XrTime)0) {
 		return oxr_error(&log, XR_ERROR_TIME_INVALID, "(time == %" PRIi64 ") is not a valid time.",
 		                 viewLocateInfo->displayTime);
-	}
-
-	if (viewLocateInfo->viewConfigurationType != sess->sys->view_config_type) {
-		return oxr_error(&log, XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED,
-		                 "(viewConfigurationType == 0x%08x) "
-		                 "unsupported view configuration type",
-		                 viewLocateInfo->viewConfigurationType);
 	}
 
 	return oxr_session_locate_views( //
@@ -300,11 +304,7 @@ oxr_xrGetVisibilityMaskKHR(XrSession session,
 	visibilityMask->indexCountOutput = 0;
 
 	OXR_VERIFY_VIEW_CONFIG_TYPE(&log, sess->sys->inst, viewConfigurationType);
-	if (viewConfigurationType != sess->sys->view_config_type) {
-		return oxr_error(&log, XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED,
-		                 "(viewConfigurationType == 0x%08x) unsupported view configuration type",
-		                 viewConfigurationType);
-	}
+	OXR_VERIFY_VIEW_CONFIG_TYPE_SUPPORTED(&log, sess->sys, viewConfigurationType);
 
 	OXR_VERIFY_VIEW_INDEX(&log, viewIndex);
 
@@ -395,268 +395,6 @@ oxr_xrThermalGetTemperatureTrendEXT(XrSession session,
 
 #endif
 
-/*
- *
- * XR_EXT_hand_tracking
- *
- */
-
-#ifdef OXR_HAVE_EXT_hand_tracking
-
-static XrResult
-oxr_hand_tracker_destroy_cb(struct oxr_logger *log, struct oxr_handle_base *hb)
-{
-	struct oxr_hand_tracker *hand_tracker = (struct oxr_hand_tracker *)hb;
-
-	free(hand_tracker);
-
-	return XR_SUCCESS;
-}
-
-XrResult
-oxr_hand_tracker_create(struct oxr_logger *log,
-                        struct oxr_session *sess,
-                        const XrHandTrackerCreateInfoEXT *createInfo,
-                        struct oxr_hand_tracker **out_hand_tracker)
-{
-	if (!oxr_system_get_hand_tracking_support(log, sess->sys->inst)) {
-		return oxr_error(log, XR_ERROR_FEATURE_UNSUPPORTED, "System does not support hand tracking");
-	}
-
-	struct oxr_hand_tracker *hand_tracker = NULL;
-	OXR_ALLOCATE_HANDLE_OR_RETURN(log, hand_tracker, OXR_XR_DEBUG_HTRACKER, oxr_hand_tracker_destroy_cb,
-	                              &sess->handle);
-
-	hand_tracker->sess = sess;
-	hand_tracker->hand = createInfo->hand;
-	hand_tracker->hand_joint_set = createInfo->handJointSet;
-
-#define OXR_SET_HT_DATA_SOURCE(SRC, SRC_TYPE)                                                                          \
-	{                                                                                                              \
-		struct xrt_device *xdev = NULL;                                                                        \
-		if (createInfo->hand == XR_HAND_LEFT_EXT) {                                                            \
-			xdev = GET_XDEV_BY_ROLE(sess->sys, hand_tracking_##SRC##_left);                                \
-		} else if (createInfo->hand == XR_HAND_RIGHT_EXT) {                                                    \
-			xdev = GET_XDEV_BY_ROLE(sess->sys, hand_tracking_##SRC##_right);                               \
-		}                                                                                                      \
-                                                                                                                       \
-		if (xdev != NULL && xdev->supported.hand_tracking) {                                                   \
-			const enum xrt_input_name ht_input_name = createInfo->hand == XR_HAND_LEFT_EXT                 \
-			                                              ? XRT_INPUT_HT_##SRC_TYPE##_LEFT                 \
-			                                              : XRT_INPUT_HT_##SRC_TYPE##_RIGHT;               \
-			struct xrt_input *input = NULL;                                                                \
-			if (oxr_xdev_find_input(xdev, ht_input_name, &input) && input != NULL) {                       \
-				hand_tracker->SRC = (struct oxr_hand_tracking_data_source){                            \
-				    .xdev = xdev,                                                                      \
-				    .input_name = ht_input_name,                                                       \
-				};                                                                                     \
-			}                                                                                              \
-		}                                                                                                      \
-                                                                                                                       \
-		if (xdev != NULL && hand_tracker->SRC.xdev == NULL)                                                    \
-			oxr_warn(log, "We got hand tracking xdev (%s) but it didn't have a hand tracking input.",      \
-			         #SRC);                                                                                \
-	}
-
-	// Find the assigned device.
-	OXR_SET_HT_DATA_SOURCE(unobstructed, UNOBSTRUCTED)
-	OXR_SET_HT_DATA_SOURCE(conforming, CONFORMING)
-#undef OXR_SET_HT_DATA_SOURCE
-
-	hand_tracker->requested_sources_count = ARRAY_SIZE(hand_tracker->requested_sources);
-	hand_tracker->requested_sources[0] = &hand_tracker->unobstructed;
-	hand_tracker->requested_sources[1] = &hand_tracker->conforming;
-
-#ifdef OXR_HAVE_EXT_hand_tracking_data_source
-	const XrHandTrackingDataSourceInfoEXT *data_source_info = NULL;
-	if (sess->sys->inst->extensions.EXT_hand_tracking_data_source) {
-		data_source_info = OXR_GET_INPUT_FROM_CHAIN(createInfo, XR_TYPE_HAND_TRACKING_DATA_SOURCE_INFO_EXT,
-		                                            XrHandTrackingDataSourceInfoEXT);
-	}
-
-	if (data_source_info != NULL) {
-
-		const uint32_t source_count =
-		    MIN(data_source_info->requestedDataSourceCount, hand_tracker->requested_sources_count);
-		hand_tracker->requested_sources_count = 0;
-		memset(hand_tracker->requested_sources, 0, sizeof(hand_tracker->requested_sources));
-
-		for (uint32_t i = 0; i < source_count; ++i) {
-			struct oxr_hand_tracking_data_source *requested_source = NULL;
-			switch (data_source_info->requestedDataSources[i]) {
-			case XR_HAND_TRACKING_DATA_SOURCE_UNOBSTRUCTED_EXT:
-				requested_source = &hand_tracker->unobstructed;
-				break;
-			case XR_HAND_TRACKING_DATA_SOURCE_CONTROLLER_EXT:
-				requested_source = &hand_tracker->conforming;
-				break;
-			default: break;
-			}
-			if (requested_source && requested_source->xdev != NULL) {
-				hand_tracker->requested_sources[hand_tracker->requested_sources_count++] =
-				    requested_source;
-			}
-		}
-
-		if (hand_tracker->requested_sources_count == 0) {
-			return oxr_error(
-			    log, XR_ERROR_FEATURE_UNSUPPORTED,
-			    "None of the requested data sources are supported by the current hand-tracking device(s).");
-		}
-
-		const size_t sort_size = hand_tracker->requested_sources_count;
-		const size_t elem_size = sizeof(const struct oxr_hand_tracking_data_source *);
-		qsort(hand_tracker->requested_sources, sort_size, elem_size, oxr_hand_tracking_data_source_cmp);
-	}
-#endif
-
-	*out_hand_tracker = hand_tracker;
-
-	return XR_SUCCESS;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL
-oxr_xrCreateHandTrackerEXT(XrSession session,
-                           const XrHandTrackerCreateInfoEXT *createInfo,
-                           XrHandTrackerEXT *handTracker)
-{
-	OXR_TRACE_MARKER();
-
-	struct oxr_hand_tracker *hand_tracker = NULL;
-	struct oxr_session *sess = NULL;
-	struct oxr_logger log;
-	XrResult ret;
-	OXR_VERIFY_SESSION_AND_INIT_LOG(&log, session, sess, "xrCreateHandTrackerEXT");
-	OXR_VERIFY_SESSION_NOT_LOST(&log, sess);
-	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, createInfo, XR_TYPE_HAND_TRACKER_CREATE_INFO_EXT);
-	OXR_VERIFY_ARG_NOT_NULL(&log, handTracker);
-
-	OXR_VERIFY_EXTENSION(&log, sess->sys->inst, EXT_hand_tracking);
-
-	if (createInfo->hand != XR_HAND_LEFT_EXT && createInfo->hand != XR_HAND_RIGHT_EXT) {
-		return oxr_error(&log, XR_ERROR_VALIDATION_FAILURE, "Invalid hand value %d\n", createInfo->hand);
-	}
-
-#ifdef OXR_HAVE_EXT_hand_tracking_data_source
-	const XrHandTrackingDataSourceInfoEXT *data_source_info = NULL;
-	if (sess->sys->inst->extensions.EXT_hand_tracking_data_source) {
-		data_source_info = OXR_GET_INPUT_FROM_CHAIN(createInfo, XR_TYPE_HAND_TRACKING_DATA_SOURCE_INFO_EXT,
-		                                            XrHandTrackingDataSourceInfoEXT);
-	}
-	OXR_VERIFY_HAND_TRACKING_DATA_SOURCE_OR_NULL(&log, data_source_info);
-#endif
-
-	ret = oxr_hand_tracker_create(&log, sess, createInfo, &hand_tracker);
-	if (ret != XR_SUCCESS) {
-		return ret;
-	}
-
-	*handTracker = oxr_hand_tracker_to_openxr(hand_tracker);
-
-	return XR_SUCCESS;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL
-oxr_xrDestroyHandTrackerEXT(XrHandTrackerEXT handTracker)
-{
-	OXR_TRACE_MARKER();
-
-	struct oxr_hand_tracker *hand_tracker;
-	struct oxr_logger log;
-	OXR_VERIFY_HAND_TRACKER_AND_INIT_LOG(&log, handTracker, hand_tracker, "xrDestroyHandTrackerEXT");
-
-	return oxr_handle_destroy(&log, &hand_tracker->handle);
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL
-oxr_xrLocateHandJointsEXT(XrHandTrackerEXT handTracker,
-                          const XrHandJointsLocateInfoEXT *locateInfo,
-                          XrHandJointLocationsEXT *locations)
-{
-	OXR_TRACE_MARKER();
-
-	struct oxr_hand_tracker *hand_tracker;
-	struct oxr_space *spc;
-	struct oxr_logger log;
-	OXR_VERIFY_HAND_TRACKER_AND_INIT_LOG(&log, handTracker, hand_tracker, "xrLocateHandJointsEXT");
-	OXR_VERIFY_SESSION_NOT_LOST(&log, hand_tracker->sess);
-	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, locateInfo, XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT);
-	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, locations, XR_TYPE_HAND_JOINT_LOCATIONS_EXT);
-	OXR_VERIFY_ARG_NOT_NULL(&log, locations->jointLocations);
-	OXR_VERIFY_SPACE_NOT_NULL(&log, locateInfo->baseSpace, spc);
-
-
-	if (locateInfo->time <= (XrTime)0) {
-		return oxr_error(&log, XR_ERROR_TIME_INVALID, "(time == %" PRIi64 ") is not a valid time.",
-		                 locateInfo->time);
-	}
-
-	if (hand_tracker->hand_joint_set == XR_HAND_JOINT_SET_DEFAULT_EXT) {
-		if (locations->jointCount != XR_HAND_JOINT_COUNT_EXT) {
-			return oxr_error(&log, XR_ERROR_VALIDATION_FAILURE, "joint count must be %d, not %d\n",
-			                 XR_HAND_JOINT_COUNT_EXT, locations->jointCount);
-		}
-	};
-
-	XrHandJointVelocitiesEXT *vel =
-	    OXR_GET_OUTPUT_FROM_CHAIN(locations, XR_TYPE_HAND_JOINT_VELOCITIES_EXT, XrHandJointVelocitiesEXT);
-	if (vel) {
-		if (vel->jointCount <= 0) {
-			return oxr_error(&log, XR_ERROR_VALIDATION_FAILURE,
-			                 "XrHandJointVelocitiesEXT joint count "
-			                 "must be >0, is %d\n",
-			                 vel->jointCount);
-		}
-		if (hand_tracker->hand_joint_set == XR_HAND_JOINT_SET_DEFAULT_EXT) {
-			if (vel->jointCount != XR_HAND_JOINT_COUNT_EXT) {
-				return oxr_error(&log, XR_ERROR_VALIDATION_FAILURE,
-				                 "XrHandJointVelocitiesEXT joint count must "
-				                 "be %d, not %d\n",
-				                 XR_HAND_JOINT_COUNT_EXT, locations->jointCount);
-			}
-		}
-	}
-
-#ifdef OXR_HAVE_EXT_hand_tracking_data_source
-	const XrHandTrackingDataSourceStateEXT *data_source_state = NULL;
-	if (hand_tracker->sess->sys->inst->extensions.EXT_hand_tracking_data_source) {
-		data_source_state = OXR_GET_OUTPUT_FROM_CHAIN(locations, XR_TYPE_HAND_TRACKING_DATA_SOURCE_STATE_EXT,
-		                                              XrHandTrackingDataSourceStateEXT);
-	}
-
-	if (data_source_state != NULL) {
-		OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, data_source_state, XR_TYPE_HAND_TRACKING_DATA_SOURCE_STATE_EXT);
-		OXR_VERIFY_ARG_NOT_ZERO(&log, hand_tracker->requested_sources_count);
-	}
-#endif
-
-	return oxr_session_hand_joints(&log, hand_tracker, locateInfo, locations);
-}
-
-#endif
-
-/*
- *
- * XR_MNDX_force_feedback_curl
- *
- */
-
-#ifdef XR_MNDX_force_feedback_curl
-
-XRAPI_ATTR XrResult XRAPI_CALL
-oxr_xrApplyForceFeedbackCurlMNDX(XrHandTrackerEXT handTracker, const XrForceFeedbackCurlApplyLocationsMNDX *locations)
-{
-	OXR_TRACE_MARKER();
-
-	struct oxr_hand_tracker *hand_tracker;
-	struct oxr_logger log;
-	OXR_VERIFY_HAND_TRACKER_AND_INIT_LOG(&log, handTracker, hand_tracker, "xrApplyForceFeedbackCurlMNDX");
-	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, locations, XR_TYPE_FORCE_FEEDBACK_CURL_APPLY_LOCATIONS_MNDX);
-
-	return oxr_session_apply_force_feedback(&log, hand_tracker, locations);
-}
-
-#endif
 
 /*
  *
@@ -743,94 +481,6 @@ oxr_xrRequestDisplayRefreshRateFB(XrSession session, float displayRefreshRate)
 
 /*
  *
- * XR_FB_haptic_pcm
- *
- */
-
-#ifdef OXR_HAVE_FB_haptic_pcm
-
-static bool
-get_action_output_pcm_sample_rate(struct oxr_session *sess, struct oxr_action_cache *cache, float *sample_rate)
-{
-	for (uint32_t i = 0; i < cache->output_count; i++) {
-		struct oxr_action_output *output = &cache->outputs[i];
-		struct xrt_device *xdev = output->xdev;
-
-		struct xrt_output_limits output_limits;
-		xrt_result_t result = xrt_device_get_output_limits(xdev, &output_limits);
-		if (result != XRT_SUCCESS) {
-			// default to something sane
-			output_limits = (struct xrt_output_limits){0};
-		}
-
-		(*sample_rate) = output_limits.haptic_pcm_sample_rate;
-		if (output_limits.haptic_pcm_sample_rate > 0) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL
-oxr_xrGetDeviceSampleRateFB(XrSession session,
-                            const XrHapticActionInfo *hapticActionInfo,
-                            XrDevicePcmSampleRateGetInfoFB *deviceSampleRate)
-{
-	OXR_TRACE_MARKER();
-
-	struct oxr_session *sess = NULL;
-	struct oxr_action *act = NULL;
-	struct oxr_subaction_paths subaction_paths = {0};
-	struct oxr_logger log;
-	XrResult ret;
-	OXR_VERIFY_SESSION_AND_INIT_LOG(&log, session, sess, "xrGetDeviceSampleRateFB");
-	OXR_VERIFY_SESSION_NOT_LOST(&log, sess);
-	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, hapticActionInfo, XR_TYPE_HAPTIC_ACTION_INFO);
-	OXR_VERIFY_ARG_TYPE_AND_NOT_NULL(&log, deviceSampleRate, XR_TYPE_DEVICE_PCM_SAMPLE_RATE_GET_INFO_FB);
-	OXR_VERIFY_ACTION_NOT_NULL(&log, hapticActionInfo->action, act);
-	OXR_VERIFY_EXTENSION(&log, sess->sys->inst, FB_haptic_pcm);
-
-	// get the subaction paths
-	ret = oxr_verify_subaction_path_get(&log, act->act_set->inst, hapticActionInfo->subactionPath,
-	                                    &act->data->subaction_paths, &subaction_paths, "getInfo->subactionPath");
-	if (ret != XR_SUCCESS) {
-		return ret;
-	}
-
-	// make sure it's a vibration action
-	if (act->data->action_type != XR_ACTION_TYPE_VIBRATION_OUTPUT) {
-		return oxr_error(&log, XR_ERROR_ACTION_TYPE_MISMATCH, "Not created with output vibration type");
-	}
-
-	// get the attached action
-	struct oxr_action_attachment *act_attached = NULL;
-
-	oxr_session_get_action_attachment(sess, act->act_key, &act_attached);
-	if (act_attached == NULL) {
-		return oxr_error(&log, XR_ERROR_ACTIONSET_NOT_ATTACHED, "Action has not been attached to this session");
-	}
-
-	// find any device with a valid sample rate, and return it
-#define GET_SAMPLE_RATE(X)                                                                                             \
-	if (subaction_paths.X || subaction_paths.any) {                                                                \
-		if (get_action_output_pcm_sample_rate(sess, &act_attached->X, &deviceSampleRate->sampleRate))          \
-			return oxr_session_success_focused_result(sess);                                               \
-	}
-
-	OXR_FOR_EACH_SUBACTION_PATH(GET_SAMPLE_RATE)
-#undef GET_SAMPLE_RATE
-
-	// no devices found
-	deviceSampleRate->sampleRate = 0;
-
-	return XR_SUCCESS;
-}
-
-#endif
-
-/*
- *
  * XR_KHR_android_thread_settings
  *
  */
@@ -897,7 +547,7 @@ oxr_xrCreatePlaneDetectorEXT(XrSession session,
 	OXR_VERIFY_EXTENSION(&log, sess->sys->inst, EXT_plane_detection);
 
 	//! @todo support planes on other devices
-	struct xrt_device *xdev = GET_XDEV_BY_ROLE(sess->sys, head);
+	struct xrt_device *xdev = GET_STATIC_XDEV_BY_ROLE(sess->sys, head);
 	if (!xdev->supported.planes) {
 		return XR_ERROR_FEATURE_UNSUPPORTED;
 	}

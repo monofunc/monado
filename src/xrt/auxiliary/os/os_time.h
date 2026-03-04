@@ -1,4 +1,5 @@
 // Copyright 2019-2022, Collabora, Ltd.
+// Copyright 2024-2025, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -22,7 +23,15 @@
 
 #include "util/u_time.h"
 
-#ifdef XRT_OS_LINUX
+
+#if defined(XRT_OS_OSX)
+#include <time.h>
+#include <sys/time.h>
+#include <mach/mach_time.h>
+#define XRT_HAVE_TIMESPEC
+#define XRT_HAVE_TIMEVAL
+
+#elif defined(XRT_OS_LINUX)
 #include <time.h>
 #include <sys/time.h>
 #define XRT_HAVE_TIMESPEC
@@ -155,9 +164,9 @@ static inline int64_t
 os_timeval_to_ns(struct timeval *val);
 #endif
 
-#if defined(XRT_OS_LINUX) || defined(XRT_DOXYGEN)
+#if defined(XRT_OS_LINUX) || defined(XRT_OS_OSX) || defined(XRT_DOXYGEN)
 /*!
- * Return a realtime clock in nanoseconds (Linux-only)
+ * Return a realtime clock in nanoseconds (Linux and OSX)
  *
  * @ingroup aux_os_time_extra
  */
@@ -194,13 +203,15 @@ os_ns_per_qpc_tick_get(void);
 static inline void
 os_nanosleep(int64_t nsec)
 {
-#if defined(XRT_OS_LINUX)
+#if defined(XRT_OS_LINUX) || defined(XRT_OS_OSX)
 	struct timespec spec;
 	spec.tv_sec = (nsec / U_1_000_000_000);
 	spec.tv_nsec = (nsec % U_1_000_000_000);
 	nanosleep(&spec, NULL);
 #elif defined(XRT_OS_WINDOWS)
 	Sleep((DWORD)(nsec / U_TIME_1MS_IN_NS));
+#else
+#error "need port"
 #endif
 }
 
@@ -307,7 +318,7 @@ os_ns_per_qpc_tick_get(void)
 static inline int64_t
 os_monotonic_get_ns(void)
 {
-#if defined(XRT_OS_LINUX)
+#if defined(XRT_OS_LINUX) || defined(XRT_OS_OSX)
 	struct timespec ts;
 	int ret = clock_gettime(CLOCK_MONOTONIC, &ts);
 	if (ret != 0) {
@@ -324,7 +335,7 @@ os_monotonic_get_ns(void)
 #endif
 }
 
-#ifdef XRT_OS_LINUX
+#if defined(XRT_OS_LINUX) || defined(XRT_OS_OSX)
 static inline int64_t
 os_realtime_get_ns(void)
 {
@@ -336,6 +347,10 @@ os_realtime_get_ns(void)
 
 	return os_timespec_to_ns(&ts);
 }
+#elif defined(XRT_OS_WINDOWS)
+// Not implemented on Windows
+#else
+#error "need port or decide not to implement"
 #endif
 
 

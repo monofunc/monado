@@ -1,4 +1,5 @@
 // Copyright 2019-2024, Collabora, Ltd.
+// Copyright 2025, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -421,6 +422,8 @@ update_session_state_locked(struct multi_system_compositor *msc)
 	    .fb_body_tracking_enabled = false,
 	    .fb_face_tracking2_enabled = false,
 	    .meta_body_tracking_full_body_enabled = false,
+	    .meta_body_tracking_calibration_enabled = false,
+	    .android_face_tracking_enabled = false,
 	};
 
 	switch (msc->sessions.state) {
@@ -555,8 +558,17 @@ multi_main_loop(struct multi_system_compositor *msc)
 		U_LOG_I("Stopped native session, shutting down.");
 		xrt_comp_end_session(xc);
 		break;
-	case MULTI_SYSTEM_STATE_STOPPED: break;
-	default: assert(false);
+	case MULTI_SYSTEM_STATE_STOPPED: U_LOG_I("Already stopped, nothing to clean up."); break;
+	case MULTI_SYSTEM_STATE_INIT_WARM_START:
+		U_LOG_I("Cleaning up from warm start state.");
+		xrt_comp_end_session(xc);
+		break;
+	case MULTI_SYSTEM_STATE_INVALID:
+		U_LOG_W("Cleaning up from invalid state.");
+		// Best effort cleanup
+		xrt_comp_end_session(xc);
+		break;
+	default: U_LOG_E("Unknown session state during cleanup: %d", msc->sessions.state); assert(false);
 	}
 
 	os_thread_helper_unlock(&msc->oth);
@@ -580,7 +592,8 @@ thread_func(void *ptr)
  */
 
 static xrt_result_t
-system_compositor_set_state(struct xrt_system_compositor *xsc, struct xrt_compositor *xc, bool visible, bool focused)
+system_compositor_set_state(
+    struct xrt_system_compositor *xsc, struct xrt_compositor *xc, bool visible, bool focused, int64_t timestamp_ns)
 {
 	struct multi_system_compositor *msc = multi_system_compositor(xsc);
 	struct multi_compositor *mc = multi_compositor(xc);
@@ -595,6 +608,7 @@ system_compositor_set_state(struct xrt_system_compositor *xsc, struct xrt_compos
 		xse.type = XRT_SESSION_EVENT_STATE_CHANGE;
 		xse.state.visible = visible;
 		xse.state.focused = focused;
+		xse.state.timestamp_ns = timestamp_ns;
 
 		return multi_compositor_push_event(mc, &xse);
 	}

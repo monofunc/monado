@@ -9,6 +9,7 @@
  * @ingroup comp_multi
  */
 
+#include "util/u_logging.h"
 #include "xrt/xrt_session.h"
 
 #include "os/os_time.h"
@@ -39,6 +40,9 @@
 #include "android/android_custom_surface.h"
 #include "android/android_globals.h"
 #endif
+
+DEBUG_GET_ONCE_LOG_OPTION(app_frame_lag_level, "XRT_APP_FRAME_LAG_LOG_AS_LEVEL", U_LOGGING_DEBUG)
+#define LOG_FRAME_LAG(...) U_LOG_IFL(debug_get_log_option_app_frame_lag_level(), u_log_get_global_level(), __VA_ARGS__)
 
 /*
  *
@@ -188,8 +192,8 @@ wait_for_scheduled_free(struct multi_compositor *mc)
 
 		// This frame is for the next frame, drop the old one no matter what.
 		if (time_is_within_half_ms(mc->progress.data.display_time_ns, mc->slot_next_frame_display)) {
-			U_LOG_W("%.3fms: Dropping old missed frame in favour for completed new frame",
-			        time_ns_to_ms_f(now_ns));
+			LOG_FRAME_LAG("%.3fms: Dropping old missed frame in favour for completed new frame",
+			              time_ns_to_ms_f(now_ns));
 			break;
 		}
 
@@ -611,6 +615,8 @@ multi_compositor_discard_frame(struct xrt_compositor *xc, int64_t frame_id)
 
 	os_mutex_lock(&mc->msc->list_and_timing_lock);
 	u_pa_mark_discarded(mc->upa, frame_id, now_ns);
+	// Need to drop delivered frame as it shouldn't be reused.
+	multi_compositor_retire_delivered_locked(mc, now_ns);
 	os_mutex_unlock(&mc->msc->list_and_timing_lock);
 
 	return XRT_SUCCESS;
@@ -924,7 +930,7 @@ log_frame_time_diff(int64_t frame_time_ns, int64_t display_time_ns)
 		late = true;
 	}
 
-	U_LOG_W("Frame %s by %.2fms!", late ? "late" : "early", time_ns_to_ms_f(diff_ns));
+	LOG_FRAME_LAG("Frame %s by %.2fms!", late ? "late" : "early", time_ns_to_ms_f(diff_ns));
 }
 
 void

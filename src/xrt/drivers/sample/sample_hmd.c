@@ -132,6 +132,7 @@ static xrt_result_t
 sample_hmd_get_view_poses(struct xrt_device *xdev,
                           const struct xrt_vec3 *default_eye_relation,
                           int64_t at_timestamp_ns,
+                          enum xrt_view_type view_type,
                           uint32_t view_count,
                           struct xrt_space_relation *out_head_relation,
                           struct xrt_fov *out_fovs,
@@ -145,6 +146,7 @@ sample_hmd_get_view_poses(struct xrt_device *xdev,
 	    xdev,                       //
 	    default_eye_relation,       //
 	    at_timestamp_ns,            //
+	    view_type,                  //
 	    view_count,                 //
 	    out_head_relation,          //
 	    out_fovs,                   //
@@ -195,7 +197,7 @@ sample_hmd_create(void)
 	snprintf(hmd->base.str, XRT_DEVICE_NAME_LEN, "Sample HMD");
 	snprintf(hmd->base.serial, XRT_DEVICE_NAME_LEN, "Sample HMD S/N");
 
-	m_relation_history_create(&hmd->relation_hist, NULL);
+	m_relation_history_create(&hmd->relation_hist);
 
 	// Setup input.
 	hmd->base.name = XRT_DEVICE_GENERIC_HMD;

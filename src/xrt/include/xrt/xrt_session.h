@@ -1,4 +1,5 @@
 // Copyright 2020-2023, Collabora, Ltd.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -11,6 +12,7 @@
 
 #include "xrt/xrt_compiler.h"
 #include "xrt/xrt_defines.h"
+#include "xrt/xrt_results.h"
 #include "xrt/xrt_space.h"
 
 
@@ -67,6 +69,9 @@ enum xrt_session_event_type
 
 	//! User presence has changed (hmd may have been put on or removed)
 	XRT_SESSION_EVENT_USER_PRESENCE_CHANGE = 10,
+
+	//! Request the session to quit.
+	XRT_SESSION_EVENT_REQUEST_EXIT = 11,
 };
 
 /*!
@@ -80,6 +85,7 @@ struct xrt_session_event_state_change
 	enum xrt_session_event_type type;
 	bool visible;
 	bool focused;
+	int64_t timestamp_ns;
 };
 
 /*!
@@ -104,7 +110,7 @@ struct xrt_session_event_overlay
 struct xrt_session_event_loss_pending
 {
 	enum xrt_session_event_type type;
-	int64_t loss_time_ns;
+	XRT_ALIGNAS(8) int64_t loss_time_ns;
 };
 
 /*!
@@ -189,6 +195,17 @@ struct xrt_session_event_user_presence_change
 };
 
 /*!
+ * Session stop event, type @ref XRT_SESSION_EVENT_REQUEST_EXIT.
+ *
+ * @see xrt_session_event
+ * @ingroup xrt_iface
+ */
+struct xrt_session_event_request_exit
+{
+	enum xrt_session_event_type type;
+};
+
+/*!
  * Union of all session events, used to return multiple events through one call.
  * Each event struct must start with a @ref xrt_session_event_type field.
  *
@@ -207,6 +224,7 @@ union xrt_session_event {
 	struct xrt_session_event_passthrough_state_change passthru;
 	struct xrt_session_event_visibility_mask_change mask_change;
 	struct xrt_session_event_user_presence_change presence_change;
+	struct xrt_session_event_request_exit request_exit;
 };
 
 /*!
@@ -234,7 +252,7 @@ struct xrt_session_event_sink
  *
  * @public @memberof xrt_session_event_sink
  */
-XRT_CHECK_RESULT static inline xrt_result_t
+XRT_CHECK_RESULT XRT_NONNULL_ALL static inline xrt_result_t
 xrt_session_event_sink_push(struct xrt_session_event_sink *xses, const union xrt_session_event *xse)
 {
 	return xses->push_event(xses, xse);
@@ -267,6 +285,13 @@ struct xrt_session
 	xrt_result_t (*poll_events)(struct xrt_session *xs, union xrt_session_event *out_xse);
 
 	/*!
+	 * Request this session to exit.
+	 *
+	 * @param xs Pointer to self
+	 */
+	xrt_result_t (*request_exit)(struct xrt_session *xs);
+
+	/*!
 	 * Destroy the session, must be destroyed after the native compositor.
 	 *
 	 * Code consuming this interface should use @ref xrt_session_destroy.
@@ -283,10 +308,23 @@ struct xrt_session
  *
  * @public @memberof xrt_session
  */
-XRT_CHECK_RESULT static inline xrt_result_t
+XRT_CHECK_RESULT XRT_NONNULL_ALL static inline xrt_result_t
 xrt_session_poll_events(struct xrt_session *xs, union xrt_session_event *out_xse)
 {
 	return xs->poll_events(xs, out_xse);
+}
+
+/*!
+ * @copydoc xrt_session::request_exit
+ *
+ * Helper for calling through the function pointer.
+ *
+ * @public @memberof xrt_session
+ */
+XRT_CHECK_RESULT static inline xrt_result_t
+xrt_session_request_exit(struct xrt_session *xs)
+{
+	return xs->request_exit(xs);
 }
 
 /*!
@@ -299,7 +337,7 @@ xrt_session_poll_events(struct xrt_session *xs, union xrt_session_event *out_xse
  *
  * @public @memberof xrt_session
  */
-static inline void
+XRT_NONNULL_ALL static inline void
 xrt_session_destroy(struct xrt_session **xs_ptr)
 {
 	struct xrt_session *xs = *xs_ptr;

@@ -1,4 +1,5 @@
 // Copyright 2024, Collabora, Ltd.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -19,6 +20,8 @@
 #include "oxr_logger.h"
 #include "oxr_handle.h"
 #include "oxr_conversions.h"
+#include "oxr_chain.h"
+#include "oxr_roles.h"
 
 static enum xrt_body_joint_set_type_fb
 oxr_to_xrt_body_joint_set_type_fb(XrBodyJointSetFB joint_set_type)
@@ -70,7 +73,7 @@ oxr_create_body_tracker_fb(struct oxr_logger *log,
 	}
 #endif
 
-	struct xrt_device *xdev = GET_XDEV_BY_ROLE(sess->sys, body);
+	struct xrt_device *xdev = GET_STATIC_XDEV_BY_ROLE(sess->sys, body);
 	if (xdev == NULL || !xdev->supported.body_tracking) {
 		return oxr_error(log, XR_ERROR_FEATURE_UNSUPPORTED, "No device found for body tracking role");
 	}
@@ -206,5 +209,19 @@ oxr_locate_body_joints_fb(struct oxr_logger *log,
 		m_relation_chain_resolve(&chain, &result);
 		OXR_XRT_POSE_TO_XRPOSEF(result.pose, dst_joint->pose);
 	}
+
+#ifdef OXR_HAVE_META_body_tracking_calibration
+	XrBodyTrackingCalibrationStatusMETA *calibration_status = OXR_GET_OUTPUT_FROM_CHAIN(
+	    locations, XR_TYPE_BODY_TRACKING_CALIBRATION_STATUS_META, XrBodyTrackingCalibrationStatusMETA);
+	if (calibration_status != NULL) {
+		if (!body_tracker_fb->xdev->supported.body_tracking_calibration) {
+			return oxr_error(log, XR_ERROR_FEATURE_UNSUPPORTED,
+			                 "body tracking device does not support XR_META_body_tracking_calibration");
+		}
+		calibration_status->status =
+		    (XrBodyTrackingCalibrationStateMETA)body_joint_set_fb->exts.calibration_status;
+	}
+#endif
+
 	return XR_SUCCESS;
 }

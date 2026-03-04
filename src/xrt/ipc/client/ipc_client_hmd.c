@@ -1,5 +1,5 @@
 // Copyright 2020-2024, Collabora, Ltd.
-// Copyright 2025, NVIDIA CORPORATION.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -66,6 +66,7 @@ static xrt_result_t
 call_get_view_poses_raw(ipc_client_hmd_t *ich,
                         const struct xrt_vec3 *default_eye_relation,
                         int64_t at_timestamp_ns,
+                        enum xrt_view_type view_type,
                         uint32_t view_count,
                         struct xrt_space_relation *out_head_relation,
                         struct xrt_fov *out_fovs,
@@ -82,6 +83,7 @@ call_get_view_poses_raw(ipc_client_hmd_t *ich,
 	    ich->device_id,                           //
 	    default_eye_relation,                     //
 	    at_timestamp_ns,                          //
+	    view_type,                                //
 	    view_count);                              //
 	IPC_CHK_WITH_GOTO(ich->ipc_c, xret, "ipc_send_device_get_view_poses_locked", out);
 
@@ -131,6 +133,7 @@ static xrt_result_t
 ipc_client_hmd_get_view_poses(struct xrt_device *xdev,
                               const struct xrt_vec3 *default_eye_relation,
                               int64_t at_timestamp_ns,
+                              enum xrt_view_type view_type,
                               uint32_t view_count,
                               struct xrt_space_relation *out_head_relation,
                               struct xrt_fov *out_fovs,
@@ -148,6 +151,7 @@ ipc_client_hmd_get_view_poses(struct xrt_device *xdev,
 		    ich->device_id,                      //
 		    default_eye_relation,                //
 		    at_timestamp_ns,                     //
+		    view_type,                           //
 		    view_count,                          //
 		    &info);                              //
 		IPC_CHK_AND_RET(ich->ipc_c, xret, "ipc_call_device_get_view_poses_2");
@@ -164,6 +168,7 @@ ipc_client_hmd_get_view_poses(struct xrt_device *xdev,
 		    ich,                        //
 		    default_eye_relation,       //
 		    at_timestamp_ns,            //
+		    view_type,                  //
 		    view_count,                 //
 		    out_head_relation,          //
 		    out_fovs,                   //
@@ -177,25 +182,22 @@ ipc_client_hmd_get_view_poses(struct xrt_device *xdev,
 	return xret;
 }
 
-static bool
+static xrt_result_t
 ipc_client_hmd_compute_distortion(
     struct xrt_device *xdev, uint32_t view, float u, float v, struct xrt_uv_triplet *out_result)
 {
 	ipc_client_hmd_t *ich = ipc_client_hmd(xdev);
 	xrt_result_t xret;
 
-	bool ret;
 	xret = ipc_call_device_compute_distortion( //
 	    ich->ipc_c,                            //
 	    ich->device_id,                        //
 	    view,                                  //
 	    u,                                     //
 	    v,                                     //
-	    &ret,                                  //
 	    out_result);                           //
-	IPC_CHK_WITH_RET(ich->ipc_c, xret, "ipc_call_device_compute_distortion", false);
 
-	return ret;
+	IPC_CHK_ALWAYS_RET(ich->ipc_c, xret, "ipc_call_device_compute_distortion");
 }
 
 static bool
@@ -271,11 +273,47 @@ ipc_client_hmd_destroy(struct xrt_device *xdev)
 	u_device_free(&ich->base);
 }
 
+static xrt_result_t
+ipc_client_hmd_get_brightness(struct xrt_device *xdev, float *out_brightness)
+{
+	ipc_client_hmd_t *ich = ipc_client_hmd(xdev);
+	struct ipc_connection *ipc_c = ich->ipc_c;
+	xrt_result_t xret;
+
+	ipc_client_connection_lock(ipc_c);
+
+	xret = ipc_call_device_get_brightness(ipc_c, ich->device_id, out_brightness);
+	IPC_CHK_ONLY_PRINT(ipc_c, xret, "ipc_call_device_get_brightness");
+
+	ipc_client_connection_unlock(ipc_c);
+
+	return xret;
+}
+
+static xrt_result_t
+ipc_client_hmd_set_brightness(struct xrt_device *xdev, float brightness, bool relative)
+{
+	ipc_client_hmd_t *ich = ipc_client_hmd(xdev);
+	struct ipc_connection *ipc_c = ich->ipc_c;
+	xrt_result_t xret;
+
+	ipc_client_connection_lock(ipc_c);
+
+	xret = ipc_call_device_set_brightness(ipc_c, ich->device_id, brightness, relative);
+	IPC_CHK_ONLY_PRINT(ipc_c, xret, "ipc_call_device_set_brightness");
+
+	ipc_client_connection_unlock(ipc_c);
+
+	return xret;
+}
+
 /*!
  * @public @memberof ipc_client_hmd
  */
 struct xrt_device *
-ipc_client_hmd_create(struct ipc_connection *ipc_c, struct xrt_tracking_origin *xtrack, uint32_t device_id)
+ipc_client_hmd_create(struct ipc_connection *ipc_c,
+                      struct ipc_client_tracking_origin_manager *ictom,
+                      uint32_t device_id)
 {
 	// Convenience helper.
 	struct ipc_shared_memory *ism = ipc_c->ism;
@@ -285,14 +323,20 @@ ipc_client_hmd_create(struct ipc_connection *ipc_c, struct xrt_tracking_origin *
 	ipc_client_hmd_t *ich = U_DEVICE_ALLOCATE(ipc_client_hmd_t, flags, 0, 0);
 
 	// Fills in almost everything a regular device needs.
-	ipc_client_xdev_init(ich, ipc_c, xtrack, device_id);
+	xrt_result_t xret = ipc_client_xdev_init(ich, ipc_c, ictom, device_id, ipc_client_hmd_destroy);
+	if (xret != XRT_SUCCESS) {
+		IPC_ERROR(ipc_c, "Failed to initialize IPC client HMD: %d", xret);
+		u_device_free(&ich->base);
+		return NULL;
+	}
 
-	// Fill in needed HMD functions, and destroy.
+	// Fill in needed HMD functions.
 	ich->base.get_view_poses = ipc_client_hmd_get_view_poses;
 	ich->base.compute_distortion = ipc_client_hmd_compute_distortion;
 	ich->base.is_form_factor_available = ipc_client_hmd_is_form_factor_available;
 	ich->base.get_visibility_mask = ipc_client_hmd_get_visibility_mask;
-	ich->base.destroy = ipc_client_hmd_destroy;
+	ich->base.get_brightness = ipc_client_hmd_get_brightness;
+	ich->base.set_brightness = ipc_client_hmd_set_brightness;
 
 	// Setup blend-modes.
 	ich->base.hmd->blend_mode_count = ipc_c->ism->hmd.blend_mode_count;

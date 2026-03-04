@@ -1,4 +1,5 @@
 # Copyright 2019, Collabora, Ltd.
+# Copyright 2025, NVIDIA CORPORATION.
 # SPDX-License-Identifier: BSL-1.0
 
 ######
@@ -14,7 +15,12 @@ set(RUNTIME_TARGET
 # OpenXR 1.0
 set(XR_API_MAJOR "1")
 
-add_library(${RUNTIME_TARGET} MODULE target.c libopenxr.def)
+if(APPLE)
+	# Needed to make a dynlib.
+	add_library(${RUNTIME_TARGET} SHARED target.c)
+else()
+	add_library(${RUNTIME_TARGET} MODULE target.c libopenxr.def)
+endif()
 
 # Note: Order may matter in these lists!
 target_link_libraries(${RUNTIME_TARGET} PUBLIC aux_vk aux_os aux_util aux_math)
@@ -34,7 +40,14 @@ else()
 		)
 endif()
 
-if(NOT WIN32)
+if(APPLE)
+	# Only expose the negotiate symbol.
+	set_property(
+		TARGET ${RUNTIME_TARGET}
+		APPEND_STRING
+		PROPERTY LINK_FLAGS "-Wl,-exported_symbol -Wl,_xrNegotiateLoaderRuntimeInterface"
+		)
+elseif(NOT WIN32)
 	# Force the main "negotiate" symbol's inclusion
 	# and use a version script to ensure that's the only one we expose.
 	set_property(

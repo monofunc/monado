@@ -1,4 +1,5 @@
 // Copyright 2020-2023, Collabora, Ltd.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -11,6 +12,8 @@
 #include "util/u_misc.h"
 #include "util/u_trace_marker.h"
 
+#include "shared/ipc_protocol.h"
+#include "shared/ipc_shmem.h"
 #include "shared/ipc_utils.h"
 #include "server/ipc_server.h"
 #include "ipc_server_generated.h"
@@ -70,6 +73,9 @@ common_shutdown(volatile struct ipc_client_state *ics)
 
 	ipc_message_channel_close((struct ipc_message_channel *)&ics->imc);
 
+	ipc_shmem_destroy((xrt_shmem_handle_t *)&ics->ism_handle, (void **)&ics->server->isms[ics->server_thread_index],
+	                  sizeof(struct ipc_shared_memory));
+
 	ics->server->threads[ics->server_thread_index].state = IPC_THREAD_STOPPING;
 	ics->server_thread_index = -1;
 	memset((void *)&ics->client_state, 0, sizeof(struct ipc_app_state));
@@ -125,6 +131,15 @@ common_shutdown(volatile struct ipc_client_state *ics)
 
 		xrt_system_devices_feature_dec(ics->server->xsysd, (enum xrt_device_feature_type)i);
 		ics->device_feature_used[i] = false;
+	}
+
+	// Clear the tracking origins array.
+	for (uint32_t i = 0; i < XRT_SYSTEM_MAX_DEVICES; i++) {
+		/*
+		 * We don't control the lifetime of the tracking origins,
+		 * so we just set the pointer to NULL.
+		 */
+		ics->objects.xtracks[i] = NULL;
 	}
 
 	// Make sure undestroyed plane detections are cleaned up
@@ -195,7 +210,11 @@ client_loop(volatile struct ipc_client_state *ics)
 {
 	U_TRACE_SET_THREAD_NAME("IPC Client");
 
-	IPC_INFO(ics->server, "Client %u connected", ics->client_state.id);
+	// Call the client connected callback.
+	ics->server->callbacks->client_connected( //
+	    ics->server,                          //
+	    ics->client_state.id,                 //
+	    ics->server->callback_data);          //
 
 	// Claim the client fd.
 	int epoll_fd = setup_epoll(ics);
@@ -226,7 +245,6 @@ client_loop(volatile struct ipc_client_state *ics)
 
 		// Detect clients disconnecting gracefully.
 		if (ret > 0 && (event.events & EPOLLHUP) != 0) {
-			IPC_INFO(ics->server, "Client disconnected.");
 			break;
 		}
 
@@ -241,6 +259,12 @@ client_loop(volatile struct ipc_client_state *ics)
 		size_t cmd_size = ipc_command_size(cmd);
 		if (cmd_size == 0) {
 			IPC_ERROR(ics->server, "Invalid command size.");
+			break;
+		}
+
+		// This needs to hold true.
+		if (cmd_size > IPC_BUF_SIZE) {
+			IPC_ERROR(ics->server, "Command too large! (%u > %u)", (uint32_t)cmd_size, IPC_BUF_SIZE);
 			break;
 		}
 
@@ -269,6 +293,12 @@ client_loop(volatile struct ipc_client_state *ics)
 	close(epoll_fd);
 	epoll_fd = -1;
 
+	// Call the client disconnected callback.
+	ics->server->callbacks->client_disconnected( //
+	    ics->server,                             //
+	    ics->client_state.id,                    //
+	    ics->server->callback_data);             //
+
 	// Following code is same for all platforms.
 	common_shutdown(ics);
 }
@@ -292,7 +322,11 @@ client_loop(volatile struct ipc_client_state *ics)
 {
 	U_TRACE_SET_THREAD_NAME("IPC Client");
 
-	IPC_INFO(ics->server, "Client connected");
+	// Call the client connected callback.
+	ics->server->callbacks->client_connected( //
+	    ics->server,                          //
+	    ics->client_state.id,                 //
+	    ics->server->callback_data);          //
 
 	while (ics->server->running) {
 		uint8_t buf[IPC_BUF_SIZE] = {0};
@@ -349,6 +383,12 @@ client_loop(volatile struct ipc_client_state *ics)
 		}
 	}
 
+	// Call the client disconnected callback.
+	ics->server->callbacks->client_disconnected( //
+	    ics->server,                             //
+	    ics->client_state.id,                    //
+	    ics->server->callback_data);             //
+
 	// Following code is same for all platforms.
 	common_shutdown(ics);
 }
@@ -382,6 +422,12 @@ ipc_server_client_destroy_session_and_compositor(volatile struct ipc_client_stat
 		// Drop our reference, does NULL checking. Cast away volatile.
 		xrt_compositor_semaphore_reference((struct xrt_compositor_semaphore **)&ics->xcsems[j], NULL);
 		IPC_TRACE(ics->server, "Destroyed compositor semaphore %d.", j);
+	}
+
+	for (uint32_t j = 0; j < IPC_MAX_CLIENT_FUTURES; j++) {
+		// Drop our reference, does NULL checking. Cast away volatile.
+		xrt_future_reference((struct xrt_future **)&ics->xfts[j], NULL);
+		IPC_TRACE(ics->server, "Destroyed future %d.", j);
 	}
 
 	os_mutex_unlock(&ics->server->global_state.lock);

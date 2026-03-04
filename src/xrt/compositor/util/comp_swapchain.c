@@ -41,7 +41,7 @@ swapchain_destroy(struct xrt_swapchain *xsc)
 {
 	struct comp_swapchain *sc = comp_swapchain(xsc);
 
-	VK_TRACE(sc->vk, "DESTROY");
+	VK_DEBUG(sc->vk, "%p DESTROY(not-actual)", (void *)sc);
 
 	u_threading_stack_push(&sc->cscs->destroy_swapchains, sc);
 }
@@ -283,9 +283,9 @@ image_cleanup(struct vk_bundle *vk, struct comp_swapchain_image *image)
 	 * validation doesn't complain. This is done during image destruction so
 	 * isn't time critical.
 	 */
-	os_mutex_lock(&vk->queue_mutex);
+	vk_queue_lock(vk->main_queue);
 	vk->vkDeviceWaitIdle(vk->device);
-	os_mutex_unlock(&vk->queue_mutex);
+	vk_queue_unlock(vk->main_queue);
 
 	// The field array_size is shared, only reset once both are freed.
 	image_view_array_cleanup(vk, image->array_size, &image->views.alpha);
@@ -476,6 +476,8 @@ error:
 static void
 really_destroy(struct comp_swapchain *sc)
 {
+	VK_DEBUG(sc->vk, "%p REALLY_DESTROY", (void *)sc);
+
 	// Reuse close function.
 	comp_swapchain_teardown(sc);
 

@@ -95,6 +95,7 @@ check_and_get_interface(struct xrt_prober_device *device,
 
 		switch (device->product_id) {
 		case EXPLORER_PID: *out_hmd_type = WMR_HEADSET_LENOVO_EXPLORER; return true;
+		case EXPLORER_NO_CONTROLLERS_PID: *out_hmd_type = WMR_HEADSET_LENOVO_EXPLORER; return true;
 		default: U_LOG_IFL_T(log_level, "No matching PID!"); return false;
 		}
 
@@ -132,6 +133,14 @@ check_and_get_interface(struct xrt_prober_device *device,
 		switch (device->product_id) {
 		case AH100_PID: *out_hmd_type = WMR_HEADSET_ACER_AH100; return true;
 		case AH101_PID: *out_hmd_type = WMR_HEADSET_ACER_AH101; return true;
+		default: U_LOG_IFL_T(log_level, "No matching PID!"); return false;
+		}
+
+	case FUJITSU_VID:
+		U_LOG_IFL_T(log_level, "FUJITSU_VID");
+
+		switch (device->product_id) {
+		case FMVHDS1_PID: *out_hmd_type = WMR_HEADSET_FUJITSU_FMVHDS1; return true;
 		default: U_LOG_IFL_T(log_level, "No matching PID!"); return false;
 		}
 

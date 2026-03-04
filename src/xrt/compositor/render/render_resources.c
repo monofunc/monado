@@ -291,7 +291,6 @@ struct compute_layer_params
 {
 	VkBool32 do_timewarp;
 	VkBool32 do_color_correction;
-	uint32_t max_layers;
 	uint32_t image_array_size;
 };
 
@@ -319,8 +318,7 @@ create_compute_layer_pipeline(struct vk_bundle *vk,
 	VkSpecializationMapEntry entries[] = {
 	    ENTRY(1, do_timewarp),         //
 	    ENTRY(2, do_color_correction), //
-	    ENTRY(3, max_layers),          //
-	    ENTRY(4, image_array_size),    //
+	    ENTRY(3, image_array_size),    //
 	};
 #undef ENTRY
 
@@ -543,7 +541,7 @@ render_resources_init(struct render_resources *r,
 	r->compute.ubo_binding = 3;
 
 	r->compute.layer.image_array_size =
-	    MIN(vk->features.max_per_stage_descriptor_sampled_images, RENDER_MAX_IMAGES_COUNT(r));
+	    MIN(vk->limits.max_per_stage_descriptor_sampled_images, RENDER_MAX_IMAGES_SIZE);
 
 
 	/*
@@ -595,7 +593,7 @@ render_resources_init(struct render_resources *r,
 	VkCommandPoolCreateInfo command_pool_info = {
 	    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 	    .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-	    .queueFamilyIndex = vk->queue_family_index,
+	    .queueFamilyIndex = vk->main_queue->family_index,
 	};
 
 	ret = vk->vkCreateCommandPool(vk->device, &command_pool_info, NULL, &r->cmd_pool);
@@ -657,7 +655,7 @@ render_resources_init(struct render_resources *r,
 		    r->mock.color.image);        // dst
 		VK_CHK_WITH_RET(ret, "prepare_mock_image_locked", false);
 
-		ret = vk_cmd_end_submit_wait_and_free_cmd_buffer_locked(vk, r->cmd_pool, cmd);
+		ret = vk_cmd_end_submit_wait_and_free_cmd_buffer_locked(vk, vk->main_queue, r->cmd_pool, cmd);
 		VK_CHK_WITH_RET(ret, "vk_cmd_end_submit_wait_and_free_cmd_buffer_locked", false);
 
 		// No need to wait, submit waits on the fence.
@@ -876,7 +874,6 @@ render_resources_init(struct render_resources *r,
 	struct compute_layer_params layer_params = {
 	    .do_timewarp = false,
 	    .do_color_correction = true,
-	    .max_layers = RENDER_MAX_LAYERS,
 	    .image_array_size = r->compute.layer.image_array_size,
 	};
 
@@ -895,7 +892,6 @@ render_resources_init(struct render_resources *r,
 	struct compute_layer_params layer_timewarp_params = {
 	    .do_timewarp = true,
 	    .do_color_correction = true,
-	    .max_layers = RENDER_MAX_LAYERS,
 	    .image_array_size = r->compute.layer.image_array_size,
 	};
 

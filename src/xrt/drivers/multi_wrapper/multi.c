@@ -16,7 +16,6 @@
 
 #include "multi.h"
 
-
 DEBUG_GET_ONCE_LOG_OPTION(multi_log, "MULTI_LOG", U_LOGGING_WARN)
 
 #define MULTI_TRACE(d, ...) U_LOG_XDEV_IFL_T(&d->base, d->log_level, __VA_ARGS__)
@@ -197,6 +196,7 @@ static xrt_result_t
 get_view_poses(struct xrt_device *xdev,
                const struct xrt_vec3 *default_eye_relation,
                int64_t at_timestamp_ns,
+               enum xrt_view_type view_type,
                uint32_t view_count,
                struct xrt_space_relation *out_head_relation,
                struct xrt_fov *out_fovs,
@@ -204,8 +204,16 @@ get_view_poses(struct xrt_device *xdev,
 {
 	struct multi_device *d = (struct multi_device *)xdev;
 	struct xrt_device *target = d->tracking_override.target;
-	xrt_result_t xret = xrt_device_get_view_poses(target, default_eye_relation, at_timestamp_ns, view_count,
-	                                              out_head_relation, out_fovs, out_poses);
+
+	xrt_result_t xret = xrt_device_get_view_poses( //
+	    target,                                    //
+	    default_eye_relation,                      //
+	    at_timestamp_ns,                           //
+	    view_type,                                 //
+	    view_count,                                //
+	    out_head_relation,                         //
+	    out_fovs,                                  //
+	    out_poses);                                //
 	if (xret != XRT_SUCCESS) {
 		return xret;
 	}
@@ -217,7 +225,7 @@ get_view_poses(struct xrt_device *xdev,
 	return xrt_device_get_tracked_pose(xdev, XRT_INPUT_GENERIC_HEAD_POSE, at_timestamp_ns, out_head_relation);
 }
 
-static bool
+static xrt_result_t
 compute_distortion(struct xrt_device *xdev, uint32_t view, float u, float v, struct xrt_uv_triplet *result)
 {
 	struct multi_device *d = (struct multi_device *)xdev;

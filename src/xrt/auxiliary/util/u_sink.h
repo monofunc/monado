@@ -26,9 +26,17 @@ extern "C" {
  */
 struct u_sink_quirk_params
 {
+	//! Marks frames passing through as side-by-side stereo.
 	bool stereo_sbs;
+	/*!
+	 * Marks the frames passing through as side-by-side stereo, and fixes up the camera's data offset to be readable
+	 * as a standard side-by-side frame.
+	 */
 	bool ps4_cam;
+	//! Sets the stereo format to the correct one for the leap motion and fixes image width.
 	bool leap_motion;
+	//! Reinterprets a raw bayer image as a monochrome L8 image.
+	bool bayer_as_l8;
 };
 
 /*!
@@ -164,14 +172,14 @@ u_sink_split_create(struct xrt_frame_context *xfctx,
  * Splits Stereo SBS frames into two independent frames
  */
 void
-u_sink_stereo_sbs_to_slam_sbs_create(struct xrt_frame_context *xfctx,
-                                     struct xrt_frame_sink *downstream_left,
-                                     struct xrt_frame_sink *downstream_right,
-                                     struct xrt_frame_sink **out_xfs);
+u_sink_stereo_sbs_split_create(struct xrt_frame_context *xfctx,
+                               struct xrt_frame_sink *downstream_left,
+                               struct xrt_frame_sink *downstream_right,
+                               struct xrt_frame_sink **out_xfs);
 
 /*!
  * Combines stereo frames.
- * Opposite of u_sink_stereo_sbs_to_slam_sbs_create
+ * Opposite of u_sink_stereo_sbs_split_create
  */
 bool
 u_sink_combiner_create(struct xrt_frame_context *xfctx,

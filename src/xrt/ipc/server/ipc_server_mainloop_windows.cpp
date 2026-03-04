@@ -1,5 +1,6 @@
 // Copyright 2022, Magic Leap, Inc.
 // Copyright 2020-2022, Collabora, Ltd.
+// Copyright 2025, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -218,7 +219,7 @@ ipc_server_mainloop_poll(struct ipc_server *vs, struct ipc_server_mainloop *ml)
 {
 	IPC_TRACE_MARKER();
 
-	if (_kbhit()) {
+	if (!vs->no_stdin && _kbhit()) {
 		U_LOG_E("console input! exiting...");
 		ipc_server_handle_shutdown_signal(vs);
 		return;
@@ -249,7 +250,7 @@ ipc_server_mainloop_poll(struct ipc_server *vs, struct ipc_server_mainloop *ml)
 }
 
 int
-ipc_server_mainloop_init(struct ipc_server_mainloop *ml)
+ipc_server_mainloop_init(struct ipc_server_mainloop *ml, bool no_stdin)
 {
 	IPC_TRACE_MARKER();
 
@@ -259,7 +260,7 @@ ipc_server_mainloop_init(struct ipc_server_mainloop *ml)
 	constexpr char pipe_prefix[] = "\\\\.\\pipe\\";
 	constexpr int prefix_len = sizeof(pipe_prefix) - 1;
 	char pipe_name[MAX_PATH + prefix_len];
-	strcpy(pipe_name, pipe_prefix);
+	snprintf(pipe_name, ARRAY_SIZE(pipe_name), pipe_prefix);
 
 	if (u_file_get_path_in_runtime_dir(XRT_IPC_MSG_SOCK_FILENAME, pipe_name + prefix_len, MAX_PATH) == -1) {
 		U_LOG_E("u_file_get_path_in_runtime_dir failed!");

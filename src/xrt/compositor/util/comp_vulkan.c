@@ -1,4 +1,5 @@
 // Copyright 2019-2023, Collabora, Ltd.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -177,7 +178,7 @@ fill_in_results(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_arg
 static VkResult
 create_instance(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_args)
 {
-	struct u_string_list *instance_ext_list = NULL;
+	struct u_extension_list *instance_ext_list = NULL;
 	VkResult ret;
 
 	assert(vk_args->required_instance_version != 0);
@@ -187,24 +188,18 @@ create_instance(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_arg
 	 * Extension handling.
 	 */
 
-	// Check required extensions, results in clearer error message.
-	ret = vk_check_required_instance_extensions(vk, vk_args->required_instance_extensions);
+	// Build extension list.
+	ret = vk_build_instance_extensions(        //
+	    vk,                                    //
+	    vk_args->required_instance_extensions, //
+	    vk_args->optional_instance_extensions, //
+	    &instance_ext_list);                   //
 	if (ret == VK_ERROR_EXTENSION_NOT_PRESENT) {
 		return ret; // Already printed.
 	}
 	if (ret != VK_SUCCESS) {
-		VK_ERROR_RET(vk, "vk_check_required_instance_extensions", "Failed to check required extension(s)", ret);
+		VK_ERROR_RET(vk, "vk_build_instance_extensions", "Failed to build extension list", ret);
 		return ret;
-	}
-
-	// Build extension list.
-	instance_ext_list = vk_build_instance_extensions( //
-	    vk,                                           //
-	    vk_args->required_instance_extensions,        //
-	    vk_args->optional_instance_extensions);       //
-	if (!instance_ext_list) {
-		VK_ERROR(vk, "vk_build_instance_extensions: Failed to be list");
-		return VK_ERROR_EXTENSION_NOT_PRESENT;
 	}
 
 
@@ -222,8 +217,8 @@ create_instance(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_arg
 	VkInstanceCreateInfo instance_info = {
 	    .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
 	    .pApplicationInfo = &app_info,
-	    .enabledExtensionCount = u_string_list_get_size(instance_ext_list),
-	    .ppEnabledExtensionNames = u_string_list_get_data(instance_ext_list),
+	    .enabledExtensionCount = u_extension_list_get_size(instance_ext_list),
+	    .ppEnabledExtensionNames = u_extension_list_get_data(instance_ext_list),
 	};
 
 	ret = vk->vkCreateInstance(&instance_info, NULL, &vk->instance);
@@ -244,7 +239,7 @@ create_instance(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_arg
 	// Needs to be filled in before getting functions.
 	vk_fill_in_has_instance_extensions(vk, instance_ext_list);
 
-	u_string_list_destroy(&instance_ext_list);
+	u_extension_list_destroy(&instance_ext_list);
 
 	ret = vk_get_instance_functions(vk);
 	if (ret != VK_SUCCESS) {
@@ -282,6 +277,7 @@ create_device(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_args)
 	    .timeline_semaphore = vk_args->timeline_semaphore,
 	    .synchronization_2 = true,
 	    .present_wait = true,
+	    .video_maintenance_1 = true,
 	};
 
 	ret = vk_init_mutex(vk);
@@ -326,6 +322,9 @@ create_device(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_args)
 
 	// Print device information.
 	vk_print_opened_device_info(vk, U_LOGGING_INFO);
+
+	// Print selected queue(s) information.
+	vk_print_queues_info(vk, U_LOGGING_INFO);
 
 	// Print features enabled.
 	vk_print_features_info(vk, U_LOGGING_INFO);
@@ -383,9 +382,10 @@ void
 comp_vulkan_formats_check(struct vk_bundle *vk, struct comp_vulkan_formats *formats)
 {
 #define CHECK_COLOR(FORMAT)                                                                                            \
-	formats->has_##FORMAT = vk_csci_is_format_supported(vk, VK_FORMAT_##FORMAT, XRT_SWAPCHAIN_USAGE_COLOR);
+	formats->has_##FORMAT = vk_csci_is_format_supported(vk, VK_FORMAT_##FORMAT, 0, XRT_SWAPCHAIN_USAGE_COLOR);
 #define CHECK_DS(FORMAT)                                                                                               \
-	formats->has_##FORMAT = vk_csci_is_format_supported(vk, VK_FORMAT_##FORMAT, XRT_SWAPCHAIN_USAGE_DEPTH_STENCIL);
+	formats->has_##FORMAT =                                                                                        \
+	    vk_csci_is_format_supported(vk, VK_FORMAT_##FORMAT, 0, XRT_SWAPCHAIN_USAGE_DEPTH_STENCIL);
 
 	VK_CSCI_FORMATS(CHECK_COLOR, CHECK_DS, CHECK_DS, CHECK_DS)
 

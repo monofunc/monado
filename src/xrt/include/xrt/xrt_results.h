@@ -1,4 +1,5 @@
 // Copyright 2020-2023, Collabora, Ltd.
+// Copyright 2024-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -36,6 +37,11 @@ typedef enum xrt_result
 	 * The space’s bounds are not known at the moment.
 	 */
 	XRT_SPACE_BOUNDS_UNAVAILABLE = 3,
+
+	/*!
+	 * An (asynchronous) operation has been cancelled.
+	 */
+	XRT_OPERATION_CANCELLED = 4,
 
 	/*!
 	 * A problem occurred either with the IPC transport itself, with invalid commands from the client, or with
@@ -214,4 +220,46 @@ typedef enum xrt_result
 	 * The requested operation failed, verify the log to know more.
 	 */
 	XRT_ERROR_OUTPUT_REQUEST_FAILURE = -35,
+
+	/*!
+	 * Failed to create a sync primitive like mutex.
+	 */
+	XRT_ERROR_SYNC_PRIMITIVE_CREATION_FAILED = -36,
+
+	/*!
+	 * The IPC server detected that a service was already running and
+	 * couldn't start because of that.
+	 */
+	XRT_ERROR_IPC_SERVICE_ALREADY_RUNNING = -37,
+
+	/*!
+	 * The IPC server couldn't starts it mainloop.
+	 */
+	XRT_ERROR_IPC_MAINLOOP_FAILED_TO_INIT = -38,
+
+	/*!
+	 * Invalid function arguments passed in, e.g. null or out-of-range values.
+	 */
+	XRT_ERROR_INVALID_ARGUMENT = -39,
+
+	/*!
+	 * Querying result of a future before it is ready.
+	 */
+	XRT_ERROR_FUTURE_RESULT_NOT_READY = -40,
+
+	/*!
+	 * Invoking complete on an already completed future
+	 */
+	XRT_ERROR_FUTURE_ALREADY_COMPLETE = -41,
+
+	/*!
+	 * The device's tracking origin is not of type
+	 * XRT_TRACKING_TYPE_ATTACHABLE.
+	 */
+	XRT_ERROR_DEVICE_NOT_ATTACHABLE = -42,
+
+	/*!
+	 * C++ code threw an exception that wasn't caught.
+	 */
+	XRT_ERROR_UNCAUGHT_EXCEPTION = -43,
 } xrt_result_t;

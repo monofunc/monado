@@ -11,10 +11,11 @@
 #include "xrt/xrt_system.h"
 #include "xrt/xrt_instance.h"
 #include "xrt/xrt_config_build.h"
+#include "math/m_api.h"
+#include "util/u_debug_gui.h"
+
 
 #ifndef XRT_FEATURE_DEBUG_GUI
-
-struct u_debug_gui;
 
 int
 u_debug_gui_create(const struct u_debug_gui_create_info *udgci, struct u_debug_gui **out_debug_ui)
@@ -84,6 +85,8 @@ struct u_debug_gui
 	bool sdl_initialized;
 	char layout_file[1024];
 
+	float gui_scale;
+
 #ifdef XRT_BUILD_DRIVER_QWERTY
 	bool qwerty_enabled;
 #endif
@@ -151,6 +154,17 @@ sdl2_window_init(struct u_debug_gui *p)
 
 	// Start the scene.
 	gui_scene_debug(&p->base);
+
+	// Set imgui interface scale percentage
+	p->gui_scale = 1.0f; // Fallback (default) value
+	int disp_idx = SDL_GetWindowDisplayIndex(p->win);
+	if (disp_idx >= 0) {
+		float dpi;
+		if (SDL_GetDisplayDPI(disp_idx, &dpi, NULL, NULL) >= 0) {
+			// 96.0f is the base 100% GUI scale reported by SDL2
+			p->gui_scale = CLAMP(dpi / 96.0f, 1.0f, 3.0f); // up to 300%
+		}
+	}
 }
 
 static void
@@ -236,7 +250,7 @@ sdl2_loop(struct u_debug_gui *p)
 	igCreateContext(NULL);
 
 	// Local state
-	ImGuiIO *io = igGetIO();
+	ImGuiIO *io = igGetIO_Nil();
 
 	// Make window layout file "imgui.ini" live in config dir
 	XRT_MAYBE_UNUSED int res = u_file_get_path_in_config_dir("imgui.ini", p->layout_file, sizeof(p->layout_file));
@@ -254,7 +268,10 @@ sdl2_loop(struct u_debug_gui *p)
 	ImGui_ImplOpenGL3_Init(NULL);
 
 	// Setup Dear ImGui style
-	igStyleColorsDark(NULL);
+	ImGuiStyle *style = igGetStyle();
+	style->FontScaleMain = p->gui_scale;
+	ImGuiStyle_ScaleAllSizes(style, p->gui_scale);
+	igStyleColorsDark(style);
 
 	// Setup the plot context.
 	ImPlotContext *plot_ctx = ImPlot_CreateContext();

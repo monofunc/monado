@@ -15,6 +15,7 @@
 
 #include "util/u_logging.h"
 #include "util/u_distortion_mesh.h"
+#include "vive/vive_common.h"
 
 
 // public documentation
@@ -39,20 +40,6 @@ extern "C" {
 
 
 /*!
- * Headset variant.
- *
- * @ingroup aux_vive
- */
-enum VIVE_VARIANT
-{
-	VIVE_UNKNOWN = 0,
-	VIVE_VARIANT_VIVE,
-	VIVE_VARIANT_PRO,
-	VIVE_VARIANT_INDEX,
-	VIVE_VARIANT_PRO2,
-};
-
-/*!
  * Controller variant.
  *
  * @ingroup aux_vive
@@ -62,6 +49,8 @@ enum VIVE_CONTROLLER_VARIANT
 	CONTROLLER_VIVE_WAND,
 	CONTROLLER_INDEX_LEFT,
 	CONTROLLER_INDEX_RIGHT,
+	CONTROLLER_FLIPVR_LEFT,
+	CONTROLLER_FLIPVR_RIGHT,
 	CONTROLLER_TRACKER_GEN1,
 	CONTROLLER_TRACKER_GEN2,
 	CONTROLLER_TRACKER_GEN3,
@@ -115,6 +104,7 @@ struct index_camera
  */
 struct lh_sensor
 {
+	uint8_t channel;
 	struct xrt_vec3 pos;
 	uint32_t _pad0;
 	struct xrt_vec3 normal;
@@ -131,7 +121,7 @@ struct lh_sensor
 struct lh_model
 {
 	struct lh_sensor *sensors;
-	size_t sensor_count;
+	uint8_t sensor_count;
 };
 
 /*!

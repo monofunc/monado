@@ -6,6 +6,8 @@ xrt_optimized_math_flags()
 add_library(
 	aux_tracking STATIC
 	t_data_utils.c
+	t_dead_reckoning.h
+	t_dead_reckoning.c
 	t_imu_fusion.hpp
 	t_imu.cpp
 	t_imu.h
@@ -23,7 +25,6 @@ target_link_libraries(
 		xrt-external-hungarian
 		xrt-optimized-math
 	)
-target_include_directories(aux_tracking SYSTEM PRIVATE ${EIGEN3_INCLUDE_DIR})
 
 if(XRT_HAVE_OPENCV)
 	target_sources(

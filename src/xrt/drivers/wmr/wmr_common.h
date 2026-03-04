@@ -38,6 +38,7 @@ enum wmr_headset_type
 	WMR_HEADSET_DELL_VISOR,
 	WMR_HEADSET_ACER_AH100,
 	WMR_HEADSET_ACER_AH101,
+	WMR_HEADSET_FUJITSU_FMVHDS1,
 };
 
 /*!
@@ -65,6 +66,7 @@ enum wmr_headset_type
 
 #define LENOVO_VID 0x17ef
 #define EXPLORER_PID 0xb801
+#define EXPLORER_NO_CONTROLLERS_PID 0xb800
 
 #define DELL_VID 0x413c
 #define VISOR_PID 0xb0d5
@@ -80,6 +82,9 @@ enum wmr_headset_type
 #define ACER_VID 0x0502
 #define AH100_PID 0xb0d5
 #define AH101_PID 0xb0d6
+
+#define FUJITSU_VID 0x04c5
+#define FMVHDS1_PID 0x15b9
 
 /*!
  * @}

@@ -120,7 +120,7 @@ socket_close(r_socket_t id)
 static inline r_socket_t
 socket_create(void)
 {
-	return socket(AF_INET, SOCK_STREAM, 0);
+	return socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 }
 
 static inline int
@@ -248,7 +248,11 @@ do_accept(struct r_hub *r)
 	}
 
 	socklen_t addr_length = (socklen_t)sizeof(addr);
+#ifdef SOCK_CLOEXEC
+	ret = accept4(r->accept_fd, (struct sockaddr *)&addr, &addr_length, SOCK_CLOEXEC);
+#else
 	ret = accept(r->accept_fd, (struct sockaddr *)&addr, &addr_length);
+#endif
 	if (ret < 0) {
 		R_ERROR(r, "accept: " R_SOCKET_FMT, ret);
 		return ret;
@@ -416,6 +420,7 @@ r_create_devices(uint16_t port,
 	r->base.get_roles = r_hub_system_devices_get_roles;
 	r->origin.type = XRT_TRACKING_TYPE_RGB;
 	r->origin.initial_offset = (struct xrt_pose)XRT_POSE_IDENTITY;
+	r->reset.header = R_HEADER_VALUE;
 	r->reset.head.center = (struct xrt_pose)XRT_POSE_IDENTITY;
 	r->reset.head.center.position.y = 1.6f;
 	r->reset.left.active = true;
@@ -649,6 +654,12 @@ r_remote_connection_read_one(struct r_remote_connection *rc, struct r_remote_dat
 		}
 	}
 
+	if (data->header != R_HEADER_VALUE) {
+		RC_ERROR(rc, "Protocol version mismatch (expected 0x%08" PRIx64 ", got 0x%08" PRIx64, R_HEADER_VALUE,
+		         data->header);
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -657,6 +668,12 @@ r_remote_connection_write_one(struct r_remote_connection *rc, const struct r_rem
 {
 	const size_t size = sizeof(*data);
 	size_t current = 0;
+
+	if (data->header != R_HEADER_VALUE) {
+		RC_ERROR(rc, "Protocol version mismatch (expected 0x%08" PRIx64 ", got 0x%08" PRIx64, R_HEADER_VALUE,
+		         data->header);
+		return -1;
+	}
 
 	while (current < size) {
 		void *ptr = (uint8_t *)data + current;
