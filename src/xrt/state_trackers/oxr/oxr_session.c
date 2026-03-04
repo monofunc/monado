@@ -234,6 +234,45 @@ handle_reference_space_change_pending(struct oxr_logger *log,
 	return XR_SUCCESS;
 }
 
+static xrt_result_t
+set_default_compositor_scale(struct oxr_session *sess, enum xrt_view_type view_type)
+{
+	xrt_result_t xret;
+
+	if (sess->sys->xsysc->xmcc != NULL) {
+		struct xrt_compositor *xc = &sess->xcn->base;
+
+		struct oxr_view_config_properties *props =
+		    oxr_system_get_view_config_properties(sess->sys, xrt_view_type_to_xr(view_type));
+
+		for (uint32_t view = 0; view < props->view_count; view++) {
+			float scale;
+			struct xrt_size base_view_resolution;
+			xret = xrt_comp_get_view_resolution(xc, view_type, view, &scale, &base_view_resolution);
+			if (xret == XRT_ERROR_NOT_IMPLEMENTED) {
+				// We can't do anything, but this is non-fatal
+				break;
+			} else if (xret != XRT_SUCCESS) {
+				return xret;
+			}
+
+			// Get what the default "app scale" is
+			float app_scale =
+			    (float)props->views[view].recommendedImageRectWidth / (float)base_view_resolution.w;
+
+			xret = xrt_syscomp_set_resolution_scale(sess->sys->xsysc, xc, view_type, view, app_scale);
+			if (xret == XRT_ERROR_NOT_IMPLEMENTED) {
+				// We can't do anything, but this is non-fatal
+				break;
+			} else if (xret != XRT_SUCCESS) {
+				return xret;
+			}
+		}
+	}
+
+	return XRT_SUCCESS;
+}
+
 
 /*
  *
@@ -293,6 +332,8 @@ oxr_session_enumerate_formats(struct oxr_logger *log,
 XrResult
 oxr_session_begin(struct oxr_logger *log, struct oxr_session *sess, const XrSessionBeginInfo *beginInfo)
 {
+	xrt_result_t xret;
+
 	/*
 	 * If the session is not running when the application calls xrBeginSession, but the session is not yet in the
 	 * XR_SESSION_STATE_READY state, the runtime must return error XR_ERROR_SESSION_NOT_READY.
@@ -301,12 +342,14 @@ oxr_session_begin(struct oxr_logger *log, struct oxr_session *sess, const XrSess
 		return oxr_error(log, XR_ERROR_SESSION_NOT_READY, "Session is not ready to begin");
 	}
 
+	enum xrt_view_type view_type = xr_view_type_to_xrt(beginInfo->primaryViewConfigurationType);
+
 	struct xrt_compositor *xc = sess->compositor;
 	if (xc != NULL) {
 		const struct oxr_extension_status *extensions = &sess->sys->inst->extensions;
 
 		const struct xrt_begin_session_info begin_session_info = {
-		    .view_type = xr_view_type_to_xrt(beginInfo->primaryViewConfigurationType),
+		    .view_type = view_type,
 #ifdef OXR_HAVE_EXT_hand_tracking
 		    .ext_hand_tracking_enabled = extensions->EXT_hand_tracking,
 #endif
@@ -342,7 +385,7 @@ oxr_session_begin(struct oxr_logger *log, struct oxr_session *sess, const XrSess
 #endif
 		};
 
-		xrt_result_t xret = xrt_comp_begin_session(xc, &begin_session_info);
+		xret = xrt_comp_begin_session(xc, &begin_session_info);
 		OXR_CHECK_XRET(log, sess, xret, xrt_comp_begin_session);
 
 #ifdef OXR_HAVE_EXT_user_presence
@@ -372,6 +415,10 @@ oxr_session_begin(struct oxr_logger *log, struct oxr_session *sess, const XrSess
 		oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, now_xr);
 		oxr_session_change_state(log, sess, XR_SESSION_STATE_FOCUSED, now_xr);
 	}
+
+	xret = set_default_compositor_scale(sess, view_type);
+	OXR_CHECK_XRET(log, sess, xret, set_default_compositor_scale);
+
 	XrResult ret = oxr_frame_sync_begin_session(&sess->frame_sync);
 	if (ret != XR_SUCCESS) {
 		return oxr_error(log, ret,
