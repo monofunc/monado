@@ -134,6 +134,7 @@ add_library(
 	${CMAKE_CURRENT_BINARY_DIR}/ipc_server_generated.h
 	server/ipc_server.h
 	server/ipc_server_handler.c
+	server/ipc_server_handler_swapchain.c
 	server/ipc_server_per_client_thread.c
 	server/ipc_server_process.c
 	server/ipc_server_objects.c
