@@ -20,5 +20,27 @@
 
 	"session_end": {},
 
-	"session_destroy": {}
+	"session_destroy": {},
+
+	"session_set_state": {
+		"in": [
+			{"name": "visible", "type": "bool"},
+			{"name": "focused", "type": "bool"},
+			{"name": "timestamp_ns", "type": "int64_t"}
+		]
+	},
+
+	"session_set_z_order": {
+		"in": [
+			{"name": "z_order", "type": "int64_t"}
+		]
+	},
+
+	"session_set_resolution_scale": {
+		"in": [
+			{"name": "view_type", "type": "enum xrt_view_type"},
+			{"name": "view", "type": "uint32_t"},
+			{"name": "scale", "type": "float"}
+		]
+	}
 }

@@ -623,6 +623,68 @@ ipc_handle_session_destroy(volatile struct ipc_client_state *ics)
 }
 
 xrt_result_t
+ipc_handle_session_set_state(volatile struct ipc_client_state *ics, bool visible, bool focused, int64_t timestamp_ns)
+{
+	IPC_TRACE_MARKER();
+
+	// Have we created the session?
+	if (ics->xs == NULL) {
+		return XRT_ERROR_IPC_SESSION_NOT_CREATED;
+	}
+
+	// Need to check both because set session state is handled by compositor.
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	ics->client_state.session_visible = visible;
+	ics->client_state.session_focused = focused;
+
+	return xrt_syscomp_set_state(ics->server->xsysc, ics->xc, visible, focused, timestamp_ns);
+}
+
+xrt_result_t
+ipc_handle_session_set_z_order(volatile struct ipc_client_state *ics, int64_t z_order)
+{
+	IPC_TRACE_MARKER();
+
+	// Have we created the session?
+	if (ics->xs == NULL) {
+		return XRT_ERROR_IPC_SESSION_NOT_CREATED;
+	}
+
+	// Need to check both because set z order is handled by compositor.
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	ics->client_state.z_order = z_order;
+
+	return xrt_syscomp_set_z_order(ics->server->xsysc, ics->xc, z_order);
+}
+
+xrt_result_t
+ipc_handle_session_set_resolution_scale(volatile struct ipc_client_state *ics,
+                                        enum xrt_view_type view_type,
+                                        uint32_t view,
+                                        float scale)
+{
+	IPC_TRACE_MARKER();
+
+	// Have we created the session?
+	if (ics->xs == NULL) {
+		return XRT_ERROR_IPC_SESSION_NOT_CREATED;
+	}
+
+	// Need to check both because set resolution scale is handled by compositor.
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	return xrt_syscomp_set_resolution_scale(ics->server->xsysc, ics->xc, view_type, view, scale);
+}
+
+xrt_result_t
 ipc_handle_space_create_semantic_ids(volatile struct ipc_client_state *ics,
                                      uint32_t *out_root_id,
                                      uint32_t *out_view_id,
