@@ -669,6 +669,9 @@ oxr_system_get_by_id(struct oxr_logger *log,
 XrResult
 oxr_system_get_properties(struct oxr_logger *log, struct oxr_system *sys, XrSystemProperties *properties);
 
+struct oxr_view_config_properties *
+oxr_system_get_view_config_properties(struct oxr_system *sys, XrViewConfigurationType view_config_type);
+
 XrResult
 oxr_system_enumerate_view_confs(struct oxr_logger *log,
                                 struct oxr_system *sys,
