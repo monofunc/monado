@@ -1,4 +1,4 @@
-// Copyright 2019, Collabora, Ltd.
+// Copyright 2019-2026, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -85,6 +85,10 @@ struct comp_settings
 
 	//! Nominal frame interval
 	int64_t nominal_frame_interval_ns;
+
+	//! Offset to account for latency between GPU starting transmit and first photons
+	//! Technically might vary by mode, maybe?
+	int64_t transmit_to_display_offset_ns;
 
 	//! Vulkan physical device selected by comp_settings_check_vulkan_caps
 	//! may be forced by user

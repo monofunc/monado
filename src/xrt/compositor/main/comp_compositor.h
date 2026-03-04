@@ -1,4 +1,4 @@
-// Copyright 2019-2024, Collabora, Ltd.
+// Copyright 2019-2026, Collabora, Ltd.
 // Copyright 2025, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
@@ -111,6 +111,9 @@ struct comp_compositor
 
 	//! Renderer helper.
 	struct comp_renderer *r;
+
+	//! Offset to account for latency between GPU starting scanout and photon
+	int64_t transmit_to_display_offset_ns;
 
 	//! Duration of a frame at current refresh rate.
 	int64_t frame_interval_ns;
