@@ -83,7 +83,6 @@ WndProc(HWND hWnd, unsigned int message, WPARAM wParam, LPARAM lParam)
 		// We might want to handle messages differently in here.
 		return DefWindowProcW(hWnd, message, wParam, lParam);
 	}
-	struct comp_compositor *c = cwm->base.base.c;
 	switch (message) {
 	case WM_PAINT:
 		// COMP_INFO(c, "WM_PAINT");
@@ -134,7 +133,6 @@ comp_window_mswin_destroy(struct comp_target *ct)
 static void
 comp_window_mswin_update_window_title(struct comp_target *ct, const char *title)
 {
-	struct comp_window_mswin *cwm = (struct comp_window_mswin *)ct;
 	//! @todo
 }
 
@@ -194,7 +192,7 @@ comp_window_mswin_init_swapchain(struct comp_target *ct, uint32_t width, uint32_
 static void
 comp_window_mswin_flush(struct comp_target *ct)
 {
-	struct comp_window_mswin *cwm = (struct comp_window_mswin *)ct;
+	//! @todo
 }
 
 static void
@@ -229,7 +227,6 @@ comp_window_mswin_window_loop(struct comp_window_mswin *cwm)
 	}
 	COMP_INFO(ct->c, "Starting the Windows window message loop");
 
-	bool done = false;
 	while (os_thread_helper_is_running(&cwm->oth)) {
 		// force handling messages.
 		MSG msg;
@@ -277,8 +274,6 @@ static void
 comp_window_mswin_thread(struct comp_window_mswin *cwm)
 {
 	struct comp_target *ct = &cwm->base.base;
-
-	RECT rc = {0, 0, (LONG)(ct->width), (LONG)ct->height};
 
 	WNDCLASSEXW wcex;
 	U_ZERO(&wcex);
