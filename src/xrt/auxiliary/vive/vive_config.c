@@ -484,7 +484,19 @@ vive_config_parse(struct vive_config *d, char *json_string, enum u_logging_level
 	}
 
 	// Only exists on the OG Vive
-	JSON_DOUBLE(json, "lens_separation", &d->display.lens_separation);
+	success = JSON_DOUBLE(json, "lens_separation", &d->display.lens_separation);
+	// Modern devices with static IPDs, such as the Bigscreen Beyond
+	if (!success) {
+		const cJSON *ipd_json = u_json_get(json, "ipd");
+		if (ipd_json) {
+			int ipd;
+			success = JSON_INT(ipd_json, "default_mm", &ipd);
+
+			if (success) {
+				d->display.lens_separation = (double)ipd / 1000.;
+			}
+		}
+	}
 
 	JSON_STRING(json, "device_serial_number", d->firmware.device_serial_number);
 	// Only exists on Vive devices

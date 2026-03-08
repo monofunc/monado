@@ -970,6 +970,8 @@ _create_hmd_device(struct survive_system *sys, const struct SurviveSimpleObject 
 	}
 
 	survive->hmd.use_default_ipd = debug_get_bool_option_survive_default_ipd();
+	// Sets the IPD for devices which cannot it at runtime, such as the Bigscreen Beyond
+	survive->hmd.ipd = survive->hmd.config.display.lens_separation;
 
 	u_var_add_root(survive, "Survive HMD Device", true);
 	u_var_add_bool(survive, &survive->hmd.use_default_ipd, "Use default IPD");
@@ -1309,7 +1311,7 @@ survive_get_devices(struct xrt_prober *xp, struct xrt_device **out_xdevs, struct
 	// clang-format off
 	char *survive_args[] = {
 	    "Monado-libsurvive", "--lighthouse-gen", (char *)debug_get_option_survive_lh_gen(),
-		"--globalscenesolver", (char*)debug_get_option_survive_global_scene_solver(), 
+		"--globalscenesolver", (char*)debug_get_option_survive_global_scene_solver(),
 	    //"--time-window", "1500000"
 	    //"--use-imu", "0",
 	    //"--use-kalman", "0"
