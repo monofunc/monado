@@ -125,6 +125,24 @@ struct lh_model
 };
 
 /*!
+ * Properties of the IMU sensor.
+ *
+ * @ingroup aux_vive
+ */
+struct vive_imu_properties
+{
+	double acc_range;
+	double gyro_range;
+	struct xrt_vec3 acc_bias;
+	struct xrt_vec3 acc_scale;
+	struct xrt_vec3 gyro_bias;
+	struct xrt_vec3 gyro_scale;
+
+	//! IMU position in tracking space.
+	struct xrt_pose trackref;
+};
+
+/*!
  * headset config.
  *
  * @ingroup aux_vive
@@ -136,18 +154,7 @@ struct vive_config
 
 	enum VIVE_VARIANT variant;
 
-	struct
-	{
-		double acc_range;
-		double gyro_range;
-		struct xrt_vec3 acc_bias;
-		struct xrt_vec3 acc_scale;
-		struct xrt_vec3 gyro_bias;
-		struct xrt_vec3 gyro_scale;
-
-		//! IMU position in tracking space.
-		struct xrt_pose trackref;
-	} imu;
+	struct vive_imu_properties imu;
 
 	struct
 	{
@@ -224,18 +231,7 @@ struct vive_controller_config
 		char device_serial_number[32];
 	} firmware;
 
-	struct
-	{
-		double acc_range;
-		double gyro_range;
-		struct xrt_vec3 acc_bias;
-		struct xrt_vec3 acc_scale;
-		struct xrt_vec3 gyro_bias;
-		struct xrt_vec3 gyro_scale;
-
-		//! IMU position in tracking space.
-		struct xrt_pose trackref;
-	} imu;
+	struct vive_imu_properties imu;
 };
 
 
