@@ -1,14 +1,18 @@
-// Copyright 2020-2021, Collabora, Ltd.
+// Copyright 2020-2026, Collabora, Ltd.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Inline implementations for partially-generated wrapper for the
  * `org.freedesktop.monado.auxiliary` Java package - do not include on its own!
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
+ * @author Lubosz Sarnecki <lubosz.sarnecki@collabora.com>
+ * @author Korcan Hussein <korcan.hussein@collabora.com>
  * @ingroup aux_android
  */
 
 #pragma once
+
+#include "math/m_api.h"
 
 #include "wrap/android.app.h"
 #include "wrap/android.content.h"
@@ -116,6 +120,134 @@ namespace org::freedesktop::monado::auxiliary {
 	ActivityLifecycleListener::unregisterCallback(android::app::Activity const &activity)
 	{
 		object().call<void>(Meta::data().unregisterCallback, activity.object());
+	}
+
+	inline int32_t
+	ReadResult::getStatus() const
+	{
+		assert(!isNull());
+		return java::lang::Integer(object().get<jni::Object>(Meta::data().second)).intValue();
+	}
+
+	inline bool
+	ReadResult::getData(std::span<uint8_t> outData) const
+	{
+		assert(!isNull());
+		if (outData.empty()) {
+			return false;
+		}
+
+		const auto byteArrayObj = object().get<jni::Object>(Meta::data().first);
+		if (byteArrayObj.isNull()) {
+			return false;
+		}
+
+		jni::Array<jni::byte_t> byteArray((jarray)byteArrayObj.getHandle());
+		if (byteArray.isNull() || byteArray.getLength() < 1) {
+			return false;
+		}
+
+		const long len = MIN(outData.size(), static_cast<size_t>(byteArray.getLength()));
+		jni::env()->GetByteArrayRegion(jbyteArray(byteArray.getHandle()), 0, len,
+		                               reinterpret_cast<jbyte *>(outData.data()));
+		return true;
+	}
+
+	inline AndroidBleDevice
+	AndroidBleDevice::openDevice(android::content::Context const &context,
+	                             const std::string &serviceUuid,
+	                             const std::string &notifyCharUuid,
+	                             const std::string &writeCharUuid,
+	                             const std::string &deviceName,
+	                             int majorDeviceClass)
+	{
+		return AndroidBleDevice(Meta::data().clazz().call<jni::Object>(
+		    Meta::data().openDevice, context.object(), serviceUuid, notifyCharUuid, writeCharUuid, deviceName,
+		    majorDeviceClass));
+	}
+
+	inline AndroidBleDevice::ConnectionState
+	AndroidBleDevice::getConnectionState() const
+	{
+		assert(!isNull());
+		return static_cast<ConnectionState>(object().call<int32_t>(Meta::data().getConnectionStateOrdinal));
+	}
+
+	inline bool
+	AndroidBleDevice::isConnected() const
+	{
+		assert(!isNull());
+		return object().call<bool>(Meta::data().isConnected);
+	}
+
+	inline void
+	AndroidBleDevice::connect()
+	{
+		assert(!isNull());
+		object().call<void>(Meta::data().connect);
+	}
+
+	inline void
+	AndroidBleDevice::disconnect()
+	{
+		assert(!isNull());
+		object().call<void>(Meta::data().disconnect);
+	}
+
+	inline void
+	AndroidBleDevice::destroy()
+	{
+		assert(!isNull());
+		object().call<void>(Meta::data().destroy);
+	}
+
+	inline std::string
+	AndroidBleDevice::getAddress() const
+	{
+		assert(!isNull());
+		return object().call<std::string>(Meta::data().getAddress);
+	}
+
+	inline std::string
+	AndroidBleDevice::getName() const
+	{
+		assert(!isNull());
+		return object().call<std::string>(Meta::data().getName);
+	}
+
+	inline ReadResult
+	AndroidBleDevice::read(int timeoutMs) const
+	{
+		assert(!isNull());
+		return ReadResult(object().call<jni::Object>(Meta::data().read, timeoutMs));
+	}
+
+	inline bool
+	AndroidBleDevice::write(std::span<const uint8_t> data)
+	{
+		assert(!isNull());
+		if (data.empty()) {
+			return false;
+		}
+
+		jni::Array<jni::byte_t> arr(static_cast<long>(data.size()));
+		jni::env()->SetByteArrayRegion(jbyteArray(arr.getHandle()), 0, static_cast<jsize>(data.size()),
+		                               reinterpret_cast<const jbyte *>(data.data()));
+		return object().call<bool>(Meta::data().write, arr);
+	}
+
+	inline bool
+	AndroidBleDevice::writeToCharacteristic(const std::string &charUuid, std::span<const uint8_t> data)
+	{
+		assert(!isNull());
+		if (data.empty()) {
+			return false;
+		}
+
+		jni::Array<jni::byte_t> arr(static_cast<long>(data.size()));
+		jni::env()->SetByteArrayRegion(jbyteArray(arr.getHandle()), 0, static_cast<jsize>(data.size()),
+		                               reinterpret_cast<const jbyte *>(data.data()));
+		return object().call<bool>(Meta::data().writeToCharacteristic, charUuid, arr);
 	}
 } // namespace org::freedesktop::monado::auxiliary
 } // namespace wrap

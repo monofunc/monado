@@ -1,4 +1,4 @@
-# Copyright 2019-2022, Collabora, Ltd.
+# Copyright 2019-2025, Collabora, Ltd.
 # SPDX-License-Identifier: BSL-1.0
 
 ####
@@ -35,6 +35,12 @@ if(XRT_HAVE_DBUS)
 	target_sources(aux_os_ble PRIVATE os_ble_dbus.c)
 	target_link_libraries(aux_os_ble PRIVATE ${DBUS_LIBRARIES})
 	target_include_directories(aux_os_ble SYSTEM PRIVATE ${DBUS_INCLUDE_DIRS})
+elseif(ANDROID)
+	message(NOTICE "Building Android BLE support")
+	target_sources(aux_os_ble PRIVATE os_ble_android.cpp)
+	target_link_libraries(
+		aux_os_ble PRIVATE aux_android xrt-external-jni-wrap xrt-external-jnipp
+		)
 else()
 	target_sources(aux_os_ble PRIVATE os_ble_stubs.c)
 endif()

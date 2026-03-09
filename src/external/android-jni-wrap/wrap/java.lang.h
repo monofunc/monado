@@ -180,6 +180,38 @@ class System : public ObjectWrapperBase {
     };
 };
 
+class Integer : public ObjectWrapperBase
+{
+public:
+    using ObjectWrapperBase::ObjectWrapperBase;
+
+    static constexpr const char *
+    getTypeName() noexcept
+    {
+        return "java/lang/Integer";
+    }
+
+    int32_t	intValue() const;
+
+    struct Meta : public MetaBaseDroppable
+    {
+        jni::method_t intValue;
+
+        /*!
+            * Singleton accessor
+            */
+        static Meta &
+        data()
+        {
+            static Meta instance{};
+            return instance;
+        }
+
+    private:
+        Meta();
+    };
+};
+
 } // namespace java::lang
 } // namespace wrap
 #include "java.lang.impl.h"

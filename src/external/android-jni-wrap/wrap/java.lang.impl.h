@@ -51,5 +51,10 @@ inline std::string System::mapLibraryName(std::string const &name) {
                                                   name);
 }
 
+inline int32_t Integer::intValue() const {
+    assert(!isNull());
+    return object().call<int32_t>(Meta::data().intValue);
+}
+
 } // namespace java::lang
 } // namespace wrap

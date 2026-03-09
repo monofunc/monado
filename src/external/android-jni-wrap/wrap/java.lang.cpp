@@ -27,5 +27,12 @@ System::Meta::Meta()
     : MetaBase(System::getTypeName()),
       mapLibraryName(classRef().getStaticMethod(
           "mapLibraryName", "(Ljava/lang/String;)Ljava/lang/String;")) {}
+
+Integer::Meta::Meta()
+    : MetaBaseDroppable(Integer::getTypeName()),
+      intValue(classRef().getMethod("intValue", "()I"))
+{
+    MetaBaseDroppable::dropClassRef();
+}
 } // namespace java::lang
 } // namespace wrap
