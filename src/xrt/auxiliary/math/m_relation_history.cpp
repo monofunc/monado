@@ -21,7 +21,9 @@
 #include "os/os_time.h"
 #include "os/os_threading.h"
 
+#include "util/u_debug.h"
 #include "util/u_logging.h"
+#include "util/u_time.h"
 #include "util/u_trace_marker.h"
 #include "util/u_template_historybuf.hpp"
 
@@ -36,6 +38,8 @@
 
 using namespace xrt::auxiliary::util;
 namespace os = xrt::auxiliary::os;
+
+DEBUG_GET_ONCE_NUM_OPTION(xrt_max_prediction_ms, "XRT_MAX_PREDICTION_MS", 80)
 
 struct relation_history_entry
 {
@@ -112,6 +116,9 @@ m_relation_history_get(const struct m_relation_history *rh,
 			// (pose-prediction)
 			// Output flags match the most recent buffer entry.
 			int64_t diff_prediction_ns = static_cast<int64_t>(at_timestamp_ns) - rh->impl.back().timestamp;
+			diff_prediction_ns =
+			    MIN(diff_prediction_ns,
+			        (int64_t)debug_get_num_option_xrt_max_prediction_ms() * U_TIME_1MS_IN_NS);
 			double delta_s = time_ns_to_s(diff_prediction_ns);
 
 			U_LOG_T("Extrapolating %f s past the back of the buffer!", delta_s);
