@@ -7,6 +7,8 @@
  * @ingroup drv_rift_sensor
  */
 
+#include "xrt/xrt_frame.h"
+
 #include "os/os_threading.h"
 
 #include "rift_sensor_interface.h"
@@ -16,17 +18,17 @@
 
 struct rift_sensor_context
 {
+	struct xrt_frame_node node;
+
 	enum u_logging_level log_level;
 
 	struct libusb_context *usb_ctx;
-	struct xrt_frame_context *xfctx;
 
 	struct rift_sensor *sensors;
 	size_t num_sensors;
 
 	struct os_thread_helper usb_thread;
 };
-
 struct rift_sensor
 {
 	enum rift_variant variant;
@@ -83,3 +85,9 @@ struct rift_sensor_cv1_calib
 SIZE_ASSERT(struct rift_sensor_cv1_calib, 128);
 
 #pragma pack(pop)
+
+static struct rift_sensor_context *
+rift_sensor_context(struct xrt_frame_node *node)
+{
+	return container_of(node, struct rift_sensor_context, node);
+}

@@ -300,10 +300,6 @@ rift_destroy(struct xrt_builder *xb)
 	struct rift_builder *rb = rift_builder(xb);
 
 #ifdef XRT_BUILD_DRIVER_RIFT_SENSOR
-	if (rb->sensor_context) {
-		rift_sensor_context_destroy(rb->sensor_context);
-	}
-
 	if (rb->sensors) {
 		free(rb->sensors);
 	}

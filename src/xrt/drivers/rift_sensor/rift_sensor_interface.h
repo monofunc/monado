@@ -26,9 +26,6 @@
 struct rift_sensor;
 struct rift_sensor_context;
 
-void
-rift_sensor_context_destroy(struct rift_sensor_context *context);
-
 int
 rift_sensor_context_create(struct rift_sensor_context **out_context, struct xrt_frame_context *xfctx);
 

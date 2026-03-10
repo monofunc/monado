@@ -38,6 +38,60 @@ DEBUG_GET_ONCE_LOG_OPTION(rift_sensor_log, "RIFT_SENSOR_LOG", U_LOGGING_WARN)
  * Internal functions
  */
 
+static void
+rift_sensor_destroy(struct rift_sensor *sensor)
+{
+	if (sensor->hid_dev) {
+		libusb_close(sensor->hid_dev);
+
+		libusb_unref_device(libusb_get_device(sensor->hid_dev));
+	}
+
+	// @note uvc_fs_destroy is called by the xrt_frame_node destroy callback, so we don't need to call it here
+}
+
+static void
+rift_sensor_context_destroy(struct rift_sensor_context *context)
+{
+	os_thread_helper_destroy(&context->usb_thread);
+
+	u_var_remove_root(context);
+
+	for (size_t i = 0; i < context->num_sensors; i++) {
+		rift_sensor_destroy(&context->sensors[i]);
+	}
+
+	libusb_exit(context->usb_ctx);
+
+	if (context->sensors != NULL) {
+		free(context->sensors);
+	}
+
+	free(context);
+
+	return;
+}
+
+static void
+rift_sensor_context_node_break_apart(struct xrt_frame_node *node)
+{
+	struct rift_sensor_context *context = rift_sensor_context(node);
+
+	SENSOR_DEBUG(context, "Breaking apart Rift sensor context node");
+
+	os_thread_helper_stop_and_wait(&context->usb_thread);
+}
+
+static void
+rift_sensor_context_node_destroy(struct xrt_frame_node *node)
+{
+	struct rift_sensor_context *context = rift_sensor_context(node);
+
+	SENSOR_DEBUG(context, "Destroying Rift sensor context node, destroying sensors and freeing context.");
+
+	rift_sensor_context_destroy(context);
+}
+
 static bool
 rift_sensor_setup_stream_parameters_callback(uint16_t vid,
                                              uint16_t pid,
@@ -215,6 +269,7 @@ rift_sensor_read_calibration(struct rift_sensor_context *context,
 
 static int
 rift_sensor_create(struct rift_sensor_context *context,
+                   struct xrt_frame_context *xfctx,
                    struct rift_sensor *sensor,
                    libusb_device *device,
                    const struct libusb_device_descriptor *desc)
@@ -231,7 +286,7 @@ rift_sensor_create(struct rift_sensor_context *context,
 	sensor->hid_dev = device_handle;
 
 	ret = uvc_fs_create(context->usb_ctx, device_handle, desc, rift_sensor_setup_stream_parameters_callback,
-	                    rift_sensor_post_init_callback, context, context->xfctx, &sensor->frame_server);
+	                    rift_sensor_post_init_callback, context, xfctx, &sensor->frame_server);
 	if (ret < 0) {
 		libusb_close(device_handle);
 		SENSOR_ERROR(context, "Failed to create UVC frameserver, reason %d", ret);
@@ -310,43 +365,9 @@ rift_sensor_usb_thread_run(void *user_ptr)
 	return NULL;
 }
 
-static void
-rift_sensor_destroy(struct rift_sensor *sensor)
-{
-	if (sensor->hid_dev) {
-		libusb_close(sensor->hid_dev);
-
-		libusb_unref_device(libusb_get_device(sensor->hid_dev));
-	}
-
-	// @note uvc_fs_destroy is called by the xrt_frame_node destroy callback, so we don't need to call it here
-}
-
 /*
  * Exported functions
  */
-
-void
-rift_sensor_context_destroy(struct rift_sensor_context *context)
-{
-	os_thread_helper_destroy(&context->usb_thread);
-
-	u_var_remove_root(context);
-
-	for (size_t i = 0; i < context->num_sensors; i++) {
-		rift_sensor_destroy(&context->sensors[i]);
-	}
-
-	libusb_exit(context->usb_ctx);
-
-	if (context->sensors != NULL) {
-		free(context->sensors);
-	}
-
-	free(context);
-
-	return;
-}
 
 int
 rift_sensor_context_create(struct rift_sensor_context **out_context, struct xrt_frame_context *xfctx)
@@ -354,8 +375,12 @@ rift_sensor_context_create(struct rift_sensor_context **out_context, struct xrt_
 	int ret;
 
 	struct rift_sensor_context *context = U_TYPED_CALLOC(struct rift_sensor_context);
+	context->node = (struct xrt_frame_node){
+	    .next = NULL,
+	    .break_apart = rift_sensor_context_node_break_apart,
+	    .destroy = rift_sensor_context_node_destroy,
+	};
 	context->log_level = debug_get_log_option_rift_sensor_log();
-	context->xfctx = xfctx;
 
 	u_var_add_root(context, "Rift Sensors", false);
 	u_var_add_log_level(context, &context->log_level, "Log Level");
@@ -427,7 +452,7 @@ rift_sensor_context_create(struct rift_sensor_context **out_context, struct xrt_
 		case OCULUS_DK2_SENSOR_PID: {
 			struct rift_sensor *sensor = &context->sensors[context->num_sensors];
 
-			ret = rift_sensor_create(context, sensor, device, &desc);
+			ret = rift_sensor_create(context, xfctx, sensor, device, &desc);
 			if (ret < 0) {
 				SENSOR_ERROR(context, "Failed to create sensor for device %x:%x, reason %d, skipping.",
 				             desc.idVendor, desc.idProduct, ret);
@@ -448,6 +473,8 @@ rift_sensor_context_create(struct rift_sensor_context **out_context, struct xrt_
 	}
 
 	libusb_free_device_list(devices, 1);
+
+	xrt_frame_context_add(xfctx, &context->node);
 
 	*out_context = context;
 	return 0;
