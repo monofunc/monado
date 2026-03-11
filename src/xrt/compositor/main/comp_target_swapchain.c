@@ -657,7 +657,8 @@ comp_target_swapchain_create_images(struct comp_target *ct,
 	}
 
 	// if we have the present wait extension, mark it as supported now
-	ct->wait_for_present_supported = vk->has_KHR_present_wait && debug_get_bool_option_use_present_wait();
+	ct->wait_for_present_supported =
+	    (vk->has_KHR_present_wait || vk->has_KHR_present_wait2) && debug_get_bool_option_use_present_wait();
 
 	// Free old image views.
 	destroy_image_views(cts);
@@ -721,6 +722,7 @@ comp_target_swapchain_create_images(struct comp_target *ct,
 
 	// Get the caps first.
 	VkSurfaceCapabilitiesKHR surface_caps = info.caps;
+	cts->surface.present_wait2 = info.present_wait2;
 
 	// Now we can free the info.
 	vk_surface_info_destroy(&info);
@@ -788,6 +790,18 @@ comp_target_swapchain_create_images(struct comp_target *ct,
 	    .clipped = VK_TRUE,
 	    .oldSwapchain = old_swapchain_handle,
 	};
+
+#if defined(VK_KHR_present_id2)
+	if (cts->surface.present_wait2) {
+		swapchain_info.flags |= VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR;
+	}
+#endif
+
+#if defined(VK_KHR_present_wait2)
+	if (cts->surface.present_wait2) {
+		swapchain_info.flags |= VK_SWAPCHAIN_CREATE_PRESENT_WAIT_2_BIT_KHR;
+	}
+#endif
 
 	// Print what we are creating.
 	vk_print_swapchain_create_info(vk, &swapchain_info, print_log_level);
@@ -914,17 +928,29 @@ comp_target_swapchain_present(struct comp_target *ct,
 	}
 #endif
 
-#ifdef VK_KHR_present_id
-	uint64_t present_id = (uint64_t)cts->current_frame_id;
+	XRT_MAYBE_UNUSED uint64_t present_id = (uint64_t)cts->current_frame_id;
 
+#ifdef VK_KHR_present_id
 	VkPresentIdKHR vk_present_id = {
 	    .sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR,
 	    .swapchainCount = 1,
 	    .pPresentIds = &present_id,
 	};
 
-	if (vk->features.present_wait) {
+	if (vk->features.present_wait && !cts->surface.present_wait2) {
 		vk_append_to_pnext_chain((VkBaseInStructure *)&present_info, (VkBaseInStructure *)&vk_present_id);
+	}
+#endif
+
+#ifdef VK_KHR_present_id2
+	VkPresentId2KHR vk_present_id2 = {
+	    .sType = VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR,
+	    .swapchainCount = 1,
+	    .pPresentIds = &present_id,
+	};
+
+	if (cts->surface.present_wait2) {
+		vk_append_to_pnext_chain((VkBaseInStructure *)&present_info, (VkBaseInStructure *)&vk_present_id2);
 	}
 #endif
 
@@ -954,6 +980,19 @@ comp_target_swapchain_wait_for_present(struct comp_target *ct, time_duration_ns 
 {
 	struct comp_target_swapchain *cts = (struct comp_target_swapchain *)ct;
 	struct vk_bundle *vk = get_vk(cts);
+
+#ifdef VK_KHR_present_wait2
+	VkPresentWait2InfoKHR info2 = {
+	    .sType = VK_STRUCTURE_TYPE_PRESENT_WAIT_2_INFO_KHR,
+	    .pNext = NULL,
+	    .presentId = (uint64_t)cts->current_frame_id,
+	    .timeout = timeout_ns,
+	};
+
+	if (cts->surface.present_wait2) {
+		return vk->vkWaitForPresent2KHR(vk->device, cts->swapchain.handle, &info2);
+	}
+#endif
 
 #ifdef VK_KHR_present_wait
 	if (!vk->features.present_wait) {
