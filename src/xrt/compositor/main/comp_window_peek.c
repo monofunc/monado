@@ -28,6 +28,23 @@ DEBUG_GET_ONCE_OPTION(window_peek, "XRT_WINDOW_PEEK", NULL)
 
 #define PEEK_IMAGE_USAGE (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
 
+/*!
+ * Convert SRGB formats to their UNORM equivalents.
+ *
+ * The peek window blits an already-rendered image, so using SRGB swapchain
+ * formats would apply the sRGB transfer function a second time.
+ */
+static VkFormat
+srgb_to_unorm(VkFormat format)
+{
+	switch (format) {
+	case VK_FORMAT_B8G8R8A8_SRGB: return VK_FORMAT_B8G8R8A8_UNORM;
+	case VK_FORMAT_R8G8B8A8_SRGB: return VK_FORMAT_R8G8B8A8_UNORM;
+	case VK_FORMAT_A8B8G8R8_SRGB_PACK32: return VK_FORMAT_A8B8G8R8_UNORM_PACK32;
+	default: return format;
+	}
+}
+
 struct comp_window_peek
 {
 	struct comp_target_swapchain base;
@@ -66,10 +83,10 @@ create_images(struct comp_window_peek *w)
 
 	static_assert(ARRAY_SIZE(info.formats) == ARRAY_SIZE(w->c->settings.formats), "Miss-match format array sizes");
 	for (uint32_t i = 0; i < w->c->settings.format_count; i++) {
-		info.formats[info.format_count++] = w->c->settings.formats[i];
+		info.formats[info.format_count++] = srgb_to_unorm(w->c->settings.formats[i]);
 	}
 
-	comp_target_create_images(&w->base.base, &info, vk->main_queue);
+	comp_target_create_images(&w->base.base, &info, vk->graphics_queue);
 }
 
 static void *
@@ -122,8 +139,7 @@ window_peek_run_thread(void *ptr)
 struct comp_window_peek *
 comp_window_peek_create(struct comp_compositor *c)
 {
-	const char *compute = getenv("XRT_COMPOSITOR_COMPUTE");
-	if (compute) {
+	if (c->settings.use_compute) {
 		COMP_WARN(c, "Peek window cannot be enabled on compute compositor");
 		return NULL;
 	}
