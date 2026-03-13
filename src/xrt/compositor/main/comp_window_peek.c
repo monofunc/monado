@@ -29,10 +29,24 @@ DEBUG_GET_ONCE_OPTION(window_peek, "XRT_WINDOW_PEEK", NULL)
 #define PEEK_IMAGE_USAGE (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
 
 /*!
+ * Returns true if the given format is an sRGB format.
+ */
+static bool
+is_format_srgb(VkFormat format)
+{
+	switch (format) {
+	case VK_FORMAT_B8G8R8A8_SRGB:
+	case VK_FORMAT_R8G8B8A8_SRGB:
+	case VK_FORMAT_A8B8G8R8_SRGB_PACK32: return true;
+	default: return false;
+	}
+}
+
+/*!
  * Convert SRGB formats to their UNORM equivalents.
  *
- * The peek window blits an already-rendered image, so using SRGB swapchain
- * formats would apply the sRGB transfer function a second time.
+ * Used when the blit source image is UNORM — we need the peek swapchain to
+ * also be UNORM so that vkCmdBlitImage does not apply any format conversion.
  */
 static VkFormat
 srgb_to_unorm(VkFormat format)
@@ -55,6 +69,7 @@ struct comp_window_peek
 	uint32_t width, height;
 	bool running;
 	bool hidden;
+	bool src_is_srgb;
 
 	struct vk_cmd_pool pool;
 	VkCommandBuffer cmd;
@@ -83,7 +98,20 @@ create_images(struct comp_window_peek *w)
 
 	static_assert(ARRAY_SIZE(info.formats) == ARRAY_SIZE(w->c->settings.formats), "Miss-match format array sizes");
 	for (uint32_t i = 0; i < w->c->settings.format_count; i++) {
-		info.formats[info.format_count++] = srgb_to_unorm(w->c->settings.formats[i]);
+		VkFormat format = w->c->settings.formats[i];
+
+		/*
+		 * When the blit source is UNORM, we need the peek swapchain
+		 * to also be UNORM so that vkCmdBlitImage does not apply any
+		 * sRGB format conversion. When the source is SRGB, keep the
+		 * swapchain formats as-is so the blit's SRGB→SRGB path is a
+		 * no-op on the transfer function.
+		 */
+		if (!w->src_is_srgb) {
+			format = srgb_to_unorm(format);
+		}
+
+		info.formats[info.format_count++] = format;
 	}
 
 	comp_target_create_images(&w->base.base, &info, vk->graphics_queue);
@@ -305,14 +333,23 @@ comp_window_peek_destroy(struct comp_window_peek **w_ptr)
 }
 
 void
-comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, int32_t height)
+comp_window_peek_blit(struct comp_window_peek *w, VkImage src, VkFormat src_format, int32_t width, int32_t height)
 {
 	if (w->hidden || !w->running) {
 		return;
 	}
 
-	if (w->width != w->base.base.width || w->height != w->base.base.height) {
-		COMP_DEBUG(w->c, "Resizing swapchain");
+	bool src_is_srgb = is_format_srgb(src_format);
+	bool need_recreate = (w->width != w->base.base.width || w->height != w->base.base.height);
+
+	if (src_is_srgb != w->src_is_srgb) {
+		COMP_DEBUG(w->c, "Source format sRGB-ness changed, recreating swapchain");
+		w->src_is_srgb = src_is_srgb;
+		need_recreate = true;
+	}
+
+	if (need_recreate) {
+		COMP_DEBUG(w->c, "Recreating swapchain");
 		create_images(w);
 	}
 

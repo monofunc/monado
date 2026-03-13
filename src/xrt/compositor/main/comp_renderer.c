@@ -1104,6 +1104,7 @@ comp_renderer_draw(struct comp_renderer *r)
 			comp_window_peek_blit(                 //
 			    c->peek,                           //
 			    view->images[scratch_index].image, //
+			    (VkFormat)view->info.format,       //
 			    view->info.width,                  //
 			    view->info.height);                //
 		} break;
@@ -1114,13 +1115,18 @@ comp_renderer_draw(struct comp_renderer *r)
 			comp_window_peek_blit(                 //
 			    c->peek,                           //
 			    view->images[scratch_index].image, //
+			    (VkFormat)view->info.format,       //
 			    view->info.width,                  //
 			    view->info.height);                //
 		} break;
 		case COMP_WINDOW_PEEK_EYE_BOTH:
 			/* TODO: display the undistorted image */
-			comp_window_peek_blit(c->peek, c->target->images[r->acquired_buffer].handle, c->target->width,
-			                      c->target->height);
+			comp_window_peek_blit(                            //
+			    c->peek,                                      //
+			    c->target->images[r->acquired_buffer].handle, //
+			    c->target->format,                            //
+			    c->target->width,                             //
+			    c->target->height);                           //
 			break;
 		}
 	}
