@@ -14,6 +14,7 @@
 #include "u_extension_list.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <string_view>
