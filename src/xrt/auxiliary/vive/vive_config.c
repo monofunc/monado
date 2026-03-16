@@ -113,7 +113,7 @@ _get_distortion_properties(struct vive_config *d, const cJSON *eye_transform_jso
 	// [ fx,  0, cx,
 	//    0, fy, cy,
 	//    0,  0, -1 ]
-	const cJSON *intrinsics = cJSON_GetObjectItemCaseSensitive(eye_json, "intrinsics");
+	const cJSON *intrinsics = u_json_get(eye_json, "intrinsics");
 	struct xrt_matrix_3x3 intrinsics_matrix;
 	u_json_get_matrix_3x3(intrinsics, &intrinsics_matrix);
 	d->distortion.values[eye].intrinsic_focus.x = intrinsics_matrix.v[0];
@@ -128,7 +128,7 @@ _get_distortion_properties(struct vive_config *d, const cJSON *eye_transform_jso
 	};
 
 	for (int i = 0; i < 3; i++) {
-		const cJSON *distortion = cJSON_GetObjectItemCaseSensitive(eye_json, names[i]);
+		const cJSON *distortion = u_json_get(eye_json, names[i]);
 		if (distortion == NULL) {
 			continue;
 		}
@@ -136,7 +136,7 @@ _get_distortion_properties(struct vive_config *d, const cJSON *eye_transform_jso
 		JSON_FLOAT(distortion, "center_x", &d->distortion.values[eye].center[i].x);
 		JSON_FLOAT(distortion, "center_y", &d->distortion.values[eye].center[i].y);
 
-		const cJSON *coeffs = cJSON_GetObjectItemCaseSensitive(distortion, "coeffs");
+		const cJSON *coeffs = u_json_get(distortion, "coeffs");
 		if (coeffs != NULL) {
 			_get_color_coeffs(&d->distortion.values[eye], coeffs, eye, i);
 		}
@@ -144,16 +144,11 @@ _get_distortion_properties(struct vive_config *d, const cJSON *eye_transform_jso
 }
 
 static void
-_get_lighthouse(struct vive_config *d, const cJSON *json)
+_get_lighthouse(const cJSON *lh_config, struct vive_config *d)
 {
-	const cJSON *lh = cJSON_GetObjectItemCaseSensitive(json, "lighthouse_config");
-	if (lh == NULL) {
-		return;
-	}
-
-	const cJSON *json_channels = cJSON_GetObjectItemCaseSensitive(lh, "channelMap");
-	const cJSON *json_normals = cJSON_GetObjectItemCaseSensitive(lh, "modelNormals");
-	const cJSON *json_points = cJSON_GetObjectItemCaseSensitive(lh, "modelPoints");
+	const cJSON *json_channels = u_json_get(lh_config, "channelMap");
+	const cJSON *json_normals = u_json_get(lh_config, "modelNormals");
+	const cJSON *json_points = u_json_get(lh_config, "modelPoints");
 
 	if (json_channels == NULL || json_normals == NULL || json_points == NULL) {
 		return;
@@ -167,7 +162,7 @@ _get_lighthouse(struct vive_config *d, const cJSON *json)
 		return;
 	}
 
-	struct lh_sensor *s = U_TYPED_ARRAY_CALLOC(struct lh_sensor, channels_size);
+	struct vive_lh_sensor *s = U_TYPED_ARRAY_CALLOC(struct vive_lh_sensor, channels_size);
 
 	uint8_t i = 0;
 	const cJSON *item = NULL;
@@ -211,8 +206,31 @@ _get_lighthouse(struct vive_config *d, const cJSON *json)
 	}
 }
 
+static void
+_get_imu(cJSON *dev_json, struct vive_imu_properties *imu)
+{
+	const cJSON *json = u_json_get(dev_json, "imu");
+	// Early devices, such as the OG Vive, had imu info in the root JSON
+	if (!json) {
+		JSON_VEC3(dev_json, "acc_bias", &imu->acc_bias);
+		JSON_VEC3(dev_json, "acc_scale", &imu->acc_scale);
+		JSON_VEC3(dev_json, "gyro_bias", &imu->gyro_bias);
+		JSON_VEC3(dev_json, "gyro_scale", &imu->gyro_scale);
+
+		return;
+	}
+
+	JSON_VEC3(json, "acc_bias", &imu->acc_bias);
+	JSON_VEC3(json, "acc_scale", &imu->acc_scale);
+	JSON_VEC3(json, "gyro_bias", &imu->gyro_bias);
+	// NOTE: gyro_scale may not exist on all devices
+	JSON_VEC3(json, "gyro_scale", &imu->gyro_scale);
+
+	_get_pose_from_pos_x_z(json, &imu->trackref);
+}
+
 static bool
-_get_camera(struct index_camera *cam, const cJSON *cam_json)
+_get_camera(struct vive_index_camera *cam, const cJSON *cam_json)
 {
 	bool succeeded = true;
 	const cJSON *extrinsics = u_json_get(cam_json, "extrinsics");
@@ -413,53 +431,36 @@ vive_config_parse(struct vive_config *d, char *json_string, enum u_logging_level
 	d->log_level = log_level;
 	vive_init_defaults(d);
 
+
 	VIVE_DEBUG(d, "JSON config:\n%s", json_string);
 
 	cJSON *json = cJSON_Parse(json_string);
 	if (!cJSON_IsObject(json)) {
 		VIVE_ERROR(d, "Could not parse JSON data.");
-		vive_config_teardown(d);
-		return false;
+		goto fail;
 	}
 
-	if (u_json_get(json, "model_number")) {
-		JSON_STRING(json, "model_number", d->firmware.model_number);
-	} else if (u_json_get(json, "model_name")) {
-		JSON_STRING(json, "model_name", d->firmware.model_number);
-	} else {
-		VIVE_ERROR(d, "Could not find either 'model_number' or 'model_name' fields!");
+	bool success = JSON_STRING(json, "model_number", d->firmware.model_number);
+	if (!success) {
+		success = JSON_STRING(json, "model_name", d->firmware.model_number);
+	}
+	if (!success) {
+		VIVE_ERROR(d, "Could not find HMD model.");
+		goto fail;
 	}
 
 	VIVE_DEBUG(d, "Parsing model number: %s", d->firmware.model_number);
-
 	d->variant = vive_determine_variant(d->firmware.model_number);
+	if (d->variant == VIVE_UNKNOWN) {
+		VIVE_ERROR(d, "HMD variant is unknown.");
+		goto fail;
+	}
 
-	switch (d->variant) {
-	case VIVE_VARIANT_VIVE:
-		JSON_VEC3(json, "acc_bias", &d->imu.acc_bias);
-		JSON_VEC3(json, "acc_scale", &d->imu.acc_scale);
-		JSON_VEC3(json, "gyro_bias", &d->imu.gyro_bias);
-		JSON_VEC3(json, "gyro_scale", &d->imu.gyro_scale);
-		break;
-	case VIVE_VARIANT_PRO: {
-		const cJSON *imu = cJSON_GetObjectItemCaseSensitive(json, "imu");
-		JSON_VEC3(imu, "acc_bias", &d->imu.acc_bias);
-		JSON_VEC3(imu, "acc_scale", &d->imu.acc_scale);
-		JSON_VEC3(imu, "gyro_bias", &d->imu.gyro_bias);
-		JSON_VEC3(imu, "gyro_scale", &d->imu.gyro_scale);
-	} break;
-	case VIVE_VARIANT_INDEX: {
-		const cJSON *head = cJSON_GetObjectItemCaseSensitive(json, "head");
-		_get_pose_from_pos_x_z(head, &d->display.trackref);
 
-		const cJSON *imu = cJSON_GetObjectItemCaseSensitive(json, "imu");
-		_get_pose_from_pos_x_z(imu, &d->imu.trackref);
-
-		JSON_VEC3(imu, "acc_bias", &d->imu.acc_bias);
-		JSON_VEC3(imu, "acc_scale", &d->imu.acc_scale);
-		JSON_VEC3(imu, "gyro_bias", &d->imu.gyro_bias);
-
-		_get_lighthouse(d, json);
+	_get_imu(json, &d->imu);
+	const cJSON *head_json = u_json_get(json, "head");
+	if (head_json) {
+		_get_pose_from_pos_x_z(head_json, &d->display.trackref);
 
 		struct xrt_pose trackref_to_head;
 		struct xrt_pose imu_to_head;
@@ -468,58 +469,53 @@ vive_config_parse(struct vive_config *d, char *json_string, enum u_logging_level
 		math_pose_transform(&trackref_to_head, &d->imu.trackref, &imu_to_head);
 
 		d->display.imuref = imu_to_head;
-
-		const cJSON *cameras_json = u_json_get(json, "tracked_cameras");
-		_get_cameras(d, cameras_json);
-	} break;
-	case VIVE_VARIANT_PRO2: {
-		const cJSON *imu = cJSON_GetObjectItemCaseSensitive(json, "imu");
-		JSON_VEC3(imu, "acc_bias", &d->imu.acc_bias);
-		JSON_VEC3(imu, "acc_scale", &d->imu.acc_scale);
-		JSON_VEC3(imu, "gyro_bias", &d->imu.gyro_bias);
-		JSON_VEC3(imu, "gyro_scale", &d->imu.gyro_scale);
-
-		_get_lighthouse(d, json);
-
-		struct xrt_pose trackref_to_head;
-		struct xrt_pose imu_to_head;
-
-		math_pose_invert(&d->display.trackref, &trackref_to_head);
-		math_pose_transform(&trackref_to_head, &d->imu.trackref, &imu_to_head);
-
-		d->display.imuref = imu_to_head;
-
-		const cJSON *cameras_json = u_json_get(json, "tracked_cameras");
-		_get_cameras(d, cameras_json);
-	} break;
-	default:
-		VIVE_ERROR(d, "Unknown Vive variant.");
-		vive_config_teardown(d);
-		return false;
 	}
 
-	if (d->variant != VIVE_VARIANT_INDEX) {
-		JSON_STRING(json, "mb_serial_number", d->firmware.mb_serial_number);
+
+	const cJSON *lh_config = u_json_get(json, "lighthouse_config");
+	if (lh_config) {
+		_get_lighthouse(lh_config, d);
 	}
-	if (d->variant == VIVE_VARIANT_VIVE) {
-		JSON_DOUBLE(json, "lens_separation", &d->display.lens_separation);
+
+
+	const cJSON *cameras_json = u_json_get(json, "tracked_cameras");
+	if (cameras_json) {
+		_get_cameras(d, cameras_json);
+	}
+
+	// Only exists on the OG Vive
+	success = JSON_DOUBLE(json, "lens_separation", &d->display.lens_separation);
+	// Modern devices with static IPDs, such as the Bigscreen Beyond
+	if (!success) {
+		const cJSON *ipd_json = u_json_get(json, "ipd");
+		if (ipd_json) {
+			int ipd;
+			success = JSON_INT(ipd_json, "default_mm", &ipd);
+
+			if (success) {
+				d->display.lens_separation = (double)ipd / 1000.;
+			}
+		}
 	}
 
 	JSON_STRING(json, "device_serial_number", d->firmware.device_serial_number);
+	// Only exists on Vive devices
+	JSON_STRING(json, "mb_serial_number", d->firmware.mb_serial_number);
 
-	const cJSON *device_json = cJSON_GetObjectItemCaseSensitive(json, "device");
+	const cJSON *device_json = u_json_get(json, "device");
 	if (device_json) {
-		if (d->variant != VIVE_VARIANT_INDEX) {
-			JSON_DOUBLE(device_json, "persistence", &d->display.persistence);
-			JSON_FLOAT(device_json, "physical_aspect_x_over_y", &d->distortion.values[0].aspect_x_over_y);
-
-			d->distortion.values[1].aspect_x_over_y = d->distortion.values[0].aspect_x_over_y;
-		}
 		JSON_INT(device_json, "eye_target_height_in_pixels", &d->display.eye_target_height_in_pixels);
 		JSON_INT(device_json, "eye_target_width_in_pixels", &d->display.eye_target_width_in_pixels);
+
+		// Only exists on Vive devices
+		JSON_DOUBLE(device_json, "persistence", &d->display.persistence);
+		success = JSON_FLOAT(device_json, "physical_aspect_x_over_y", &d->distortion.values[0].aspect_x_over_y);
+		if (success) {
+			d->distortion.values[1].aspect_x_over_y = d->distortion.values[0].aspect_x_over_y;
+		}
 	}
 
-	const cJSON *eye_transform_json = cJSON_GetObjectItemCaseSensitive(json, "tracking_to_eye_transform");
+	const cJSON *eye_transform_json = u_json_get(json, "tracking_to_eye_transform");
 	if (eye_transform_json) {
 		for (uint8_t eye = 0; eye < 2; eye++) {
 			_get_distortion_properties(d, eye_transform_json, eye);
@@ -530,7 +526,6 @@ vive_config_parse(struct vive_config *d, char *json_string, enum u_logging_level
 
 	cJSON_Delete(json);
 
-	// clang-format off
 	VIVE_DEBUG(d, "= Vive configuration =");
 	VIVE_DEBUG(d, "lens_separation: %f", d->display.lens_separation);
 	VIVE_DEBUG(d, "persistence: %f", d->display.persistence);
@@ -554,9 +549,12 @@ vive_config_parse(struct vive_config *d, char *json_string, enum u_logging_level
 
 	VIVE_DEBUG(d, "undistort_r2_cutoff 0: %f", (double)d->distortion.values[0].undistort_r2_cutoff);
 	VIVE_DEBUG(d, "undistort_r2_cutoff 1: %f", (double)d->distortion.values[1].undistort_r2_cutoff);
-	// clang-format on
 
 	return true;
+
+fail:
+	vive_config_teardown(d);
+	return false;
 }
 
 void
@@ -589,12 +587,13 @@ vive_config_parse_controller(struct vive_controller_config *d, char *json_string
 	}
 
 
-	if (u_json_get(json, "model_number")) {
-		JSON_STRING(json, "model_number", d->firmware.model_number);
-	} else if (u_json_get(json, "model_name")) {
-		JSON_STRING(json, "model_name", d->firmware.model_number);
-	} else {
-		VIVE_ERROR(d, "Could not find either 'model_number' or 'model_name' fields!");
+	bool success = JSON_STRING(json, "model_number", d->firmware.model_number);
+	if (!success) {
+		success = JSON_STRING(json, "model_name", d->firmware.model_number);
+	}
+	if (!success) {
+		VIVE_ERROR(d, "Could not find controller model.");
+		return false;
 	}
 
 
@@ -638,41 +637,15 @@ vive_config_parse_controller(struct vive_controller_config *d, char *json_string
 		           d->firmware.model_number);
 	}
 
-	switch (d->variant) {
-	case CONTROLLER_VIVE_WAND:
-	case CONTROLLER_TRACKER_GEN1: {
-		JSON_VEC3(json, "acc_bias", &d->imu.acc_bias);
-		JSON_VEC3(json, "acc_scale", &d->imu.acc_scale);
-		JSON_VEC3(json, "gyro_bias", &d->imu.gyro_bias);
-		JSON_VEC3(json, "gyro_scale", &d->imu.gyro_scale);
-		JSON_STRING(json, "mb_serial_number", d->firmware.mb_serial_number);
-	} break;
-	case CONTROLLER_INDEX_LEFT:
-	case CONTROLLER_INDEX_RIGHT:
-	case CONTROLLER_FLIPVR_LEFT:
-	case CONTROLLER_FLIPVR_RIGHT:
-	case CONTROLLER_TRACKER_GEN2:
-	case CONTROLLER_TRACKER_GEN3:
-	case CONTROLLER_TRACKER_TUNDRA: {
-		const cJSON *imu = u_json_get(json, "imu");
-		_get_pose_from_pos_x_z(imu, &d->imu.trackref);
-
-		JSON_VEC3(imu, "acc_bias", &d->imu.acc_bias);
-		JSON_VEC3(imu, "acc_scale", &d->imu.acc_scale);
-		JSON_VEC3(imu, "gyro_bias", &d->imu.gyro_bias);
-
-		if (d->variant == CONTROLLER_TRACKER_GEN2 || d->variant == CONTROLLER_TRACKER_GEN3 ||
-		    d->variant == CONTROLLER_TRACKER_TUNDRA)
-			JSON_VEC3(imu, "gyro_scale", &d->imu.gyro_scale);
-	} break;
-	default: VIVE_ERROR(d, "Unknown Vive watchman variant."); return false;
-	}
+	_get_imu(json, &d->imu);
 
 	JSON_STRING(json, "device_serial_number", d->firmware.device_serial_number);
+	// Only exists on Vive devices
+	JSON_STRING(json, "mb_serial_number", d->firmware.mb_serial_number);
+
 
 	cJSON_Delete(json);
 
-	// clang-format off
 	VIVE_DEBUG(d, "= Vive controller configuration =");
 
 	VIVE_DEBUG(d, "model_number: %s", d->firmware.model_number);
@@ -685,8 +658,6 @@ vive_config_parse_controller(struct vive_controller_config *d, char *json_string
 		_print_vec3("gyro_bias", &d->imu.gyro_bias);
 		_print_vec3("gyro_scale", &d->imu.gyro_scale);
 	}
-
-	// clang-format on
 
 	return true;
 }
