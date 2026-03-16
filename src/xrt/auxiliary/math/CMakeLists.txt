@@ -20,6 +20,8 @@ add_library(
 	m_imu_3dof.h
 	m_imu_xio_ahrs.c
 	m_imu_xio_ahrs.h
+	m_mag_calib_nxp.c
+	m_mag_calib_nxp.h
 	m_imu_pre.c
 	m_imu_pre.h
 	m_lowpass_float.cpp
@@ -48,7 +50,12 @@ add_library(
 	)
 target_link_libraries(
 	aux_math
-	PUBLIC aux-includes aux_util Eigen3::Eigen xrt-external-xio-fusion
+	PUBLIC
+		aux-includes
+		aux_util
+		Eigen3::Eigen
+		xrt-external-xio-fusion
+		xrt-external-nxp-mag-fusion
 	PRIVATE xrt-optimized-math
 	)
 

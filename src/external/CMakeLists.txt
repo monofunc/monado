@@ -160,12 +160,15 @@ if(XRT_HAVE_TRACY)
 endif()
 
 # xio Fusion AHRS
-add_library(
-	xrt-external-xio-fusion STATIC
-	xio_fusion/FusionAhrs.c
-	)
+add_library(xrt-external-xio-fusion STATIC xio_fusion/FusionAhrs.c)
 target_include_directories(
 	xrt-external-xio-fusion SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/xio_fusion
+	)
+
+# NXP/Freescale magnetometer calibration
+add_library(xrt-external-nxp-mag-fusion STATIC nxp_mag_fusion/magnetic.c nxp_mag_fusion/matrix.c)
+target_include_directories(
+	xrt-external-nxp-mag-fusion SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/nxp_mag_fusion
 	)
 
 # Valve VDF parser
