@@ -43,6 +43,10 @@ struct comp_window_peek
 	VkCommandBuffer cmd;
 
 	struct os_thread_helper oth;
+
+	bool use_compute;
+
+	uint32_t window_id;
 };
 
 
@@ -72,6 +76,45 @@ create_images(struct comp_window_peek *w)
 	comp_target_create_images(&w->base.base, &info, vk->main_queue);
 }
 
+static int
+window_peek_event_filter(void *ptr, SDL_Event *event)
+{
+	struct comp_window_peek *w = (struct comp_window_peek *)ptr;
+
+	// Only process events for the window
+	if (event->type == SDL_WINDOWEVENT && event->window.windowID == w->window_id) {
+		switch (event->window.event) {
+		case SDL_WINDOWEVENT_HIDDEN: w->hidden = true; break;
+		case SDL_WINDOWEVENT_SHOWN: w->hidden = false; break;
+		case SDL_WINDOWEVENT_SIZE_CHANGED:
+			w->width = event->window.data1;
+			w->height = event->window.data2;
+			break;
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+		case SDL_WINDOWEVENT_DISPLAY_CHANGED:
+#endif
+		case SDL_WINDOWEVENT_MOVED: SDL_GetWindowSize(w->window, (int *)&w->width, (int *)&w->height); break;
+		case SDL_WINDOWEVENT_CLOSE: w->running = false; break;
+		default: break;
+		}
+	} else if (event->type == SDL_KEYDOWN) {
+		// Only process keyboard events if the window has focus
+		SDL_Window *focused = SDL_GetKeyboardFocus();
+		if (focused && SDL_GetWindowID(focused) == w->window_id) {
+			switch (event->key.keysym.sym) {
+			case SDLK_ESCAPE: w->running = false; break;
+			default: break;
+			}
+		}
+	} else if (event->type == SDL_QUIT) {
+		// Global quit event
+		w->running = false;
+	}
+
+	// Return 1 to keep the event in the queue for other handlers
+	return 1;
+}
+
 static void *
 window_peek_run_thread(void *ptr)
 {
@@ -79,42 +122,18 @@ window_peek_run_thread(void *ptr)
 
 	w->running = true;
 	w->hidden = false;
-	while (w->running) {
-		SDL_Event event;
-		while (SDL_PollEvent(&event)) {
-			switch (event.type) {
-			case SDL_QUIT: w->running = false; break;
-			case SDL_WINDOWEVENT:
-				switch (event.window.event) {
-				case SDL_WINDOWEVENT_HIDDEN: w->hidden = true; break;
-				case SDL_WINDOWEVENT_SHOWN: w->hidden = false; break;
-				case SDL_WINDOWEVENT_SIZE_CHANGED:
-					w->width = event.window.data1;
-					w->height = event.window.data2;
-					break;
-#if SDL_VERSION_ATLEAST(2, 0, 18)
-				case SDL_WINDOWEVENT_DISPLAY_CHANGED:
-#endif
-				case SDL_WINDOWEVENT_MOVED:
-					SDL_GetWindowSize(w->window, (int *)&w->width, (int *)&w->height);
-					break;
-				default: break;
-				}
-				break;
-			case SDL_KEYDOWN:
-				switch (event.key.keysym.sym) {
-				case SDLK_ESCAPE: w->running = false; break;
-				default: break;
-				}
-				break;
-			default: break;
-			}
 
-			if (event.type == SDL_QUIT) {
-				w->running = false;
-			}
-		}
+	// Add the event filter
+	SDL_AddEventWatch(window_peek_event_filter, w);
+
+	// Wait while the window is running
+	// Events are handled by the filter
+	while (w->running) {
+		SDL_Delay(10);
 	}
+
+	// Remove the event filter
+	SDL_DelEventWatch(window_peek_event_filter, w);
 
 	return NULL;
 }
@@ -122,12 +141,6 @@ window_peek_run_thread(void *ptr)
 struct comp_window_peek *
 comp_window_peek_create(struct comp_compositor *c)
 {
-	const char *compute = getenv("XRT_COMPOSITOR_COMPUTE");
-	if (compute) {
-		COMP_WARN(c, "Peek window cannot be enabled on compute compositor");
-		return NULL;
-	}
-
 	const char *option = debug_get_option_window_peek();
 	if (option == NULL) {
 		return NULL;
@@ -160,6 +173,7 @@ comp_window_peek_create(struct comp_compositor *c)
 	struct comp_window_peek *w = U_TYPED_CALLOC(struct comp_window_peek);
 	w->c = c;
 	w->eye = eye;
+	w->use_compute = c->settings.use_compute;
 
 
 	/*
@@ -211,6 +225,7 @@ comp_window_peek_create(struct comp_compositor *c)
 
 	w->width = width;
 	w->height = height;
+	w->window_id = SDL_GetWindowID(w->window);
 
 	comp_target_swapchain_init_and_set_fnptrs(&w->base, COMP_TARGET_FORCE_FAKE_DISPLAY_TIMING);
 
@@ -307,6 +322,7 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 	VkResult ret = comp_target_acquire(&w->base.base, &current);
 	if (ret != VK_SUCCESS) {
 		COMP_ERROR(w->c, "comp_target_acquire: %s", vk_result_string(ret));
+		return;
 	}
 
 	VkImage dst = w->base.base.images[current].handle;
@@ -321,6 +337,11 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 	vk_cmd_pool_lock(&w->pool);
 
 	ret = vk->vkBeginCommandBuffer(w->cmd, &begin_info);
+	if (ret != VK_SUCCESS) {
+		vk_cmd_pool_unlock(&w->pool);
+		VK_ERROR(vk, "vkBeginCommandBuffer: %s", vk_result_string(ret));
+		return;
+	}
 
 	VkImageSubresourceRange range = {
 	    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -330,20 +351,35 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 	    .layerCount = 1,
 	};
 
-	// Barrier to make source a source
-	vk_cmd_image_barrier_locked(                       //
-	    vk,                                            // vk_bundle
-	    w->cmd,                                        // cmdbuffer
-	    src,                                           // image
-	    VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,          // srcAccessMask
-	    VK_ACCESS_TRANSFER_READ_BIT,                   // dstAccessMask
-	    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,      // oldImageLayout
-	    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,          // newImageLayout
-	    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
-	    VK_PIPELINE_STAGE_TRANSFER_BIT,                // dstStageMask
-	    range);                                        // subresourceRange
+	// Determine source layout and access mask based on backend
+	VkImageLayout src_old_layout;
+	VkAccessFlags src_access_mask;
+	VkPipelineStageFlags src_stage_mask;
 
-	// Barrier to make destination a destination
+	if (w->use_compute) {
+		src_old_layout = VK_IMAGE_LAYOUT_GENERAL;
+		src_access_mask = VK_ACCESS_SHADER_WRITE_BIT;
+		src_stage_mask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+	} else {
+		src_old_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		src_access_mask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		src_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	}
+
+	// Barrier to make source ready for transfer from respective backend
+	vk_cmd_image_barrier_locked(              //
+	    vk,                                   // vk_bundle
+	    w->cmd,                               // cmdbuffer
+	    src,                                  // image
+	    src_access_mask,                      // srcAccessMask
+	    VK_ACCESS_TRANSFER_READ_BIT,          // dstAccessMask
+	    src_old_layout,                       // oldImageLayout
+	    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // newImageLayout
+	    src_stage_mask,                       // srcStageMask
+	    VK_PIPELINE_STAGE_TRANSFER_BIT,       // dstStageMask
+	    range);                               // subresourceRange
+
+	// Barrier to make destination ready for transfer
 	vk_cmd_image_barrier_locked(              //
 	    vk,                                   // vk_bundle
 	    w->cmd,                               // cmdbuffer
@@ -352,7 +388,7 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 	    VK_ACCESS_TRANSFER_WRITE_BIT,         // dstAccessMask
 	    VK_IMAGE_LAYOUT_UNDEFINED,            // oldImageLayout
 	    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, // newImageLayout
-	    VK_PIPELINE_STAGE_TRANSFER_BIT,       // srcStageMask
+	    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,    // srcStageMask
 	    VK_PIPELINE_STAGE_TRANSFER_BIT,       // dstStageMask
 	    range);                               // subresourceRange
 
@@ -388,7 +424,7 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 	    VK_FILTER_LINEAR                      // filter
 	);
 
-	// Reset destination
+	// Transition destination to present source
 	vk_cmd_image_barrier_locked(              //
 	    vk,                                   // vk_bundle
 	    w->cmd,                               // cmdbuffer
@@ -401,23 +437,37 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 	    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // dstStageMask
 	    range);                               // subresourceRange
 
-	// Reset src
-	vk_cmd_image_barrier_locked(                  //
-	    vk,                                       // vk_bundle
-	    w->cmd,                                   // cmdbuffer
-	    src,                                      // image
-	    VK_ACCESS_TRANSFER_READ_BIT,              // srcAccessMask
-	    0,                                        // dstAccessMask
-	    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,     // oldImageLayout
-	    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, // newImageLayout
-	    VK_PIPELINE_STAGE_TRANSFER_BIT,           // srcStageMask
-	    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,        // dstStageMask
-	    range);                                   // subresourceRange
+	// Restore source to its expected layout
+	VkImageLayout src_new_layout;
+	VkAccessFlags src_new_access;
+	VkPipelineStageFlags src_new_stage;
+
+	if (w->use_compute) {
+		src_new_layout = VK_IMAGE_LAYOUT_GENERAL;
+		src_new_access = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+		src_new_stage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+	} else {
+		src_new_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		src_new_access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+		src_new_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	}
+
+	vk_cmd_image_barrier_locked(              //
+	    vk,                                   // vk_bundle
+	    w->cmd,                               // cmdbuffer
+	    src,                                  // image
+	    VK_ACCESS_TRANSFER_READ_BIT,          // srcAccessMask
+	    src_new_access,                       // dstAccessMask
+	    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, // oldImageLayout
+	    src_new_layout,                       // newImageLayout
+	    VK_PIPELINE_STAGE_TRANSFER_BIT,       // srcStageMask
+	    src_new_stage,                        // dstStageMask
+	    range);                               // subresourceRange
 
 	ret = vk->vkEndCommandBuffer(w->cmd);
 	if (ret != VK_SUCCESS) {
 		vk_cmd_pool_unlock(&w->pool);
-		VK_ERROR(vk, "Error: Could not end command buffer.\n");
+		VK_ERROR(vk, "vkEndCommandBuffer: %s", vk_result_string(ret));
 		return;
 	}
 
@@ -444,7 +494,7 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 
 	// Check results from submit.
 	if (ret != VK_SUCCESS) {
-		VK_ERROR(vk, "Error: Could not submit to queue.\n");
+		VK_ERROR(vk, "vk_cmd_submit_locked: %s", vk_result_string(ret));
 		return;
 	}
 
@@ -464,7 +514,7 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 	vk_queue_unlock(vk->main_queue);
 
 	if (ret != VK_SUCCESS) {
-		VK_ERROR(vk, "Error: could not present to queue.\n");
+		VK_ERROR(vk, "vkQueuePresentKHR: %s", vk_result_string(ret));
 		return;
 	}
 }
