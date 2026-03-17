@@ -61,6 +61,7 @@ add_library(
 	u_id_ringbuffer.h
 	u_imu_sink_split.c
 	u_imu_sink_force_monotonic.c
+	u_interface_helper.hpp
 	u_json.c
 	u_json.h
 	u_json.hpp
@@ -76,6 +77,7 @@ add_library(
 	u_misc.h
 	u_native_images_debug.h
 	u_pacing.h
+	u_pacing.hpp
 	u_pacing_app.c
 	u_pacing_compositor.c
 	u_pacing_compositor_fake.c
