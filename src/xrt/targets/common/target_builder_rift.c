@@ -281,6 +281,8 @@ rift_open_system_impl(struct xrt_builder *xb,
 				continue;
 			}
 
+			rift_sensor_setup_frame_timestamp_callback(sensor, rb->hmd);
+
 			struct u_sink_debug *debug_sink = &rb->blobwatch_debug_sinks[rb->num_sensors];
 			struct t_blobwatch **blobwatch = &rb->blobwatches[rb->num_sensors];
 
@@ -311,6 +313,7 @@ rift_open_system_impl(struct xrt_builder *xb,
 			}
 
 			struct xrt_fs *fs = rift_sensor_get_frame_server(sensor);
+
 			if (!xrt_fs_stream_start(fs, frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0)) {
 				RIFT_WARN(rb, "Failed to start Rift sensor frame server stream for sensor %zd", i);
 				continue;
