@@ -22,13 +22,13 @@
 #include "math/m_api.h"
 #include "math/m_clock_tracking.h"
 #include "math/m_imu_xio_ahrs.h"
+#include "math/m_mag_calib_nxp.h"
 #include "math/m_predict.h"
 
 #include "util/u_debug.h"
+#include "util/u_linux.h"
 #include "util/u_device.h"
 #include "util/u_distortion_mesh.h"
-#include "util/u_file.h"
-#include "util/u_json.h"
 #include "util/u_time.h"
 #include "util/u_trace_marker.h"
 #include "util/u_var.h"
@@ -38,6 +38,7 @@
 
 DEBUG_GET_ONCE_LOG_OPTION(rayneo_log, "RAYNEO_LOG", U_LOGGING_WARN)
 DEBUG_GET_ONCE_BOOL_OPTION(rayneo_fw_log, "RAYNEO_FW_LOG", false)
+DEBUG_GET_ONCE_BOOL_OPTION(rayneo_disable_mag, "RAYNEO_DISABLE_MAG", false)
 
 
 #define RAYNEO_TRACE(hmd, ...) U_LOG_XDEV_IFL_T(&(hmd)->base, (hmd)->log_level, __VA_ARGS__)
@@ -169,12 +170,17 @@ struct rayneo_hmd
 	xrt_atomic_s32_t current_brightness;
 	xrt_atomic_s32_t desired_brightness;
 
-	// Debug vars
-	struct xrt_vec3 last_accel;
-	struct xrt_vec3 last_gyro;
-	struct xrt_vec3 last_mag;
-	struct xrt_vec3 last_mag_raw;
-	float last_temperature_c;
+	struct
+	{
+		struct xrt_vec3 accel;
+		struct xrt_vec3 gyro;
+		struct xrt_vec3 mag;
+		struct xrt_vec3 mag_raw;
+		float temperature_c;
+		int32_t mag_calib_level;
+		float mag_calib_error;
+		int32_t mag_calib_samples;
+	} debug;
 };
 
 struct rayneo_thread_ctx
@@ -188,10 +194,8 @@ struct rayneo_thread_ctx
 	struct m_imu_xio_ahrs fusion;
 	struct m_clock_windowed_skew_tracker *clock_tracker;
 
-	// Magnetometer calibration
-	bool has_mag_calib;
-	struct xrt_vec3 mag_hard_iron;
-	struct xrt_matrix_3x3 mag_soft_iron;
+	// Online magnetometer calibration
+	struct m_mag_calib_nxp mag_calib_online;
 
 	// Pointer to hardware-specific parameters from the rayneo_known_devices
 	const rayneo_device_params_t *device_params;
@@ -340,32 +344,29 @@ rayneo_update_fusion(struct rayneo_thread_ctx *ctx,
 		gyro = rayneo_imu_apply_matrix(&gyro, &ctx->imu_calib_matrix, NULL);
 	}
 
-	// Capture raw mag before calibration for debug display.
-	hmd->last_mag_raw = mag;
-
-	// Apply magnetometer calibration from config file (in the sensor's native frame).
-	if (ctx->has_mag_calib) {
-		struct xrt_vec3 mag_offset = {
-		    .x = mag.x - ctx->mag_hard_iron.x,
-		    .y = mag.y - ctx->mag_hard_iron.y,
-		    .z = mag.z - ctx->mag_hard_iron.z,
-		};
-		math_matrix_3x3_transform_vec3(&ctx->mag_soft_iron, &mag_offset, &mag);
-	}
+	// Capture raw mag before any processing for debug display.
+	hmd->debug.mag_raw = mag;
 
 	// Remap mag from chip frame to accel/gyro frame (MMC5633NJL mounting).
 	mag = (struct xrt_vec3){.x = mag.y, .y = -mag.x, .z = mag.z};
 
+	// Apply mounting rotation to all sensor vectors.
 	if (ctx->has_imu_rot) {
-		struct xrt_vec3 accel_rot = XRT_VEC3_ZERO;
-		struct xrt_vec3 gyro_rot = XRT_VEC3_ZERO;
-		struct xrt_vec3 mag_rot = XRT_VEC3_ZERO;
-		math_quat_rotate_vec3(&ctx->imu_rot, &accel, &accel_rot);
-		math_quat_rotate_vec3(&ctx->imu_rot, &gyro, &gyro_rot);
-		math_quat_rotate_vec3(&ctx->imu_rot, &mag, &mag_rot);
-		accel = accel_rot;
-		gyro = gyro_rot;
-		mag = mag_rot;
+		math_quat_rotate_vec3(&ctx->imu_rot, &accel, &accel);
+		math_quat_rotate_vec3(&ctx->imu_rot, &gyro, &gyro);
+		math_quat_rotate_vec3(&ctx->imu_rot, &mag, &mag);
+	}
+
+	// Online magnetometer calibration (after remap and imu_rot).
+	bool has_mag = !debug_get_bool_option_rayneo_disable_mag() && (mag.x != 0.0f || mag.y != 0.0f || mag.z != 0.0f);
+	if (has_mag) {
+		m_mag_calib_nxp_update(&ctx->mag_calib_online, &mag, &accel);
+		struct xrt_vec3 mag_cal;
+		m_mag_calib_nxp_apply(&ctx->mag_calib_online, &mag, &mag_cal);
+		mag = mag_cal;
+		hmd->debug.mag_calib_level = m_mag_calib_nxp_level(&ctx->mag_calib_online);
+		hmd->debug.mag_calib_error = m_mag_calib_nxp_fit_error(&ctx->mag_calib_online);
+		hmd->debug.mag_calib_samples = m_mag_calib_nxp_sample_count(&ctx->mag_calib_online);
 	}
 
 	m_clock_windowed_skew_tracker_push(ctx->clock_tracker, observed_local_ts, sample->device_time_ns);
@@ -378,14 +379,12 @@ rayneo_update_fusion(struct rayneo_thread_ctx *ctx,
 		sample_local_ts = hmd->last_update_ns;
 	}
 
-	bool has_mag = (mag.x != 0.0f || mag.y != 0.0f || mag.z != 0.0f);
+	hmd->debug.accel = accel;
+	hmd->debug.gyro = gyro;
+	hmd->debug.mag = mag;
+	hmd->debug.temperature_c = sample->temperature_c;
 
-	hmd->last_accel = accel;
-	hmd->last_gyro = gyro;
-	hmd->last_mag = mag;
-	hmd->last_temperature_c = sample->temperature_c;
-
-	if (has_mag) {
+	if (has_mag && m_mag_calib_nxp_level(&ctx->mag_calib_online) > 0) {
 		m_imu_xio_ahrs_update_mag(&ctx->fusion, sample_local_ts, &accel, &gyro, &mag);
 	} else {
 		m_imu_xio_ahrs_update(&ctx->fusion, sample_local_ts, &accel, &gyro);
@@ -850,14 +849,18 @@ rayneo_thread_run(void *ptr)
 {
 	struct rayneo_hmd *hmd = (struct rayneo_hmd *)ptr;
 	U_TRACE_SET_THREAD_NAME("RayNeo");
+#ifdef XRT_OS_LINUX
+	u_linux_try_to_set_realtime_priority_on_thread(U_LOGGING_INFO, "RayNeo USB thread");
+#endif
 
 	struct rayneo_thread_ctx ctx = {
 	    .hmd = hmd,
 	};
 	struct m_imu_xio_ahrs_settings ahrs_settings = M_IMU_XIO_AHRS_SETTINGS_DEFAULT;
-    ahrs_settings.magnetic_rejection = 70.0f;
+	ahrs_settings.magnetic_rejection = 70.0f;
 	ahrs_settings.recovery_trigger_period = 5 * 200; // 5 seconds at ~200Hz IMU rate
 	m_imu_xio_ahrs_init(&ctx.fusion, &ahrs_settings);
+	m_mag_calib_nxp_init(&ctx.mag_calib_online, 1.0f);
 	ctx.clock_tracker = m_clock_windowed_skew_tracker_alloc(RAYNEO_CLOCK_TRACKER_WINDOW_SAMPLES);
 	if (ctx.clock_tracker == NULL) {
 		RAYNEO_ERROR(hmd, "Failed to allocate clock tracker");
@@ -876,6 +879,7 @@ rayneo_thread_run(void *ptr)
 	}
 
 	RAYNEO_DEBUG(hmd, "Thread exiting, closing device");
+	m_mag_calib_nxp_save_stop(&ctx.mag_calib_online);
 	m_clock_windowed_skew_tracker_destroy(ctx.clock_tracker);
 	rayneo_usb_close(&ctx.dev);
 	return NULL;
@@ -1044,73 +1048,6 @@ rayneo_hmd_get_tracked_pose(struct xrt_device *xdev,
 	return XRT_SUCCESS;
 }
 
-#define RAYNEO_MAG_CAL_FILE "rayneo_mag_cal.json"
-
-static void
-rayneo_load_mag_calibration(struct rayneo_thread_ctx *ctx)
-{
-	struct rayneo_hmd *hmd = ctx->hmd;
-	ctx->has_mag_calib = false;
-
-	FILE *f = u_file_open_file_in_config_dir(RAYNEO_MAG_CAL_FILE, "r");
-	if (f == NULL) {
-		RAYNEO_DEBUG(hmd, "No mag calibration file (%s), magnetometer disabled", RAYNEO_MAG_CAL_FILE);
-		return;
-	}
-
-	fseek(f, 0, SEEK_END);
-	long len = ftell(f);
-	fseek(f, 0, SEEK_SET);
-	if (len <= 0 || len > 4096) {
-		fclose(f);
-		return;
-	}
-
-	char *buf = malloc((size_t)len + 1);
-	if (buf == NULL) {
-		fclose(f);
-		return;
-	}
-	size_t nread = fread(buf, 1, (size_t)len, f);
-	fclose(f);
-	buf[nread] = '\0';
-
-	cJSON *root = cJSON_Parse(buf);
-	free(buf);
-	if (root == NULL) {
-		RAYNEO_WARN(hmd, "Failed to parse %s", RAYNEO_MAG_CAL_FILE);
-		return;
-	}
-
-	struct xrt_vec3 hard_iron = XRT_VEC3_ZERO;
-	struct xrt_matrix_3x3 soft_iron;
-	math_matrix_3x3_identity(&soft_iron);
-
-	const cJSON *j_hard = u_json_get(root, "hard_iron");
-	const cJSON *j_soft = u_json_get(root, "soft_iron");
-
-	if (j_hard == NULL || !u_json_get_vec3_array(j_hard, &hard_iron)) {
-		RAYNEO_WARN(hmd, "Missing or invalid 'hard_iron' in %s", RAYNEO_MAG_CAL_FILE);
-		cJSON_Delete(root);
-		return;
-	}
-
-	if (j_soft != NULL) {
-		u_json_get_matrix_3x3(j_soft, &soft_iron);
-	}
-
-	ctx->mag_hard_iron = hard_iron;
-	ctx->mag_soft_iron = soft_iron;
-	ctx->has_mag_calib = true;
-
-	RAYNEO_DEBUG(hmd, "Loaded mag calibration: hard_iron=[%.2f, %.2f, %.2f]", hard_iron.x, hard_iron.y,
-	             hard_iron.z);
-	RAYNEO_DEBUG(hmd, "  soft_iron=[%.4f, %.4f, %.4f; %.4f, %.4f, %.4f; %.4f, %.4f, %.4f]", soft_iron.v[0],
-	             soft_iron.v[1], soft_iron.v[2], soft_iron.v[3], soft_iron.v[4], soft_iron.v[5], soft_iron.v[6],
-	             soft_iron.v[7], soft_iron.v[8]);
-	cJSON_Delete(root);
-}
-
 static void
 rayneo_compute_imu_rotation(struct rayneo_thread_ctx *ctx)
 {
@@ -1163,8 +1100,13 @@ rayneo_init_finalize(struct rayneo_thread_ctx *ctx)
 	// IMU rotation from device table.
 	rayneo_compute_imu_rotation(ctx);
 
-	// Magnetometer calibration from config file.
-	rayneo_load_mag_calibration(ctx);
+	// Online mag calibration: load saved state and start background save thread.
+	if (!debug_get_bool_option_rayneo_disable_mag()) {
+		char mag_state_file[512];
+		snprintf(mag_state_file, sizeof(mag_state_file), "mag_cal_rayneo_%s.json", hmd->base.serial);
+		m_mag_calib_nxp_load(&ctx->mag_calib_online, mag_state_file);
+		m_mag_calib_nxp_save_start(&ctx->mag_calib_online, mag_state_file);
+	}
 
 	// Fusion state.
 	hmd->last_relation = (struct xrt_space_relation)XRT_SPACE_RELATION_ZERO;
@@ -1191,11 +1133,14 @@ rayneo_init_finalize(struct rayneo_thread_ctx *ctx)
 	u_var_add_root(hmd, hmd->base.str, true);
 	u_var_add_log_level(hmd, &hmd->log_level, "log_level");
 	u_var_add_pose(hmd, &hmd->last_relation.pose, "last_pose");
-	u_var_add_ro_vec3_f32(hmd, &hmd->last_gyro, "gyro");
-	u_var_add_ro_vec3_f32(hmd, &hmd->last_accel, "accel");
-	u_var_add_ro_vec3_f32(hmd, &hmd->last_mag, "mag_cal");
-	u_var_add_ro_vec3_f32(hmd, &hmd->last_mag_raw, "mag_raw");
-	u_var_add_ro_f32(hmd, &hmd->last_temperature_c, "temperature_c");
+	u_var_add_ro_vec3_f32(hmd, &hmd->debug.gyro, "gyro");
+	u_var_add_ro_vec3_f32(hmd, &hmd->debug.accel, "accel");
+	u_var_add_ro_vec3_f32(hmd, &hmd->debug.mag, "mag_cal");
+	u_var_add_ro_vec3_f32(hmd, &hmd->debug.mag_raw, "mag_raw");
+	u_var_add_ro_f32(hmd, &hmd->debug.temperature_c, "temperature_c");
+	u_var_add_ro_i32(hmd, &hmd->debug.mag_calib_level, "mag_calib_level");
+	u_var_add_ro_f32(hmd, &hmd->debug.mag_calib_error, "mag_calib_error");
+	u_var_add_ro_i32(hmd, &hmd->debug.mag_calib_samples, "mag_calib_samples");
 	u_var_add_ro_i64(hmd, &hmd->last_update_ns, "timestamp");
 	RAYNEO_DEBUG(hmd, "%s (%s)", hmd->base.str, hmd->base.serial);
 	return RAYNEO_INIT_OK;
