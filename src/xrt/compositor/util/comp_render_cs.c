@@ -250,6 +250,16 @@ do_cs_projection_layer(const struct comp_layer *layer,
 		ubo_data->layers[cur_layer + 0].image_info.depth_image_index = cur_image++;
 	}
 
+	// Chroma key - per layer settings
+	ubo_data->layers[cur_layer].chroma_key.hsv_min_h = layer_data->proj.chroma_key.hsv_min.h;
+	ubo_data->layers[cur_layer].chroma_key.hsv_min_s = layer_data->proj.chroma_key.hsv_min.s;
+	ubo_data->layers[cur_layer].chroma_key.hsv_min_v = layer_data->proj.chroma_key.hsv_min.v;
+	ubo_data->layers[cur_layer].chroma_key.hsv_max_h = layer_data->proj.chroma_key.hsv_max.h;
+	ubo_data->layers[cur_layer].chroma_key.hsv_max_s = layer_data->proj.chroma_key.hsv_max.s;
+	ubo_data->layers[cur_layer].chroma_key.hsv_max_v = layer_data->proj.chroma_key.hsv_max.v;
+	ubo_data->layers[cur_layer].chroma_key.curve = layer_data->proj.chroma_key.curve;
+	ubo_data->layers[cur_layer].chroma_key.despill = layer_data->proj.chroma_key.despill;
+
 	set_post_transform_rect(                           //
 	    layer_data,                                    // data
 	    &vd->sub.norm_rect,                            // src_norm_rect
@@ -581,6 +591,11 @@ comp_render_cs_layer(struct render_compute *render,
 
 	ubo_data->view = *target_view;
 	ubo_data->pre_transform = *pre_transform;
+
+	// Initialize chroma key settings for all layers to zero
+	for (uint32_t i = 0; i < RENDER_MAX_LAYERS; i++) {
+		ubo_data->layers[i].chroma_key = (struct render_chroma_key_info){0};
+	}
 
 	for (uint32_t c_layer_i = 0; c_layer_i < layer_count; c_layer_i++) {
 		const struct comp_layer *layer = &layers[c_layer_i];
