@@ -21,6 +21,7 @@
 #include "ipc_server_generated.h"
 #include "xrt/xrt_defines.h"
 #include "xrt/xrt_device.h"
+#include "xrt/xrt_compositor.h"
 #include "xrt/xrt_results.h"
 
 #ifdef XRT_GRAPHICS_SYNC_HANDLE_IS_FD
@@ -3107,6 +3108,17 @@ ipc_handle_device_set_brightness(volatile struct ipc_client_state *ics, uint32_t
 	}
 
 	return xrt_device_set_brightness(xdev, brightness, relative);
+}
+
+xrt_result_t
+ipc_handle_compositor_set_chroma_key_params(volatile struct ipc_client_state *ics,
+                                            const struct xrt_colour_hsv_f32 *hsv_min,
+                                            const struct xrt_colour_hsv_f32 *hsv_max,
+                                            float curve,
+                                            float despill)
+{
+	struct xrt_system_compositor *sysc = ics->server->xsysc;
+	return (sysc->xmcc->set_base_chroma_key_params)(sysc, *hsv_min, *hsv_max, curve, despill);
 }
 
 xrt_result_t
