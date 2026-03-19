@@ -15,6 +15,8 @@
 #include "math/m_imu_pre.h"
 #include "math/m_imu_3dof.h"
 
+#include "tracking/t_imu.h"
+
 #include "xrt/xrt_device.h"
 
 #include "os/os_threading.h"
@@ -38,10 +40,21 @@ struct android_device
 
 	struct
 	{
-		//! Lock for last and fusion.
+		//! Lock for fusion.
 		struct os_mutex lock;
-		struct m_imu_3dof fusion;
+
+		//! Offset between boot time (includes time spent in suspend) and monotonic time (without suspend), used
+		//! for converting timestamps from sensor events to monotonic time.
+		int64_t boottime_to_monotonic_offset;
+
+		//! SimpleIMUFusion object used for sensor fusion for 3DoF orientation tracking.
+		struct imu_fusion *fusion;
 	};
+
+	struct
+	{
+		bool fusion;
+	} gui;
 
 	enum u_logging_level log_level;
 };

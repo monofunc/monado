@@ -20,6 +20,8 @@
 #include "util/u_var.h"
 #include "util/u_visibility_mask.h"
 
+#include "xrt/xrt_defines.h"
+
 #include "cardboard_device.pb.h"
 #include "pb_decode.h"
 
@@ -29,6 +31,8 @@
 
 #include <xrt/xrt_config_android.h>
 
+#include <time.h>
+
 // Workaround to avoid the inclusion of "android_native_app_glue.h.
 #ifndef LOOPER_ID_USER
 #define LOOPER_ID_USER 3
@@ -36,6 +40,9 @@
 
 // 60 events per second (in us).
 #define POLL_RATE_USEC (1000L / 60) * 1000
+
+// Amount of samples to take for boottime/monotonic time offset calculation.
+#define BOOTTIME_TO_MONOTONIC_CALC_SAMPLE_COUNT 10
 
 
 DEBUG_GET_ONCE_LOG_OPTION(android_log, "ANDROID_SENSORS_LOG", U_LOGGING_WARN)
@@ -143,20 +150,83 @@ load_cardboard_distortion(struct android_device *d,
 	return true;
 }
 
+static int64_t
+get_boottime_offset(void)
+{
+	/* The sensor event timestamp uses the same time base as SystemClock.elapsedRealtimeNanos(),
+	 * which uses the BOOTTIME clock (counting time from boot including suspend), while Monado uses
+	 * the MONOTONIC clock (counting time from boot *without* time spent in suspend).
+	 * This function returns a "close enough" delta used to convert from boot time to monotonic time. */
+
+	struct timespec ts1, ts2;
+	int sample_count = 0;
+	int64_t delta, ret;
+	int64_t gettime_delay = 0;
+	int64_t min_delta = INT64_MAX;
+
+	// Measure the average delay between clock_gettime() calls
+	for (int i = 0; i < BOOTTIME_TO_MONOTONIC_CALC_SAMPLE_COUNT; i++) {
+		if (clock_gettime(CLOCK_MONOTONIC, &ts1))
+			continue;
+		if (clock_gettime(CLOCK_MONOTONIC, &ts2))
+			continue;
+
+		gettime_delay += os_timespec_to_ns(&ts2) - os_timespec_to_ns(&ts1);
+		sample_count += 1;
+	}
+	if (sample_count == 0)
+		gettime_delay = 0;
+	else
+		gettime_delay = gettime_delay / sample_count;
+
+	// Get multiple samples to minimize errors; pick the smallest detected delta
+	for (int i = 0; i < BOOTTIME_TO_MONOTONIC_CALC_SAMPLE_COUNT; i++) {
+		if (clock_gettime(CLOCK_MONOTONIC, &ts1))
+			continue;
+		if (clock_gettime(CLOCK_BOOTTIME, &ts2))
+			continue;
+
+		delta = os_timespec_to_ns(&ts2) - os_timespec_to_ns(&ts1);
+		if (delta < min_delta && delta > 0)
+			min_delta = delta;
+	}
+
+	if (min_delta == INT64_MAX)
+		return 0;
+
+	ret = (min_delta - gettime_delay);
+	if (ret > 0)
+		return ret;
+	return 0;
+}
+
 // Callback for the Android sensor event queue
 static int
 android_sensor_callback(ASensorEvent *event, struct android_device *d)
 {
 	struct xrt_vec3 gyro;
 	struct xrt_vec3 accel;
+	struct xrt_vec3 tmp = XRT_VEC3_ZERO;
+
+	int64_t timestamp = event->timestamp - d->boottime_to_monotonic_offset;
 
 	switch (event->type) {
 	case ASENSOR_TYPE_ACCELEROMETER: {
-		accel.x = event->acceleration.y;
-		accel.y = -event->acceleration.x;
+		accel.x = -event->acceleration.y;
+		accel.y = event->acceleration.x;
 		accel.z = event->acceleration.z;
 
-		ANDROID_TRACE(d, "accel %" PRId64 " %.2f %.2f %.2f", event->timestamp, accel.x, accel.y, accel.z);
+		ANDROID_TRACE(d, "accel %" PRId64 " %.2f %.2f %.2f", timestamp, accel.x, accel.y, accel.z);
+
+		// Lock fusion.
+		os_mutex_lock(&d->lock);
+
+		imu_fusion_incorporate_accelerometer(d->fusion, timestamp, &accel, &tmp, NULL);
+		imu_fusion_post_correct(d->fusion);
+
+		// Now done.
+		os_mutex_unlock(&d->lock);
+
 		break;
 	}
 	case ASENSOR_TYPE_GYROSCOPE: {
@@ -164,15 +234,13 @@ android_sensor_callback(ASensorEvent *event, struct android_device *d)
 		gyro.y = event->data[0];
 		gyro.z = event->data[2];
 
-		ANDROID_TRACE(d, "gyro %" PRId64 " %.2f %.2f %.2f", event->timestamp, gyro.x, gyro.y, gyro.z);
+		ANDROID_TRACE(d, "gyro %" PRId64 " %.2f %.2f %.2f", timestamp, gyro.x, gyro.y, gyro.z);
 
-		// TODO: Make filter handle accelerometer
-		struct xrt_vec3 null_accel = XRT_VEC3_ZERO;
-
-		// Lock last and the fusion.
+		// Lock fusion.
 		os_mutex_lock(&d->lock);
 
-		m_imu_3dof_update(&d->fusion, event->timestamp, &null_accel, &gyro);
+		imu_fusion_incorporate_gyros(d->fusion, timestamp, &gyro, &tmp);
+		imu_fusion_post_correct(d->fusion);
 
 		// Now done.
 		os_mutex_unlock(&d->lock);
@@ -298,7 +366,7 @@ android_device_destroy(struct xrt_device *xdev)
 	os_mutex_destroy(&android->lock);
 
 	// Destroy the fusion.
-	m_imu_3dof_close(&android->fusion);
+	imu_fusion_destroy(android->fusion);
 
 	// Remove the variable tracking.
 	u_var_remove_root(android);
@@ -312,22 +380,26 @@ android_device_get_tracked_pose(struct xrt_device *xdev,
                                 int64_t at_timestamp_ns,
                                 struct xrt_space_relation *out_relation)
 {
-	(void)at_timestamp_ns;
-
 	struct android_device *d = android_device(xdev);
+	struct xrt_quat rot;
+	struct xrt_vec3 angvel;
 
-	struct xrt_space_relation new_relation = XRT_SPACE_RELATION_ZERO;
-
+	// Lock fusion.
 	os_mutex_lock(&d->lock);
-	new_relation.pose.orientation = d->fusion.rot;
+
+	imu_fusion_get_prediction(d->fusion, at_timestamp_ns, &rot, &angvel);
+
+	// Now done.
 	os_mutex_unlock(&d->lock);
 
-	//! @todo assuming that orientation is actually currently tracked.
-	new_relation.relation_flags = (enum xrt_space_relation_flags)(XRT_SPACE_RELATION_ORIENTATION_VALID_BIT |
-	                                                              XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT |
-	                                                              XRT_SPACE_RELATION_POSITION_VALID_BIT);
+	out_relation->pose.orientation = rot;
+	math_quat_rotate_derivative(&rot, &angvel, &out_relation->angular_velocity);
 
-	*out_relation = new_relation;
+	//! @todo assuming that orientation is actually currently tracked.
+	out_relation->relation_flags = (enum xrt_space_relation_flags)(XRT_SPACE_RELATION_ORIENTATION_VALID_BIT |
+	                                                               XRT_SPACE_RELATION_ORIENTATION_TRACKED_BIT |
+	                                                               XRT_SPACE_RELATION_ANGULAR_VELOCITY_VALID_BIT);
+
 	return XRT_SUCCESS;
 }
 
@@ -367,7 +439,13 @@ android_device_create(void)
 
 	d->log_level = debug_get_log_option_android_log();
 
-	m_imu_3dof_init(&d->fusion, M_IMU_3DOF_USE_GRAVITY_DUR_20MS);
+	d->fusion = imu_fusion_create();
+
+	//! @todo We get the boottime offset once at initialization time rather than every time we query the sensors to
+	//! eliminate variance between events (since the offset calculation is imprecise). Ideally we would repeat this
+	//! every time the device returns from suspend, but since Monado on Android does not survive suspends at the
+	//! moment, this will suffice for now.
+	d->boottime_to_monotonic_offset = get_boottime_offset();
 
 	int ret = os_mutex_init(&d->lock);
 	if (ret != 0) {
@@ -440,8 +518,6 @@ android_device_create(void)
 
 	u_var_add_root(d, "Android phone", true);
 	u_var_add_log_level(d, &d->log_level, "log_level");
-	u_var_add_ro_vec3_f32(d, &d->fusion.last.accel, "last.accel");
-	u_var_add_ro_vec3_f32(d, &d->fusion.last.gyro, "last.gyro");
 
 	d->base.supported.orientation_tracking = true;
 	d->base.supported.position_tracking = false;
