@@ -78,7 +78,7 @@ uvc_set_cur(libusb_device_handle *dev,
             void *data,
             uint16_t data_length)
 {
-	uint8_t bmRequestType = LIBUSB_REQUEST_TYPE_CLASS | LIBUSB_RECIPIENT_INTERFACE;
+	uint8_t bmRequestType = (uint8_t)LIBUSB_REQUEST_TYPE_CLASS | LIBUSB_RECIPIENT_INTERFACE;
 	uint8_t bRequest = SET_CUR;
 	uint16_t wValue = selector << 8;
 	uint16_t wIndex = entity << 8 | usb_interface;
@@ -163,7 +163,7 @@ process_payload(struct uvc_fs *stream, unsigned char *payload, size_t len)
 		// Skip this warning for JPEG, where we only output when we see the frame change:
 		if (stream->frame_collected != 0 && pts != stream->cur_pts &&
 		    stream->parameters.format != XRT_FORMAT_MJPEG) {
-			UVC_WARN(stream, "UVC PTS changed in-frame at %lu bytes. Lost %u hz", stream->frame_collected,
+			UVC_WARN(stream, "UVC PTS changed in-frame at %zu bytes. Lost %u hz", stream->frame_collected,
 			         (pts - stream->cur_pts) * 1000);
 			stream->cur_pts = pts;
 		}
@@ -177,7 +177,7 @@ process_payload(struct uvc_fs *stream, unsigned char *payload, size_t len)
 	// starting a new frame
 	if (frame_id != stream->frame_id) {
 		if (stream->frame_collected > 0) {
-			UVC_WARN(stream, "UVC Dropping short frame: %lu < %lu (%ld lost)", stream->frame_collected,
+			UVC_WARN(stream, "UVC Dropping short frame: %zu < %zu (%zu lost)", stream->frame_collected,
 			         stream->frame_size, stream->frame_size - stream->frame_collected);
 		}
 
@@ -252,7 +252,7 @@ process_payload(struct uvc_fs *stream, unsigned char *payload, size_t len)
 	}
 
 	if (stream->frame_collected + payload_len > stream->frame_size) {
-		UVC_ERROR(stream, "UVC frame buffer overflow: %lu + %lu > %lu", stream->frame_collected, payload_len,
+		UVC_ERROR(stream, "UVC frame buffer overflow: %zu + %zu > %zu", stream->frame_collected, payload_len,
 		          stream->frame_size);
 		return;
 	}
