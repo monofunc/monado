@@ -416,7 +416,7 @@ vec4 apply_chroma_key(vec4 color, uint layer)
 	color.rgb = do_color_correction ? from_srgb_to_linear(rgb_despill) : rgb_despill;
 
 	// Pre-multiply RGB by the chroma alpha
-	return vec4(color.rgb * chroma_alpha, chroma_alpha);
+	return vec4(color.rgb * chroma_alpha, color.a * chroma_alpha);
 }
 
 vec4 do_projection(vec2 view_uv, uint layer)
