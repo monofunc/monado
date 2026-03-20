@@ -61,16 +61,20 @@ t_apply_dead_reckoning(struct m_ff_vec3_f32 *gyro_ff,
 	while (i >= 0) { // Decreasing i increases timestamp
 		// Get samples
 		struct xrt_vec3 gyro = XRT_VEC3_ZERO;
-		struct xrt_vec3 accel = XRT_VEC3_ZERO;
 		uint64_t gyro_ts = 0;
-		uint64_t accel_ts = 0;
-		bool got = true;
-		got &= m_ff_vec3_f32_get(gyro_ff, i, &gyro, &gyro_ts);
-		if (using_accel) {
-			got &= m_ff_vec3_f32_get(accel_ff, i, &accel, &accel_ts);
+		if (!m_ff_vec3_f32_get(gyro_ff, i, &gyro, &gyro_ts)) {
+			U_LOG_E("Failed to get gyro for sample %d", i);
+			break;
 		}
-		timepoint_ns ts = gyro_ts;
 
+		struct xrt_vec3 accel = XRT_VEC3_ZERO;
+		uint64_t accel_ts = 0;
+		if (using_accel && !m_ff_vec3_f32_get(accel_ff, i, &accel, &accel_ts)) {
+			U_LOG_E("Failed to get accel for sample %d", i);
+			break;
+		}
+
+		timepoint_ns ts = gyro_ts;
 
 		// Checks
 		if (ts > when_ns) {
@@ -80,13 +84,14 @@ t_apply_dead_reckoning(struct m_ff_vec3_f32 *gyro_ff,
 			// g = prev_g + ((when_ns - prev_ts) / (ts - prev_ts)) * (g - prev_g);
 			ts = when_ns; // clamp ts to when_ns
 		}
-		if (using_accel) {
-			assert(got && gyro_ts == accel_ts && "Failure getting synced gyro and accel samples");
+
+		if (ts < base_rel_ts) {
+			U_LOG_E("Accessing imu sample that is older than latest SLAM pose for sample %d", i);
+			break;
 		}
-		assert(ts >= base_rel_ts && "Accessing imu sample that is older than latest SLAM pose");
 
 		// Update time
-		float dt = (float)time_ns_to_s(ts - integ_rel_ts);
+		const float dt = (float)time_ns_to_s(ts - integ_rel_ts);
 		integ_rel_ts = ts;
 
 		// Integrate gyroscope
