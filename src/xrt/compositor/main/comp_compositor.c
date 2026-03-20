@@ -282,7 +282,10 @@ can_do_one_projection_layer_fast_path(struct comp_compositor *c)
 	// Check if chroma key is active for projection layers
 	if (type == XRT_LAYER_PROJECTION) {
 		if (layer->data.proj.chroma_key.curve > 0.0f) {
-			// Disable fast path when chroma key is active
+			return false;
+		}
+	} else if (type == XRT_LAYER_PROJECTION_DEPTH) {
+		if (layer->data.depth.chroma_key.curve > 0.0f) {
 			return false;
 		}
 	}

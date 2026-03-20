@@ -291,6 +291,8 @@ struct xrt_layer_projection_depth_data
 	struct xrt_layer_projection_view_data v[XRT_MAX_VIEWS];
 
 	struct xrt_layer_depth_data d[XRT_MAX_VIEWS];
+
+	struct xrt_layer_chroma_key_data chroma_key;
 };
 
 /*!

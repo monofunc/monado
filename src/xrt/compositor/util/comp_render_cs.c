@@ -251,14 +251,17 @@ do_cs_projection_layer(const struct comp_layer *layer,
 	}
 
 	// Chroma key - per layer settings
-	ubo_data->layers[cur_layer].chroma_key.hsv_min_h = layer_data->proj.chroma_key.hsv_min.h;
-	ubo_data->layers[cur_layer].chroma_key.hsv_min_s = layer_data->proj.chroma_key.hsv_min.s;
-	ubo_data->layers[cur_layer].chroma_key.hsv_min_v = layer_data->proj.chroma_key.hsv_min.v;
-	ubo_data->layers[cur_layer].chroma_key.hsv_max_h = layer_data->proj.chroma_key.hsv_max.h;
-	ubo_data->layers[cur_layer].chroma_key.hsv_max_s = layer_data->proj.chroma_key.hsv_max.s;
-	ubo_data->layers[cur_layer].chroma_key.hsv_max_v = layer_data->proj.chroma_key.hsv_max.v;
-	ubo_data->layers[cur_layer].chroma_key.curve = layer_data->proj.chroma_key.curve;
-	ubo_data->layers[cur_layer].chroma_key.despill = layer_data->proj.chroma_key.despill;
+	const struct xrt_layer_chroma_key_data *ck = (layer_data->type == XRT_LAYER_PROJECTION_DEPTH)
+	                                                 ? &layer_data->depth.chroma_key
+	                                                 : &layer_data->proj.chroma_key;
+	ubo_data->layers[cur_layer].chroma_key.hsv_min_h = ck->hsv_min.h;
+	ubo_data->layers[cur_layer].chroma_key.hsv_min_s = ck->hsv_min.s;
+	ubo_data->layers[cur_layer].chroma_key.hsv_min_v = ck->hsv_min.v;
+	ubo_data->layers[cur_layer].chroma_key.hsv_max_h = ck->hsv_max.h;
+	ubo_data->layers[cur_layer].chroma_key.hsv_max_s = ck->hsv_max.s;
+	ubo_data->layers[cur_layer].chroma_key.hsv_max_v = ck->hsv_max.v;
+	ubo_data->layers[cur_layer].chroma_key.curve = ck->curve;
+	ubo_data->layers[cur_layer].chroma_key.despill = ck->despill;
 
 	set_post_transform_rect(                           //
 	    layer_data,                                    // data

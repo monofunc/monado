@@ -332,6 +332,11 @@ transfer_layers_locked(struct multi_system_compositor *msc, int64_t display_time
 				layer->data.proj.chroma_key.hsv_max = msc->chroma_key.hsv_max;
 				layer->data.proj.chroma_key.curve = msc->chroma_key.curve;
 				layer->data.proj.chroma_key.despill = msc->chroma_key.despill;
+			} else if (layer->data.type == XRT_LAYER_PROJECTION_DEPTH) {
+				layer->data.depth.chroma_key.hsv_min = msc->chroma_key.hsv_min;
+				layer->data.depth.chroma_key.hsv_max = msc->chroma_key.hsv_max;
+				layer->data.depth.chroma_key.curve = msc->chroma_key.curve;
+				layer->data.depth.chroma_key.despill = msc->chroma_key.despill;
 			}
 		}
 	}
