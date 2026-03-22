@@ -169,6 +169,7 @@ endif()
 if(ANDROID)
 	target_link_libraries(aux_util PUBLIC ${ANDROID_LOG_LIBRARY})
 endif()
+target_link_libraries(aux_util PUBLIC CxxAtomics::atomic_uint_fast64_t)
 
 ####
 # Debug UI library
