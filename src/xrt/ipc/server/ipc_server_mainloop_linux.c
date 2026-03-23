@@ -267,6 +267,12 @@ ipc_server_mainloop_poll(struct ipc_server *vs, struct ipc_server_mainloop *ml)
 
 	// No sleeping, returns immediately.
 	int ret = epoll_wait(epoll_fd, events, NUM_POLL_EVENTS, NO_SLEEP);
+
+	if (errno == EINTR) {
+		ipc_server_handle_shutdown_signal(vs);
+		return;
+	}
+
 	if (ret < 0) {
 		U_LOG_E("epoll_wait failed with '%i'.", ret);
 		ipc_server_handle_failure(vs);
