@@ -615,6 +615,17 @@ static const char *optional_device_extensions[] = {
 #ifdef VK_KHR_synchronization2
     VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
 #endif
+// required by KHR_create_renderpass2, KHR_separate_depth_stencil_layouts
+#ifdef VK_KHR_multiview
+    VK_KHR_MULTIVIEW_EXTENSION_NAME,
+#endif
+// required by KHR_separate_depth_stencil_layouts,
+#ifdef VK_KHR_create_renderpass2
+    VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME,
+#endif
+#ifdef VK_KHR_separate_depth_stencil_layouts
+    VK_KHR_SEPARATE_DEPTH_STENCIL_LAYOUTS_EXTENSION_NAME,
+#endif
 };
 
 static bool

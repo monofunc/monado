@@ -325,6 +325,9 @@ DEVICE_EXTENSIONS_TO_CHECK = [
     "VK_EXT_robustness2",
     "VK_ANDROID_external_format_resolve",
     "VK_GOOGLE_display_timing",
+    "VK_KHR_multiview",
+    "VK_KHR_create_renderpass2",
+    "VK_KHR_separate_depth_stencil_layouts",
 ]
 
 

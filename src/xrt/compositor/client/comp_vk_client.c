@@ -800,6 +800,7 @@ client_vk_compositor_create(struct xrt_compositor_native *xcn,
                             bool external_semaphore_fd_enabled,
                             bool timeline_semaphore_enabled,
                             bool image_format_list_enabled,
+                            bool separate_depth_stencil_layouts_enabled,
                             bool debug_utils_enabled,
                             bool renderdoc_enabled,
                             uint32_t queueFamilyIndex,
@@ -845,20 +846,21 @@ client_vk_compositor_create(struct xrt_compositor_native *xcn,
 	// Default to info.
 	enum u_logging_level log_level = debug_get_log_option_vulkan_log();
 
-	ret = vk_init_from_given(          //
-	    &c->vk,                        // vk_bundle
-	    getProc,                       // vkGetInstanceProcAddr
-	    instance,                      // instance
-	    physicalDevice,                // physical_device
-	    device,                        // device
-	    queueFamilyIndex,              // queue_family_index
-	    queueIndex,                    // queue_index
-	    external_fence_fd_enabled,     // external_fence_fd_enabled
-	    external_semaphore_fd_enabled, // external_semaphore_fd_enabled
-	    timeline_semaphore_enabled,    // timeline_semaphore_enabled
-	    image_format_list_enabled,     // image_format_list_enabled
-	    debug_utils_enabled,           // debug_utils_enabled
-	    log_level);                    // log_level
+	ret = vk_init_from_given(                   //
+	    &c->vk,                                 // vk_bundle
+	    getProc,                                // vkGetInstanceProcAddr
+	    instance,                               // instance
+	    physicalDevice,                         // physical_device
+	    device,                                 // device
+	    queueFamilyIndex,                       // queue_family_index
+	    queueIndex,                             // queue_index
+	    external_fence_fd_enabled,              // external_fence_fd_enabled
+	    external_semaphore_fd_enabled,          // external_semaphore_fd_enabled
+	    timeline_semaphore_enabled,             // timeline_semaphore_enabled
+	    image_format_list_enabled,              // image_format_list_enabled
+	    separate_depth_stencil_layouts_enabled, // separate_depth_stencil_layouts_enabled
+	    debug_utils_enabled,                    // debug_utils_enabled
+	    log_level);                             // log_level
 	if (ret != VK_SUCCESS) {
 		goto err_free;
 	}
