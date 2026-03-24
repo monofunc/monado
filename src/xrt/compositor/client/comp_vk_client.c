@@ -13,6 +13,7 @@
 #include "util/u_handles.h"
 #include "util/u_trace_marker.h"
 #include "util/u_debug.h"
+#include "util/u_compositor_ni.h"
 
 #include "comp_vk_client.h"
 
@@ -831,6 +832,8 @@ client_vk_compositor_create(struct xrt_compositor_native *xcn,
 	c->base.base.layer_equirect2 = client_vk_compositor_layer_equirect2;
 	c->base.base.layer_passthrough = client_vk_compositor_layer_passthrough;
 	c->base.base.layer_commit = client_vk_compositor_layer_commit;
+	c->base.base.get_reference_bounds_rect = u_compositor_ni_get_reference_bounds_rect;
+	c->base.base.get_view_resolution = u_compositor_ni_get_view_resolution;
 	c->base.base.destroy = client_vk_compositor_destroy;
 
 	c->xcn = xcn;

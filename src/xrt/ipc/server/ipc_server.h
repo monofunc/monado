@@ -488,6 +488,31 @@ xrt_result_t
 ipc_server_set_client_io_blocks(struct ipc_server *s, uint32_t client_id, const struct ipc_client_io_blocks *blocks);
 
 /*!
+ * Set the resolution scale of a particular client
+ *
+ * @ingroup ipc_server
+ */
+xrt_result_t
+ipc_server_set_client_resolution_scale(struct ipc_server *s, uint32_t client_id, uint32_t view, float scale);
+
+/*!
+ * Get the scale and resolution of a particular client's view
+ *
+ * @ingroup ipc_server
+ */
+xrt_result_t
+ipc_server_get_client_view_resolution(
+    struct ipc_server *s, uint32_t client_id, uint32_t view, float *out_scale, struct xrt_size *out_resolution);
+
+/*!
+ * Get the view type of a particular client
+ *
+ * @ingroup ipc_server
+ */
+xrt_result_t
+ipc_server_get_client_view_type(struct ipc_server *s, uint32_t client_id, enum xrt_view_type *out_view_type);
+
+/*!
  * Called by client threads to set a session to active.
  *
  * @ingroup ipc_server

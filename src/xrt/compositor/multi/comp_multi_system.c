@@ -24,6 +24,8 @@
 #include "util/u_trace_marker.h"
 #include "util/u_distortion_mesh.h"
 
+#include "math/m_api.h"
+
 #ifdef XRT_OS_LINUX
 #include "util/u_linux.h"
 #endif
@@ -690,6 +692,50 @@ system_compositor_notify_display_refresh_changed(struct xrt_system_compositor *x
 	return multi_compositor_push_event(mc, &xse);
 }
 
+static xrt_result_t
+system_compositor_session_get_view_type(struct xrt_system_compositor *xsc,
+                                        struct xrt_compositor *xc,
+                                        enum xrt_view_type *out_view_type)
+{
+	struct multi_system_compositor *msc = multi_system_compositor(xsc);
+	struct multi_compositor *mc = multi_compositor(xc);
+	(void)msc;
+
+	if (!mc->state.session_active) {
+		return XRT_ERROR_SESSION_NOT_BEGUN;
+	}
+
+	*out_view_type = mc->state.session_view_type;
+	return XRT_SUCCESS;
+}
+
+static xrt_result_t
+system_compositor_set_resolution_scale(struct xrt_system_compositor *xsc,
+                                       struct xrt_compositor *xc,
+                                       enum xrt_view_type view_type,
+                                       uint32_t view,
+                                       float scale)
+{
+	struct multi_system_compositor *msc = multi_system_compositor(xsc);
+	struct multi_compositor *mc = multi_compositor(xc);
+	(void)msc;
+
+	if (view > XRT_MAX_VIEWS) {
+		return XRT_ERROR_INVALID_ARGUMENT;
+	}
+
+	if (view_type != mc->state.session_view_type) {
+		return XRT_ERROR_INVALID_ARGUMENT;
+	}
+
+	// Clamp to 2.0x
+	scale = CLAMP(scale, 0.01f, 2.0f);
+
+	mc->resolution_scale[view] = scale;
+
+	return XRT_SUCCESS;
+}
+
 
 /*
  *
@@ -767,6 +813,8 @@ comp_multi_create_system_compositor(struct xrt_compositor_native *xcn,
 	msc->xmcc.notify_loss_pending = system_compositor_notify_loss_pending;
 	msc->xmcc.notify_lost = system_compositor_notify_lost;
 	msc->xmcc.notify_display_refresh_changed = system_compositor_notify_display_refresh_changed;
+	msc->xmcc.session_get_view_type = system_compositor_session_get_view_type;
+	msc->xmcc.set_resolution_scale = system_compositor_set_resolution_scale;
 	msc->base.xmcc = &msc->xmcc;
 	msc->base.info = *xsci;
 	msc->upaf = upaf;

@@ -13,7 +13,11 @@
 #include <stdlib.h>
 
 #include "xrt/xrt_config_os.h"
+
+#include "util/u_compositor_ni.h"
 #include "util/u_misc.h"
+#include "util/u_logging.h"
+#include "util/u_trace_marker.h"
 
 #include <xrt/xrt_config_have.h>
 #if defined(XRT_HAVE_EGL)
@@ -26,10 +30,6 @@
 #include "ogl/ogl_helpers.h"
 
 #include "client/comp_gl_client.h"
-
-#include "util/u_logging.h"
-#include "util/u_trace_marker.h"
-
 
 
 /*
@@ -614,6 +614,8 @@ client_gl_compositor_init(struct client_gl_compositor *c,
 	c->base.base.layer_equirect2 = client_gl_compositor_layer_equirect2;
 	c->base.base.layer_passthrough = client_gl_compositor_layer_passthrough;
 	c->base.base.layer_commit = client_gl_compositor_layer_commit;
+	c->base.base.get_reference_bounds_rect = u_compositor_ni_get_reference_bounds_rect;
+	c->base.base.get_view_resolution = u_compositor_ni_get_view_resolution;
 	c->base.base.destroy = client_gl_compositor_destroy;
 	c->context_begin_locked = context_begin_locked;
 	c->context_end_locked = context_end_locked;

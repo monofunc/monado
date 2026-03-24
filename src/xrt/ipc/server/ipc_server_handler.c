@@ -623,6 +623,68 @@ ipc_handle_session_destroy(volatile struct ipc_client_state *ics)
 }
 
 xrt_result_t
+ipc_handle_session_set_state(volatile struct ipc_client_state *ics, bool visible, bool focused, int64_t timestamp_ns)
+{
+	IPC_TRACE_MARKER();
+
+	// Have we created the session?
+	if (ics->xs == NULL) {
+		return XRT_ERROR_IPC_SESSION_NOT_CREATED;
+	}
+
+	// Need to check both because set session state is handled by compositor.
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	ics->client_state.session_visible = visible;
+	ics->client_state.session_focused = focused;
+
+	return xrt_syscomp_set_state(ics->server->xsysc, ics->xc, visible, focused, timestamp_ns);
+}
+
+xrt_result_t
+ipc_handle_session_set_z_order(volatile struct ipc_client_state *ics, int64_t z_order)
+{
+	IPC_TRACE_MARKER();
+
+	// Have we created the session?
+	if (ics->xs == NULL) {
+		return XRT_ERROR_IPC_SESSION_NOT_CREATED;
+	}
+
+	// Need to check both because set z order is handled by compositor.
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	ics->client_state.z_order = z_order;
+
+	return xrt_syscomp_set_z_order(ics->server->xsysc, ics->xc, z_order);
+}
+
+xrt_result_t
+ipc_handle_session_set_resolution_scale(volatile struct ipc_client_state *ics,
+                                        enum xrt_view_type view_type,
+                                        uint32_t view,
+                                        float scale)
+{
+	IPC_TRACE_MARKER();
+
+	// Have we created the session?
+	if (ics->xs == NULL) {
+		return XRT_ERROR_IPC_SESSION_NOT_CREATED;
+	}
+
+	// Need to check both because set resolution scale is handled by compositor.
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	return xrt_syscomp_set_resolution_scale(ics->server->xsysc, ics->xc, view_type, view, scale);
+}
+
+xrt_result_t
 ipc_handle_space_create_semantic_ids(volatile struct ipc_client_state *ics,
                                      uint32_t *out_root_id,
                                      uint32_t *out_view_id,
@@ -1639,6 +1701,22 @@ ipc_handle_compositor_get_reference_bounds_rect(volatile struct ipc_client_state
 }
 
 xrt_result_t
+ipc_handle_compositor_get_view_resolution(volatile struct ipc_client_state *ics,
+                                          enum xrt_view_type view_type,
+                                          uint32_t view,
+                                          float *out_scale,
+                                          struct xrt_size *out_resolution)
+{
+	IPC_TRACE_MARKER();
+
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_SESSION_NOT_CREATED;
+	}
+
+	return xrt_comp_get_view_resolution(ics->xc, view_type, view, out_scale, out_resolution);
+}
+
+xrt_result_t
 ipc_handle_system_get_clients(volatile struct ipc_client_state *_ics, struct ipc_client_list *list)
 {
 	struct ipc_server *s = _ics->server;
@@ -1730,6 +1808,45 @@ ipc_handle_system_set_client_io_blocks(volatile struct ipc_client_state *_ics,
 	          blocks->block_outputs ? "true" : "false");
 
 	return ipc_server_set_client_io_blocks(s, client_id, blocks);
+}
+
+xrt_result_t
+ipc_handle_system_set_client_resolution_scale(volatile struct ipc_client_state *_ics,
+                                              uint32_t client_id,
+                                              uint32_t view,
+                                              float scale)
+{
+	struct ipc_server *s = _ics->server;
+
+	IPC_DEBUG(s, "Setting resolution scale for view %u on client %u to %f", view, client_id, scale);
+
+	return ipc_server_set_client_resolution_scale(s, client_id, view, scale);
+}
+
+xrt_result_t
+ipc_handle_system_get_client_view_resolution(volatile struct ipc_client_state *_ics,
+                                             uint32_t client_id,
+                                             uint32_t view,
+                                             float *out_scale,
+                                             struct xrt_size *out_resolution)
+{
+	struct ipc_server *s = _ics->server;
+
+	IPC_DEBUG(s, "Requesting recommended view resolution for view %u on client %u.", view, client_id);
+
+	return ipc_server_get_client_view_resolution(s, client_id, view, out_scale, out_resolution);
+}
+
+xrt_result_t
+ipc_handle_system_get_client_view_type(volatile struct ipc_client_state *_ics,
+                                       uint32_t client_id,
+                                       enum xrt_view_type *out_view_type)
+{
+	struct ipc_server *s = _ics->server;
+
+	IPC_DEBUG(s, "Getting client view type for client %u", client_id);
+
+	return ipc_server_get_client_view_type(s, client_id, out_view_type);
 }
 
 xrt_result_t

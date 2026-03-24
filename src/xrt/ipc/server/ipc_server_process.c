@@ -672,6 +672,64 @@ allocate_id_locked(struct ipc_server *s)
 	return id;
 }
 
+static xrt_result_t
+set_client_resolution_scale(struct ipc_server *s, uint32_t client_id, uint32_t view, float scale)
+{
+	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
+	if (ics == NULL) {
+		return XRT_ERROR_IPC_FAILURE;
+	}
+
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	enum xrt_view_type view_type;
+	xrt_result_t xret = xrt_syscomp_session_get_view_type(ics->server->xsysc, ics->xc, &view_type);
+	if (xret != XRT_SUCCESS) {
+		return xret;
+	}
+
+	return xrt_syscomp_set_resolution_scale(ics->server->xsysc, ics->xc, view_type, view, scale);
+}
+
+static xrt_result_t
+get_client_view_resolution(
+    struct ipc_server *s, uint32_t client_id, uint32_t view, float *out_scale, struct xrt_size *out_resolution)
+{
+	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
+	if (ics == NULL) {
+		return XRT_ERROR_IPC_FAILURE;
+	}
+
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	enum xrt_view_type view_type;
+	xrt_result_t xret = xrt_syscomp_session_get_view_type(ics->server->xsysc, ics->xc, &view_type);
+	if (xret != XRT_SUCCESS) {
+		return xret;
+	}
+
+	return xrt_comp_get_view_resolution(ics->xc, view_type, view, out_scale, out_resolution);
+}
+
+static xrt_result_t
+get_client_view_type(struct ipc_server *s, uint32_t client_id, enum xrt_view_type *out_view_type)
+{
+	volatile struct ipc_client_state *ics = find_client_locked(s, client_id);
+	if (ics == NULL) {
+		return XRT_ERROR_IPC_FAILURE;
+	}
+
+	if (ics->xc == NULL) {
+		return XRT_ERROR_IPC_COMPOSITOR_NOT_CREATED;
+	}
+
+	return xrt_syscomp_session_get_view_type(ics->server->xsysc, ics->xc, out_view_type);
+}
+
 
 /*
  *
@@ -750,6 +808,37 @@ ipc_server_set_client_io_blocks(struct ipc_server *s, uint32_t client_id, const 
 {
 	os_mutex_lock(&s->global_state.lock);
 	xrt_result_t xret = set_client_io_blocks_locked(s, client_id, blocks);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_set_client_resolution_scale(struct ipc_server *s, uint32_t client_id, uint32_t view, float scale)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = set_client_resolution_scale(s, client_id, view, scale);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_get_client_view_resolution(
+    struct ipc_server *s, uint32_t client_id, uint32_t view, float *out_scale, struct xrt_size *out_resolution)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = get_client_view_resolution(s, client_id, view, out_scale, out_resolution);
+	os_mutex_unlock(&s->global_state.lock);
+
+	return xret;
+}
+
+xrt_result_t
+ipc_server_get_client_view_type(struct ipc_server *s, uint32_t client_id, enum xrt_view_type *out_view_type)
+{
+	os_mutex_lock(&s->global_state.lock);
+	xrt_result_t xret = get_client_view_type(s, client_id, out_view_type);
 	os_mutex_unlock(&s->global_state.lock);
 
 	return xret;

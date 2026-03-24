@@ -236,6 +236,45 @@ handle_reference_space_change_pending(struct oxr_logger *log,
 	return XR_SUCCESS;
 }
 
+static xrt_result_t
+set_default_compositor_scale(struct oxr_session *sess, enum xrt_view_type view_type)
+{
+	xrt_result_t xret;
+
+	if (sess->sys->xsysc->xmcc != NULL) {
+		struct xrt_compositor *xc = &sess->xcn->base;
+
+		struct oxr_view_config_properties *props =
+		    oxr_system_get_view_config_properties(sess->sys, xrt_view_type_to_xr(view_type));
+
+		for (uint32_t view = 0; view < props->view_count; view++) {
+			float scale;
+			struct xrt_size base_view_resolution;
+			xret = xrt_comp_get_view_resolution(xc, view_type, view, &scale, &base_view_resolution);
+			if (xret == XRT_ERROR_NOT_IMPLEMENTED) {
+				// We can't do anything, but this is non-fatal
+				break;
+			} else if (xret != XRT_SUCCESS) {
+				return xret;
+			}
+
+			// Get what the default "app scale" is
+			float app_scale =
+			    (float)props->views[view].recommendedImageRectWidth / (float)base_view_resolution.w;
+
+			xret = xrt_syscomp_set_resolution_scale(sess->sys->xsysc, xc, view_type, view, app_scale);
+			if (xret == XRT_ERROR_NOT_IMPLEMENTED) {
+				// We can't do anything, but this is non-fatal
+				break;
+			} else if (xret != XRT_SUCCESS) {
+				return xret;
+			}
+		}
+	}
+
+	return XRT_SUCCESS;
+}
+
 
 /*
  *
@@ -295,6 +334,8 @@ oxr_session_enumerate_formats(struct oxr_logger *log,
 XrResult
 oxr_session_begin(struct oxr_logger *log, struct oxr_session *sess, const XrSessionBeginInfo *beginInfo)
 {
+	xrt_result_t xret;
+
 	/*
 	 * If the session is not running when the application calls xrBeginSession, but the session is not yet in the
 	 * XR_SESSION_STATE_READY state, the runtime must return error XR_ERROR_SESSION_NOT_READY.
@@ -303,12 +344,14 @@ oxr_session_begin(struct oxr_logger *log, struct oxr_session *sess, const XrSess
 		return oxr_error(log, XR_ERROR_SESSION_NOT_READY, "Session is not ready to begin");
 	}
 
+	enum xrt_view_type view_type = xr_view_type_to_xrt(beginInfo->primaryViewConfigurationType);
+
 	struct xrt_compositor *xc = sess->compositor;
 	if (xc != NULL) {
 		const struct oxr_extension_status *extensions = &sess->sys->inst->extensions;
 
 		const struct xrt_begin_session_info begin_session_info = {
-		    .view_type = (enum xrt_view_type)beginInfo->primaryViewConfigurationType,
+		    .view_type = view_type,
 #ifdef OXR_HAVE_EXT_hand_tracking
 		    .ext_hand_tracking_enabled = extensions->EXT_hand_tracking,
 #endif
@@ -344,7 +387,7 @@ oxr_session_begin(struct oxr_logger *log, struct oxr_session *sess, const XrSess
 #endif
 		};
 
-		xrt_result_t xret = xrt_comp_begin_session(xc, &begin_session_info);
+		xret = xrt_comp_begin_session(xc, &begin_session_info);
 		OXR_CHECK_XRET(log, sess, xret, xrt_comp_begin_session);
 
 #ifdef OXR_HAVE_EXT_user_presence
@@ -374,6 +417,10 @@ oxr_session_begin(struct oxr_logger *log, struct oxr_session *sess, const XrSess
 		oxr_session_change_state(log, sess, XR_SESSION_STATE_VISIBLE, now_xr);
 		oxr_session_change_state(log, sess, XR_SESSION_STATE_FOCUSED, now_xr);
 	}
+
+	xret = set_default_compositor_scale(sess, view_type);
+	OXR_CHECK_XRET(log, sess, xret, set_default_compositor_scale);
+
 	XrResult ret = oxr_frame_sync_begin_session(&sess->frame_sync);
 	if (ret != XR_SUCCESS) {
 		return oxr_error(log, ret,
@@ -982,6 +1029,7 @@ oxr_session_frame_wait(struct oxr_logger *log, struct oxr_session *sess, XrFrame
 	os_mutex_lock(&sess->active_wait_frames_lock);
 	sess->active_wait_frames++;
 	sess->frame_id.waited = frame_id;
+	sess->last_converted_wait_frame_time = converted_time;
 	os_mutex_unlock(&sess->active_wait_frames_lock);
 
 	frameState->shouldRender = should_render(sess->state);
@@ -1648,3 +1696,81 @@ oxr_session_set_perf_level(struct oxr_logger *log,
 	return XR_SUCCESS;
 }
 #endif // OXR_HAVE_EXT_performance_settings
+
+#ifdef OXR_HAVE_META_recommended_layer_resolution
+XrResult
+oxr_session_get_recommended_layer_resolution_meta(struct oxr_logger *log,
+                                                  struct oxr_session *sess,
+                                                  const XrRecommendedLayerResolutionGetInfoMETA *info,
+                                                  XrRecommendedLayerResolutionMETA *resolution)
+{
+	// Default "no recommendation" to applications.
+	resolution->isValid = false;
+	resolution->recommendedImageDimensions = (XrExtent2Di){0};
+
+	struct xrt_compositor *xc = &sess->xcn->base;
+
+	// We have no compositor, so let's just early-return
+	if (xc == NULL) {
+		return XR_SUCCESS;
+	}
+
+	// Unsupported by this compositor
+	if (!xc->info.supported_get_view_resolution) {
+		return XR_SUCCESS;
+	}
+
+	// Any strictly invalid layers have already been weeded out, so we can safely just provide "no suggestion" for
+	// all unhandled layer types here.
+	switch (info->layer->type) {
+	case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
+		const XrCompositionLayerProjection *projection_layer =
+		    (const XrCompositionLayerProjection *)info->layer;
+
+		float view_scale;
+		struct xrt_size view_resolution;
+		xrt_result_t xret = xrt_comp_get_view_resolution(
+		    xc, xr_view_type_to_xrt(sess->current_view_config_type), 0, &view_scale, &view_resolution);
+
+		OXR_CHECK_XRET(log, sess, xret, xrt_comp_get_view_resolution);
+
+		resolution->recommendedImageDimensions = (XrExtent2Di){
+		    .width = (int32_t)((float)view_resolution.w * view_scale),
+		    .height = (int32_t)((float)view_resolution.h * view_scale),
+		};
+		resolution->isValid = true;
+
+		// If the XrRecommendedLayerResolutionGetInfoMETA::layer attribute of the info argument of the function
+		// contains valid swapchain handles in all fields where required, the runtime must return a resolution
+		// recommendation which is less than or equal to the size of that swapchain
+		bool clamp = true;
+		struct xrt_size clamp_size = {.w = INT32_MAX, .h = INT32_MAX};
+		for (uint32_t i = 0; i < projection_layer->viewCount; i++) {
+			XrSwapchain xr_swapchain = projection_layer->views[i].subImage.swapchain;
+			if (xr_swapchain == NULL) {
+				clamp = false;
+				break;
+			} else {
+				struct oxr_swapchain *swapchain =
+				    XRT_CAST_OXR_HANDLE_TO_PTR(struct oxr_swapchain *, xr_swapchain);
+
+				clamp_size.w = MIN(clamp_size.w, (int)swapchain->width);
+				clamp_size.h = MIN(clamp_size.h, (int)swapchain->height);
+			}
+		}
+
+		if (clamp) {
+			resolution->recommendedImageDimensions.width =
+			    MIN(resolution->recommendedImageDimensions.width, (int32_t)clamp_size.w);
+			resolution->recommendedImageDimensions.height =
+			    MIN(resolution->recommendedImageDimensions.height, (int32_t)clamp_size.h);
+		}
+
+		break;
+	}
+	default: break;
+	}
+
+	return XR_SUCCESS;
+}
+#endif // OXR_HAVE_META_recommended_layer_resolution

@@ -142,6 +142,10 @@ comp_settings_init(struct comp_settings *s, struct xrt_device *xdev)
 	s->desired_mode = debug_get_num_option_desired_mode();
 	s->viewport_scale = debug_get_num_option_scale_percentage() / 100.0;
 
+	if (s->viewport_scale > 2.0) {
+		s->viewport_scale = 2.0;
+		U_LOG_D("Clamped scale to 200%%\n");
+	}
 
 	s->nvidia_display = debug_get_option_nvidia_display();
 	if (debug_get_bool_option_force_nvidia()) {

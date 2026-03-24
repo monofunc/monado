@@ -23,6 +23,8 @@ add_library(
 	u_bitwise.h
 	u_builders.c
 	u_builders.h
+	u_compositor_ni.c
+	u_compositor_ni.h
 	u_debug.c
 	u_debug.h
 	u_deque.cpp

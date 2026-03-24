@@ -62,6 +62,8 @@ struct ipc_client_compositor
 	//! Should be turned into its own object.
 	struct xrt_system_compositor system;
 
+	struct xrt_multi_compositor_control xmcc;
+
 	struct ipc_connection *ipc_c;
 
 	//! Optional image allocator.
@@ -879,6 +881,20 @@ ipc_compositor_get_reference_bounds_rect(struct xrt_compositor *xc,
 	IPC_CHK_ALWAYS_RET(icc->ipc_c, xret, "ipc_call_compositor_get_reference_bounds_rect");
 }
 
+static xrt_result_t
+ipc_compositor_get_view_resolution(struct xrt_compositor *xc,
+                                   enum xrt_view_type view_type,
+                                   uint32_t view,
+                                   float *out_scale,
+                                   struct xrt_size *out_resolution)
+{
+	struct ipc_client_compositor *icc = ipc_client_compositor(xc);
+	xrt_result_t xret;
+
+	xret = ipc_call_compositor_get_view_resolution(icc->ipc_c, view_type, view, out_scale, out_resolution);
+	IPC_CHK_ALWAYS_RET(icc->ipc_c, xret, "ipc_call_compositor_get_view_resolution");
+}
+
 static void
 ipc_compositor_destroy(struct xrt_compositor *xc)
 {
@@ -923,6 +939,7 @@ ipc_compositor_init(struct ipc_client_compositor *icc, struct xrt_compositor_nat
 	icc->base.base.request_display_refresh_rate = ipc_compositor_request_display_refresh_rate;
 	icc->base.base.set_performance_level = ipc_compositor_set_performance_level;
 	icc->base.base.get_reference_bounds_rect = ipc_compositor_get_reference_bounds_rect;
+	icc->base.base.get_view_resolution = ipc_compositor_get_view_resolution;
 
 	// Using in wait frame.
 	os_precise_sleeper_init(&icc->sleeper);
@@ -1074,6 +1091,41 @@ ipc_syscomp_destroy(struct xrt_system_compositor *xsc)
 	free(icc);
 }
 
+xrt_result_t
+ipc_syscomp_set_state(
+    struct xrt_system_compositor *xsc, struct xrt_compositor *xc, bool visible, bool focused, int64_t timestamp_ns)
+{
+	struct ipc_client_compositor *icc = container_of(xsc, struct ipc_client_compositor, system);
+	xrt_result_t xret;
+
+	xret = ipc_call_session_set_state(icc->ipc_c, visible, focused, timestamp_ns);
+	IPC_CHK_ALWAYS_RET(icc->ipc_c, xret, "ipc_call_syscomp_set_state");
+}
+
+xrt_result_t
+ipc_syscomp_set_z_order(struct xrt_system_compositor *xsc, struct xrt_compositor *xc, int64_t z_order)
+{
+	struct ipc_client_compositor *icc = container_of(xsc, struct ipc_client_compositor, system);
+	xrt_result_t xret;
+
+	xret = ipc_call_session_set_z_order(icc->ipc_c, z_order);
+	IPC_CHK_ALWAYS_RET(icc->ipc_c, xret, "ipc_call_syscomp_set_z_order");
+}
+
+xrt_result_t
+ipc_syscomp_set_resolution_scale(struct xrt_system_compositor *xsc,
+                                 struct xrt_compositor *xc,
+                                 enum xrt_view_type view_type,
+                                 uint32_t view,
+                                 float scale)
+{
+	struct ipc_client_compositor *icc = container_of(xsc, struct ipc_client_compositor, system);
+	xrt_result_t xret;
+
+	xret = ipc_call_session_set_resolution_scale(icc->ipc_c, view_type, view, scale);
+	IPC_CHK_ALWAYS_RET(icc->ipc_c, xret, "ipc_call_syscomp_set_resolution_scale");
+}
+
 
 /*
  *
@@ -1122,6 +1174,12 @@ ipc_client_create_system_compositor(struct ipc_connection *ipc_c,
 
 	c->system.create_native_compositor = ipc_syscomp_create_native_compositor;
 	c->system.destroy = ipc_syscomp_destroy;
+
+	c->xmcc.set_state = ipc_syscomp_set_state;
+	c->xmcc.set_z_order = ipc_syscomp_set_z_order;
+	c->xmcc.set_resolution_scale = ipc_syscomp_set_resolution_scale;
+	c->system.xmcc = &c->xmcc;
+
 	c->ipc_c = ipc_c;
 	c->xina = xina;
 

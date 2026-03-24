@@ -9,11 +9,11 @@
  * @ingroup comp_multi
  */
 
-#include "util/u_logging.h"
 #include "xrt/xrt_session.h"
 
 #include "os/os_time.h"
 
+#include "util/u_logging.h"
 #include "util/u_var.h"
 #include "util/u_wait.h"
 #include "util/u_misc.h"
@@ -22,6 +22,9 @@
 #include "util/u_handles.h"
 #include "util/u_trace_marker.h"
 #include "util/u_distortion_mesh.h"
+#include "util/u_compositor_ni.h"
+
+#include "math/m_api.h"
 
 #include "multi/comp_multi_private.h"
 
@@ -481,6 +484,7 @@ multi_compositor_begin_session(struct xrt_compositor *xc, const struct xrt_begin
 	if (!mc->state.session_active) {
 		multi_system_compositor_update_session_status(mc->msc, true);
 		mc->state.session_active = true;
+		mc->state.session_view_type = info->view_type;
 	}
 
 	return XRT_SUCCESS;
@@ -876,6 +880,46 @@ multi_compositor_request_display_refresh_rate(struct xrt_compositor *xc, float d
 	return XRT_SUCCESS;
 }
 
+static xrt_result_t
+multi_compositor_get_view_resolution(struct xrt_compositor *xc,
+                                     enum xrt_view_type view_type,
+                                     uint32_t view,
+                                     float *out_scale,
+                                     struct xrt_size *out_resolution)
+{
+	COMP_TRACE_MARKER();
+
+	struct multi_compositor *mc = multi_compositor(xc);
+
+	if (view > XRT_MAX_VIEWS) {
+		return XRT_ERROR_INVALID_ARGUMENT;
+	}
+
+	if (view_type != mc->state.session_view_type) {
+		return XRT_ERROR_INVALID_ARGUMENT;
+	}
+
+	float owning_scale;
+	xrt_result_t xret = xrt_comp_get_view_resolution(&mc->msc->xcn->base, //
+	                                                 view_type,           //
+	                                                 view,                //
+	                                                 &owning_scale,       //
+	                                                 out_resolution);
+	if (xret != XRT_SUCCESS) {
+		return xret;
+	}
+
+	// Make the "base resolution" for the application the resolution of the display
+	out_resolution->w = (uint32_t)(out_resolution->w);
+	out_resolution->h = (uint32_t)(out_resolution->h);
+
+	float scale = mc->resolution_scale[view];
+
+	*out_scale = scale;
+
+	return XRT_SUCCESS;
+}
+
 static void
 multi_compositor_destroy(struct xrt_compositor *xc)
 {
@@ -1003,9 +1047,17 @@ multi_compositor_create(struct multi_system_compositor *msc,
 	mc->base.base.set_thread_hint = multi_compositor_set_thread_hint;
 	mc->base.base.get_display_refresh_rate = multi_compositor_get_display_refresh_rate;
 	mc->base.base.request_display_refresh_rate = multi_compositor_request_display_refresh_rate;
+	mc->base.base.get_view_resolution = multi_compositor_get_view_resolution;
+	mc->base.base.get_reference_bounds_rect = u_compositor_ni_get_reference_bounds_rect;
 	mc->msc = msc;
 	mc->xses = xses;
 	mc->xsi = *xsi;
+
+	mc->base.base.info.supported_get_view_resolution = true;
+
+	for (uint32_t i = 0; i < XRT_MAX_VIEWS; i++) {
+		mc->resolution_scale[i] = 1.0f;
+	}
 
 	os_mutex_init(&mc->slot_lock);
 	os_thread_helper_init(&mc->wait_thread.oth);

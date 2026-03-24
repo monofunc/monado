@@ -174,6 +174,18 @@ update_device_list_and_infos(mnd_root_t *root)
 	return MND_SUCCESS;
 }
 
+static mnd_result_t
+xrt_view_type_to_mnd(enum xrt_view_type view_type, mnd_view_type_t *out_view_type)
+{
+	switch (view_type) {
+	case XRT_VIEW_TYPE_MONO: *out_view_type = MND_VIEW_TYPE_MONO; return MND_SUCCESS;
+	case XRT_VIEW_TYPE_STEREO: *out_view_type = MND_VIEW_TYPE_STEREO; return MND_SUCCESS;
+	}
+
+	assert(!"Invalid IPC view type");
+	return MND_ERROR_OPERATION_FAILED;
+}
+
 
 /*
  *
@@ -407,6 +419,58 @@ mnd_root_set_client_io_blocks(mnd_root_t *root, uint32_t client_id, mnd_io_block
 	}
 
 	return MND_SUCCESS;
+}
+
+mnd_result_t
+mnd_root_get_client_view_resolution(
+    mnd_root_t *root, uint32_t client_id, uint32_t view, float *out_scale, int *out_width, int *out_height)
+{
+	CHECK_NOT_NULL(root);
+	CHECK_CLIENT_ID(client_id);
+
+	struct xrt_size resolution;
+	xrt_result_t xret =
+	    ipc_call_system_get_client_view_resolution(&root->ipc_c, client_id, view, out_scale, &resolution);
+	if (xret != XRT_SUCCESS) {
+		PE("Failed to get recommended resolution for client id: %u.\n", client_id);
+		return MND_ERROR_OPERATION_FAILED;
+	}
+
+	*out_width = resolution.w;
+	*out_height = resolution.h;
+
+	return MND_SUCCESS;
+}
+
+mnd_result_t
+mnd_root_set_client_resolution_scale(mnd_root_t *root, uint32_t client_id, uint32_t view, float scale)
+{
+	CHECK_NOT_NULL(root);
+	CHECK_CLIENT_ID(client_id);
+
+	xrt_result_t xret = ipc_call_system_set_client_resolution_scale(&root->ipc_c, client_id, view, scale);
+	if (xret != XRT_SUCCESS) {
+		PE("Failed to set resolution scale for client id: %u.\n", client_id);
+		return MND_ERROR_OPERATION_FAILED;
+	}
+
+	return MND_SUCCESS;
+}
+
+mnd_result_t
+mnd_root_get_client_view_type(mnd_root_t *root, uint32_t client_id, mnd_view_type_t *out_view_type)
+{
+	CHECK_NOT_NULL(root);
+	CHECK_CLIENT_ID(client_id);
+
+	enum xrt_view_type view_type;
+	xrt_result_t xret = ipc_call_system_get_client_view_type(&root->ipc_c, client_id, &view_type);
+	if (xret != XRT_SUCCESS) {
+		PE("Failed to set resolution scale for client id: %u.\n", client_id);
+		return MND_ERROR_OPERATION_FAILED;
+	}
+
+	return xrt_view_type_to_mnd(view_type, out_view_type);
 }
 
 mnd_result_t

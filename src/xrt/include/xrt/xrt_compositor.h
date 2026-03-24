@@ -947,6 +947,9 @@ struct xrt_compositor_info
 
 	//! Max texture size that GPU supports (size of a single dimension), zero means any size.
 	uint32_t max_texture_size;
+
+	//! Is xrt_compositor::get_recommended_view_resolution supported.
+	bool supported_get_view_resolution;
 };
 
 /*!
@@ -1401,6 +1404,21 @@ struct xrt_compositor
 	xrt_result_t (*get_reference_bounds_rect)(struct xrt_compositor *xc,
 	                                          enum xrt_reference_space_type reference_space_type,
 	                                          struct xrt_vec2 *bounds);
+
+	/*!
+	 * @brief Get the view resolution and current render scale for the specified view
+	 *
+	 * @param xc                  Self pointer
+	 * @param view_type           The view type to query for
+	 * @param view                The view on the view type to get the resolution of
+	 * @param[out] out_scale      A pointer to where the scale is written to
+	 * @param[out] out_resolution A pointer to where the unscaled resolution is written to
+	 */
+	xrt_result_t (*get_view_resolution)(struct xrt_compositor *xc,
+	                                    enum xrt_view_type view_type,
+	                                    uint32_t view,
+	                                    float *out_scale,
+	                                    struct xrt_size *out_resolution);
 
 	/*!
 	 * Teardown the compositor.
@@ -1898,11 +1916,24 @@ xrt_comp_get_reference_bounds_rect(struct xrt_compositor *xc,
                                    enum xrt_reference_space_type reference_space_type,
                                    struct xrt_vec2 *bounds)
 {
-	if (xc->get_reference_bounds_rect == NULL) {
-		return XRT_ERROR_NOT_IMPLEMENTED;
-	}
-
 	return xc->get_reference_bounds_rect(xc, reference_space_type, bounds);
+}
+
+/*!
+ * @copydoc xrt_compositor::get_view_resolution
+ *
+ * Helper for calling through the function pointer.
+ *
+ * @public @memberof xrt_compositor
+ */
+XRT_NONNULL_ALL static inline xrt_result_t
+xrt_comp_get_view_resolution(struct xrt_compositor *xc,
+                             enum xrt_view_type view_type,
+                             uint32_t view,
+                             float *out_scale,
+                             struct xrt_size *out_resolution)
+{
+	return xc->get_view_resolution(xc, view_type, view, out_scale, out_resolution);
 }
 
 /*!
@@ -2431,6 +2462,23 @@ struct xrt_multi_compositor_control
 	                                               struct xrt_compositor *xc,
 	                                               float from_display_refresh_rate_hz,
 	                                               float to_display_refresh_rate_hz);
+
+	/*!
+	 * This function returns the current view type of the active session. Returns XRT_ERROR_SESSION_NOT_BEGUN when
+	 * no session was begun.
+	 */
+	xrt_result_t (*session_get_view_type)(struct xrt_system_compositor *xsc,
+	                                      struct xrt_compositor *xc,
+	                                      enum xrt_view_type *out_view_type);
+
+	/*!
+	 * @brief Set the resolution scale for the specified view
+	 */
+	xrt_result_t (*set_resolution_scale)(struct xrt_system_compositor *xsc,
+	                                     struct xrt_compositor *xc,
+	                                     enum xrt_view_type view_type,
+	                                     uint32_t view,
+	                                     float scale);
 };
 
 /*!
@@ -2606,6 +2654,52 @@ xrt_syscomp_notify_display_refresh_changed(struct xrt_system_compositor *xsc,
 
 	return xsc->xmcc->notify_display_refresh_changed(xsc, xc, from_display_refresh_rate_hz,
 	                                                 to_display_refresh_rate_hz);
+}
+
+/*!
+ * @copydoc xrt_multi_compositor_control::notify_display_refresh_changed
+ *
+ * Helper for calling through the function pointer.
+ *
+ * If the system compositor @p xsc does not implement @ref xrt_multi_composition_control,
+ * this returns @ref XRT_ERROR_MULTI_SESSION_NOT_IMPLEMENTED.
+ *
+ * @public @memberof xrt_system_compositor
+ */
+XRT_NONNULL_ALL static inline xrt_result_t
+xrt_syscomp_session_get_view_type(struct xrt_system_compositor *xsc,
+                                  struct xrt_compositor *xc,
+                                  enum xrt_view_type *out_view_type)
+{
+	if (xsc->xmcc == NULL) {
+		return XRT_ERROR_MULTI_SESSION_NOT_IMPLEMENTED;
+	}
+
+	return xsc->xmcc->session_get_view_type(xsc, xc, out_view_type);
+}
+
+/*!
+ * @copydoc xrt_multi_compositor_control::notify_display_refresh_changed
+ *
+ * Helper for calling through the function pointer.
+ *
+ * If the system compositor @p xsc does not implement @ref xrt_multi_composition_control,
+ * this returns @ref XRT_ERROR_MULTI_SESSION_NOT_IMPLEMENTED.
+ *
+ * @public @memberof xrt_system_compositor
+ */
+XRT_NONNULL_ALL static inline xrt_result_t
+xrt_syscomp_set_resolution_scale(struct xrt_system_compositor *xsc,
+                                 struct xrt_compositor *xc,
+                                 enum xrt_view_type view_type,
+                                 uint32_t view,
+                                 float scale)
+{
+	if (xsc->xmcc == NULL) {
+		return XRT_ERROR_MULTI_SESSION_NOT_IMPLEMENTED;
+	}
+
+	return xsc->xmcc->set_resolution_scale(xsc, xc, view_type, view, scale);
 }
 
 /*!

@@ -36,19 +36,6 @@
 DEBUG_GET_ONCE_NUM_OPTION(scale_percentage, "OXR_VIEWPORT_SCALE_PERCENTAGE", 100)
 
 
-
-static struct oxr_view_config_properties *
-get_view_config_properties(struct oxr_system *sys, XrViewConfigurationType view_config_type)
-{
-	for (uint32_t i = 0; i < sys->view_config_count; i++) {
-		if (sys->view_configs[i].view_config_type == view_config_type) {
-			return &sys->view_configs[i];
-		}
-	}
-
-	return NULL;
-}
-
 static void
 fill_in_view_config_properties_blend_modes(struct oxr_view_config_properties *props,
                                            const struct xrt_system_compositor_info *info)
@@ -738,6 +725,18 @@ oxr_system_get_properties(struct oxr_logger *log, struct oxr_system *sys, XrSyst
 	return XR_SUCCESS;
 }
 
+struct oxr_view_config_properties *
+oxr_system_get_view_config_properties(struct oxr_system *sys, XrViewConfigurationType view_config_type)
+{
+	for (uint32_t i = 0; i < sys->view_config_count; i++) {
+		if (sys->view_configs[i].view_config_type == view_config_type) {
+			return &sys->view_configs[i];
+		}
+	}
+
+	return NULL;
+}
+
 XrResult
 oxr_system_enumerate_view_confs(struct oxr_logger *log,
                                 struct oxr_system *sys,
@@ -758,7 +757,7 @@ oxr_system_enumerate_blend_modes(struct oxr_logger *log,
                                  uint32_t *environmentBlendModeCountOutput,
                                  XrEnvironmentBlendMode *environmentBlendModes)
 {
-	struct oxr_view_config_properties *props = get_view_config_properties(sys, viewConfigurationType);
+	struct oxr_view_config_properties *props = oxr_system_get_view_config_properties(sys, viewConfigurationType);
 	if (props == NULL) {
 		return oxr_error(log, XR_ERROR_RUNTIME_FAILURE, "Didn't find view configs");
 	}
@@ -773,7 +772,7 @@ oxr_system_get_view_conf_properties(struct oxr_logger *log,
                                     XrViewConfigurationType viewConfigurationType,
                                     XrViewConfigurationProperties *configurationProperties)
 {
-	struct oxr_view_config_properties *props = get_view_config_properties(sys, viewConfigurationType);
+	struct oxr_view_config_properties *props = oxr_system_get_view_config_properties(sys, viewConfigurationType);
 	if (props == NULL) {
 		return oxr_error(log, XR_ERROR_RUNTIME_FAILURE, "Didn't find view configs");
 	}
@@ -792,7 +791,7 @@ oxr_system_enumerate_view_conf_views(struct oxr_logger *log,
                                      uint32_t *viewCountOutput,
                                      XrViewConfigurationView *views)
 {
-	struct oxr_view_config_properties *props = get_view_config_properties(sys, viewConfigurationType);
+	struct oxr_view_config_properties *props = oxr_system_get_view_config_properties(sys, viewConfigurationType);
 	if (props == NULL) {
 		return oxr_error(log, XR_ERROR_RUNTIME_FAILURE, "Didn't find view configs");
 	}

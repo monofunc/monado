@@ -423,6 +423,10 @@ handle_non_null(struct oxr_instance *inst, struct oxr_logger *log, const char *n
 	ENTRY_IF_EXT(xrSuggestBodyTrackingCalibrationOverrideMETA, META_body_tracking_calibration);
 #endif // OXR_HAVE_META_body_tracking_calibration
 
+#ifdef OXR_HAVE_META_recommended_layer_resolution
+	ENTRY_IF_EXT(xrGetRecommendedLayerResolutionMETA, META_recommended_layer_resolution);
+#endif // OXR_HAVE_META_recommended_layer_resolution
+
 #ifdef OXR_HAVE_EXT_future
 	ENTRY_IF_EXT(xrPollFutureEXT, EXT_future);
 	ENTRY_IF_EXT(xrCancelFutureEXT, EXT_future);

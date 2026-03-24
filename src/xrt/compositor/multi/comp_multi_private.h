@@ -126,6 +126,7 @@ struct multi_compositor
 		int64_t z_order;
 
 		bool session_active;
+		enum xrt_view_type session_view_type;
 	} state;
 
 	struct
@@ -186,6 +187,8 @@ struct multi_compositor
 	struct u_pacing_app *upa;
 
 	float current_refresh_rate_hz;
+
+	float resolution_scale[XRT_MAX_VIEWS];
 };
 
 /*!

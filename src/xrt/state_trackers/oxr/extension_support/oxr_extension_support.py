@@ -104,6 +104,7 @@ EXTENSIONS = (
     ['XR_LOGITECH_mx_ink_stylus_interaction', 'XRT_FEATURE_OPENXR_INTERACTION_LOGITECH_MX_INK'],
     ['XR_META_body_tracking_calibration', 'XRT_FEATURE_OPENXR_BODY_TRACKING_CALIBRATION_META'],
     ['XR_META_body_tracking_full_body', 'XRT_FEATURE_OPENXR_BODY_TRACKING_FULL_BODY_META'],
+    ['XR_META_recommended_layer_resolution', 'XRT_FEATURE_OPENXR_RECOMMENDED_LAYER_RESOLUTION_META'],
     ['XR_META_touch_controller_plus', 'XRT_FEATURE_OPENXR_INTERACTION_TOUCH_PLUS'],
     ['XR_ML_ml2_controller_interaction', 'XRT_FEATURE_OPENXR_INTERACTION_ML2'],
     ['XR_MND_headless', 'XRT_FEATURE_OPENXR_HEADLESS'],

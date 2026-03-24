@@ -76,6 +76,7 @@ add_library(
 	oxr_system.c
 	oxr_two_call.h
 	oxr_verify.c
+	oxr_verify_layers.c
 	oxr_xdev.c
 	${CMAKE_CURRENT_BINARY_DIR}/bindings/oxr_generated_bindings.c
 	${CMAKE_CURRENT_BINARY_DIR}/bindings/oxr_generated_bindings.h

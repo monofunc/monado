@@ -21,6 +21,7 @@
 #include "util/u_verify.h"
 #include "util/u_handles.h"
 #include "util/u_trace_marker.h"
+#include "util/u_compositor_ni.h"
 
 #include "util/comp_vulkan.h"
 
@@ -551,6 +552,8 @@ sdl_compositor_init(struct sdl_program *sp)
 	iface->discard_frame = sdl_compositor_discard_frame;
 	iface->layer_commit = sdl_compositor_layer_commit;
 	iface->destroy = sdl_compositor_destroy;
+	iface->get_reference_bounds_rect = u_compositor_ni_get_reference_bounds_rect;
+	iface->get_view_resolution = u_compositor_ni_get_view_resolution;
 	c->base.vk.log_level = log_level;
 	c->frame.waited.id = -1;
 	c->frame.rendering.id = -1;

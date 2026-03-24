@@ -1,11 +1,13 @@
 // Copyright 2019-2023, Collabora, Ltd.
 // Copyright 2025-2026, NVIDIA CORPORATION.
+// Copyright 2026, Beyley Cardellio
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
  * @brief  Interface of libmonado
  * @author Jakob Bornecrantz <jakob@collabora.com>
  * @author Rylie Pavlik <rylie.pavlik@collabora.com>
+ * @author Beyley Cardellio <ep1cm1n10n123@gmail.com>
  */
 
 #include <stdint.h>
@@ -26,7 +28,7 @@ extern "C" {
 //! Major version of the API.
 #define MND_API_VERSION_MAJOR 1
 //! Minor version of the API.
-#define MND_API_VERSION_MINOR 6
+#define MND_API_VERSION_MINOR 7
 //! Patch version of the API.
 #define MND_API_VERSION_PATCH 0
 
@@ -141,6 +143,17 @@ typedef enum mnd_io_block_flags
 	MND_IO_BLOCK_INPUTS = (1u << 2u),
 	MND_IO_BLOCK_OUTPUTS = (1u << 3u),
 } mnd_io_block_flags_t;
+
+/*!
+ * Represents a type of view configuration.
+ *
+ * Supported in version 1.7.0 and above.
+ */
+typedef enum mnd_view_type
+{
+	MND_VIEW_TYPE_MONO = 0,
+	MND_VIEW_TYPE_STEREO = 1,
+} mnd_view_type_t;
 
 /*
  *
@@ -298,6 +311,47 @@ mnd_root_toggle_client_io_active(mnd_root_t *root, uint32_t client_id);
  */
 mnd_result_t
 mnd_root_set_client_io_blocks(mnd_root_t *root, uint32_t client_id, mnd_io_block_flags_t block_flags);
+
+/*!
+ * Get the resolution and scale of a particular view on a client.
+ *
+ * Supported in version 1.7 and above.
+ *
+ * @param root            The libmonado state.
+ * @param client_id       ID of the client.
+ * @param view            The view to set the scale of.
+ * @param[out] out_scale  Pointer to populate with the client's current resolution scale.
+ * @param[out] out_width  Pointer to populate with the recommended width of the view.
+ * @param[out] out_height Pointer to populate with the recommended height of the view.
+ */
+mnd_result_t
+mnd_root_get_client_view_resolution(
+    mnd_root_t *root, uint32_t client_id, uint32_t view, float *out_scale, int *out_width, int *out_height);
+
+/*!
+ * Set the resolution scale for a particular client.
+ *
+ * Supported in version 1.7 and above.
+ *
+ * @param root      The libmonado state.
+ * @param client_id ID of the client.
+ * @param view      The view to query.
+ * @param scale     The scale to set. This may be clamped by the runtime, so don't treat what you set as gospel.
+ */
+mnd_result_t
+mnd_root_set_client_resolution_scale(mnd_root_t *root, uint32_t client_id, uint32_t view, float scale);
+
+/*!
+ * Get the view configuration type of a client.
+ *
+ * Supported in version 1.7 and above.
+ *
+ * @param      root      The libmonado state.
+ * @param      client_id ID of the client.
+ * @param[out] out_scale Pointer to populate with the client's current view type.
+ */
+mnd_result_t
+mnd_root_get_client_view_type(mnd_root_t *root, uint32_t client_id, mnd_view_type_t *out_view_type);
 
 /*!
  * Get the number of devices
