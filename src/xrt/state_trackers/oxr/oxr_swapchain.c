@@ -284,11 +284,19 @@ oxr_swapchain_common_create(struct oxr_logger *log,
                             const XrSwapchainCreateInfo *createInfo,
                             struct oxr_swapchain **out_swapchain)
 {
+	struct oxr_instance *inst = sess->sys->inst;
 	xrt_result_t xret = XRT_SUCCESS;
+
+	enum xrt_swapchain_usage_bits usage_bits = convert_usage_bits(createInfo->usageFlags);
+	if (inst->quirks.ignore_invalid_swapchain_usage_bits &&
+	    !inst->extensions.KHR_swapchain_usage_input_attachment_bit &&
+	    !inst->extensions.MND_swapchain_usage_input_attachment_bit) {
+		usage_bits &= ~XRT_SWAPCHAIN_USAGE_INPUT_ATTACHMENT;
+	}
 
 	struct xrt_swapchain_create_info info = {
 	    .create = convert_create_flags(createInfo->createFlags),
-	    .bits = convert_usage_bits(createInfo->usageFlags),
+	    .bits = usage_bits,
 	    .format = createInfo->format,
 	    .sample_count = createInfo->sampleCount,
 	    .width = createInfo->width,
