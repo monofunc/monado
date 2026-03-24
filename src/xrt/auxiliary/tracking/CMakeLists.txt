@@ -5,6 +5,7 @@ xrt_optimized_math_flags()
 
 add_library(
 	aux_tracking STATIC
+	t_constellation.h
 	t_data_utils.c
 	t_dead_reckoning.h
 	t_dead_reckoning.c
@@ -13,6 +14,7 @@ add_library(
 	t_imu.h
 	t_openvr_tracker.cpp
 	t_openvr_tracker.h
+	t_rift_blobwatch.c
 	t_tracking.h
 	)
 target_link_libraries(
