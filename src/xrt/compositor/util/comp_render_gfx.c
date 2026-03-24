@@ -496,12 +496,15 @@ do_quad_layer(struct render_gfx *render,
 static void
 crg_clear_output(struct render_gfx *render, const struct comp_render_dispatch_data *d)
 {
-	render_gfx_begin_target(     //
-	    render,                  //
-	    d->target.gfx.rtr,       //
-	    &background_color_idle); //
+	for (int fb = 0; fb < 2; ++fb) {
+		render_gfx_begin_target( //
+		    render,              //
+		    d->target.gfx.rtr,   //
+		    &background_color_idle,
+		    fb); //
 
-	render_gfx_end_target(render);
+		render_gfx_end_target(render);
+	}
 }
 
 /*
@@ -562,12 +565,39 @@ crg_distortion_common(struct render_gfx *render,
 	 * Do command writing here.
 	 */
 
+	// Left side
 	render_gfx_begin_target(       //
 	    render,                    //
 	    d->target.gfx.rtr,         //
-	    &background_color_active); //
+	    &background_color_active, 0); //
 
-	for (uint32_t i = 0; i < d->target.view_count; i++) {
+	for (uint32_t i = 0; i < d->target.view_count; i += 2) {
+		// Convenience.
+		const struct render_viewport_data *viewport_data = &d->views[i].target.viewport_data;
+
+		render_gfx_begin_view( //
+		    render,            //
+		    i,                 // view_index
+		    viewport_data);    //
+
+		render_gfx_mesh_draw(      //
+		    render,                //
+		    i,                     // mesh_index
+		    ms.descriptor_sets[i], //
+		    do_timewarp);          //
+
+		render_gfx_end_view(render);
+	}
+
+	render_gfx_end_target(render);
+
+	// Right side
+	render_gfx_begin_target(       //
+	    render,                    //
+	    d->target.gfx.rtr,         //
+	    &background_color_active, 1); //
+
+	for (uint32_t i = 1; i < d->target.view_count; i += 2) {
 		// Convenience.
 		const struct render_viewport_data *viewport_data = &d->views[i].target.viewport_data;
 
@@ -821,7 +851,8 @@ comp_render_gfx_layers(struct render_gfx *render,
 		render_gfx_begin_target(           //
 		    render,                        //
 		    d->views[view].squash.gfx.rtr, //
-		    color);                        //
+		    color,
+		    view % 2); //
 
 		render_gfx_begin_view( //
 		    render,            //

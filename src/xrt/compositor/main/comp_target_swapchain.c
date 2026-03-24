@@ -74,12 +74,15 @@ destroy_image_views(struct comp_target_swapchain *cts)
 	struct vk_bundle *vk = get_vk(cts);
 
 	for (uint32_t i = 0; i < cts->base.image_count; i++) {
-		if (cts->base.images[i].view == VK_NULL_HANDLE) {
-			continue;
+		if (cts->base.images[i].views[0] != VK_NULL_HANDLE) {
+			vk->vkDestroyImageView(vk->device, cts->base.images[i].views[0], NULL);
+			cts->base.images[i].views[0] = VK_NULL_HANDLE;
 		}
 
-		vk->vkDestroyImageView(vk->device, cts->base.images[i].view, NULL);
-		cts->base.images[i].view = VK_NULL_HANDLE;
+		if (cts->base.images[i].views[1] != VK_NULL_HANDLE) {
+			vk->vkDestroyImageView(vk->device, cts->base.images[i].views[1], NULL);
+			cts->base.images[i].views[1] = VK_NULL_HANDLE;
+		}
 	}
 
 	free(cts->base.images);
@@ -122,16 +125,30 @@ create_image_views(struct comp_target_swapchain *cts)
 
 	for (uint32_t i = 0; i < cts->base.image_count; i++) {
 		cts->base.images[i].handle = images[i];
-		vk_create_view(                 //
-		    vk,                         // vk_bundle
-		    cts->base.images[i].handle, // image
-		    VK_IMAGE_VIEW_TYPE_2D,      // type
-		    cts->surface.format.format, // format
-		    subresource_range,          // subresource_range
-		    &cts->base.images[i].view); // out_view
+		vk_create_view(                     //
+		    vk,                             // vk_bundle
+		    cts->base.images[i].handle,     // image
+		    VK_IMAGE_VIEW_TYPE_2D,          // type
+		    cts->surface.format.format,     // format
+		    subresource_range,              // subresource_range
+		    &cts->base.images[i].views[0]); // out_view
 
 
-		VK_NAME_IMAGE_VIEW(vk, cts->base.images[i].view, "comp_target_swapchain image view");
+		VK_NAME_IMAGE_VIEW(vk, cts->base.images[i].views[0], "comp_target_swapchain image view left");
+
+		subresource_range.baseArrayLayer = 1;
+
+			cts->base.images[i].handle = images[i];
+			vk_create_view(                     //
+			    vk,                             // vk_bundle
+			    cts->base.images[i].handle,     // image
+			    VK_IMAGE_VIEW_TYPE_2D,          // type
+			    cts->surface.format.format,     // format
+			    subresource_range,              // subresource_range
+			    &cts->base.images[i].views[1]); // out_view
+
+
+			VK_NAME_IMAGE_VIEW(vk, cts->base.images[i].views[1], "comp_target_swapchain image view right");
 	}
 
 	free(images);
@@ -778,7 +795,7 @@ comp_target_swapchain_create_images(struct comp_target *ct,
 	            .width = extent.width,
 	            .height = extent.height,
 	        },
-	    .imageArrayLayers = 1,
+	    .imageArrayLayers = 2,
 	    .imageUsage = create_info->image_usage,
 	    .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
 	    .queueFamilyIndexCount = 0,
