@@ -1,0 +1,13 @@
+NXP/Freescale Open-Source Sensor Fusion — magnetometer calibration
+https://github.com/memsindustrygroup/Open-Source-Sensor-Fusion
+
+License: BSD-3-Clause (Freescale Semiconductor, Inc.)
+
+Only the magnetometer calibration (magnetic.c) and matrix math (matrix.c)
+are included. Progressive 4/7/10 element calibration with accelerometer-based
+spatial binning.
+
+Local modifications:
+- Added compat.h to replace NXP framework dependencies.
+- Replaced custom int types with stdint.h.
+- Removed NXP-specific includes.
