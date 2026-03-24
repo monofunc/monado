@@ -1,4 +1,4 @@
-// Copyright 2019, Collabora, Ltd.
+// Copyright 2019-2026, Collabora, Ltd.
 // Copyright 2024-2025, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
@@ -9,6 +9,7 @@
  */
 
 #include "util/u_debug.h"
+#include "xrt/xrt_device.h"
 #include "comp_settings.h"
 
 #ifdef XRT_OS_ANDROID
@@ -135,6 +136,7 @@ comp_settings_init(struct comp_settings *s, struct xrt_device *xdev)
 	s->preferred.width = xdev->hmd->screens[0].w_pixels;
 	s->preferred.height = xdev->hmd->screens[0].h_pixels;
 	s->nominal_frame_interval_ns = interval_ns;
+	s->transmit_to_display_offset_ns = xdev->hmd->transmit_to_display_offset_ns;
 	s->log_level = debug_get_log_option_log();
 	s->print_modes = debug_get_bool_option_print_modes();
 	s->selected_gpu_index = debug_get_num_option_force_gpu_index();

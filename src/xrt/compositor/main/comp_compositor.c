@@ -1,4 +1,4 @@
-// Copyright 2019-2024, Collabora, Ltd.
+// Copyright 2019-2026, Collabora, Ltd.
 // Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
@@ -1085,6 +1085,7 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 	chl_scratch_init(&c->scratch);
 
 	c->frame_interval_ns = c->settings.nominal_frame_interval_ns;
+	c->transmit_to_display_offset_ns = c->settings.transmit_to_display_offset_ns;
 
 	c->last_frame_time_ns = os_monotonic_get_ns();
 

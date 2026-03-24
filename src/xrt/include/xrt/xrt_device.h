@@ -144,6 +144,17 @@ struct xrt_hmd_parts
 	size_t blend_mode_count;
 
 	/*!
+	 * How long after the GPU starts transmitting is the image actually (starting to be) displayed?
+	 *
+	 * This is one part of the present-to-photons latency, and is a function of the display
+	 * pipeline within the display device.
+	 *
+	 * Technically, this might vary by mode (e.g. added latency from FPGA image rotation on OSVR HDK 1.x),
+	 * move/augment in compositor info when we want to handle this case.
+	 */
+	int64_t transmit_to_display_offset_ns;
+
+	/*!
 	 * Distortion information.
 	 */
 	struct
@@ -326,7 +337,7 @@ struct xrt_device
 
 	//! Number of bindings in xrt_device::binding_profiles
 	size_t binding_profile_count;
-	// Array of alternative binding profiles.
+	//! Array of alternative binding profiles.
 	struct xrt_binding_profile *binding_profiles;
 
 	//! Number of inputs.

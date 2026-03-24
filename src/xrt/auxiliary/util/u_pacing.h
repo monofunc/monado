@@ -679,8 +679,14 @@ u_paf_destroy(struct u_pacing_app_factory **upaf_ptr)
  */
 struct u_pc_display_timing_config
 {
-	//! How long after "present" is the image actually displayed
+	/*!
+	 * How long after "present" is the image actually displayed?
+	 *
+	 * This is the present-to-photons latency, which is partially a function of the GPU and driver,
+	 * and partially a function of the display pipeline within the display device.
+	 */
 	int64_t present_to_display_offset_ns;
+
 	//! Extra margin that is added to compositor time, between end of draw and present
 	int64_t margin_ns;
 	/*!

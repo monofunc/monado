@@ -188,6 +188,7 @@ struct comp_target
 	/*!
 	 * Create or recreate the image(s) of the target, for swapchain based
 	 * targets this will (re)create the swapchain.
+	 * This also creates the compositor pacer to be used when rendering to those images.
 	 *
 	 * @param ct self
 	 * @param create_info Image creation parameters
