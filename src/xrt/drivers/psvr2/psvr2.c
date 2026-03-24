@@ -737,7 +737,7 @@ set_brightness(struct psvr2_hmd *hmd, float brightness)
 }
 
 bool
-get_serial(struct psvr2_hmd *hmd, char serial[static(SERIAL_LENGTH + 1)])
+get_headset_info(struct psvr2_hmd *hmd, uint32_t *out_firmware_version, char serial[SERIAL_LENGTH + 1])
 {
 	uint8_t buf[504];
 
@@ -746,8 +746,12 @@ get_serial(struct psvr2_hmd *hmd, char serial[static(SERIAL_LENGTH + 1)])
 		return false;
 	}
 
-	memcpy(serial, buf + 56, SERIAL_LENGTH);
+	memcpy(serial, buf + 0x38, SERIAL_LENGTH);
 	serial[SERIAL_LENGTH] = '\0';
+
+	__le32 firmware_version;
+	memcpy(&firmware_version, buf, sizeof(firmware_version));
+	*out_firmware_version = __le32_to_cpu(firmware_version);
 
 	return true;
 }
@@ -1363,9 +1367,11 @@ psvr2_hmd_create(struct xrt_prober_device *xpdev)
 	}
 	hmd->brightness = initial_brightness;
 
+	uint32_t firmware_version;
 	char serial[SERIAL_LENGTH + 1];
-	if (get_serial(hmd, serial)) {
+	if (get_headset_info(hmd, &firmware_version, serial)) {
 		snprintf(hmd->base.serial, XRT_DEVICE_NAME_LEN, "%s", serial);
+		PSVR2_INFO(hmd, "Headset has firmware version of %08x", firmware_version);
 	} else {
 		PSVR2_WARN(hmd, "Failed to get serial number");
 	}
