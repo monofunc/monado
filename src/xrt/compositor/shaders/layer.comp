@@ -8,6 +8,7 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "srgb.inc.glsl"
+#include "hsv.inc.glsl"
 #include "layer_defines.inc.glsl"
 
 #define LAYER ubo.layers[layer]
@@ -37,12 +38,25 @@ struct image_info
 
 const float PI = acos(-1);
 
+// Must match render_chroma_key_info in C code.
+struct ChromaKeyInfo {
+	float hsv_min_h;
+	float hsv_min_s;
+	float hsv_min_v;
+	float hsv_max_h;
+	float hsv_max_s;
+	float hsv_max_v;
+	float curve;
+	float despill;
+};
+
 // Should we do timewarp.
 layout(constant_id = 1) const bool do_timewarp = false;
 layout(constant_id = 2) const bool do_color_correction = true;
 
 //! This is always set by the render_resource pipeline creation code to the actual limit.
 layout(constant_id = 3) const int SAMPLER_ARRAY_SIZE = 16;
+
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -74,7 +88,9 @@ struct Layer {
 
 	// timewarp matrices
 	mat4 transform;
-
+	
+	// per-layer chroma key settings
+	ChromaKeyInfo chroma_key;
 
 	// for quad layers
 
@@ -363,17 +379,54 @@ vec4 do_equirect2(vec2 view_uv, uint layer)
 	return out_color;
 }
 
+vec4 apply_chroma_key(vec4 color, uint layer)
+{
+	float curve = LAYER.chroma_key.curve;
+
+	if (curve <= 0.0) {
+		return color; // Chroma key disabled
+	}
+
+	vec3 hsv_a = vec3(LAYER.chroma_key.hsv_min_h, LAYER.chroma_key.hsv_min_s, LAYER.chroma_key.hsv_min_v);
+	vec3 hsv_b = vec3(LAYER.chroma_key.hsv_max_h, LAYER.chroma_key.hsv_max_s, LAYER.chroma_key.hsv_max_v);
+	float despill = LAYER.chroma_key.despill;
+
+	// Sort so S/V min/max are correct regardless of input order
+	// Hue is left unsorted to preserve wrapping semantics
+	vec3 hsv_min = vec3(hsv_a.x, min(hsv_a.y, hsv_b.y), min(hsv_a.z, hsv_b.z));
+	vec3 hsv_max = vec3(hsv_b.x, max(hsv_a.y, hsv_b.y), max(hsv_a.z, hsv_b.z));
+
+	// Convert to sRGB then to HSV for color matching
+	vec3 srgb = do_color_correction ? from_linear_to_srgb(color.rgb) : color.rgb;
+	vec3 hsv = rgb_to_hsv(srgb);
+
+	// Compute distance from the HSV range (0 = inside, >0 = outside)
+	float h_dist = hue_distance(hsv.x, hsv_min.x, hsv_max.x);
+	float s_dist = range_distance(hsv.y, hsv_min.y, hsv_max.y);
+	float v_dist = range_distance(hsv.z, hsv_min.z, hsv_max.z);
+	float dist = length(vec3(h_dist, s_dist, v_dist));
+
+	// Apply power curve: <1 = softer falloff, 1 = linear, >1 = harder cutoff
+	float chroma_alpha = clamp(pow(dist, curve), 0.0, 1.0);
+
+	// Despill: reduce saturation of pixels near the key color
+	float despill_strength = despill * (1.0 - chroma_alpha);
+	hsv.y *= (1.0 - despill_strength);
+	vec3 rgb_despill = hsv_to_rgb(hsv);
+	color.rgb = do_color_correction ? from_srgb_to_linear(rgb_despill) : rgb_despill;
+
+	// Pre-multiply RGB by the chroma alpha
+	return vec4(color.rgb * chroma_alpha, color.a * chroma_alpha);
+}
+
 vec4 do_projection(vec2 view_uv, uint layer)
 {
 	uint source_image_index = LAYER.image_info.color_image_index;
 
-	// Do any transformation needed.
-	vec2 uv = transform_uv(view_uv, layer);
-
-	// Sample the source.
-	vec4 colour = vec4(texture(source[source_image_index], uv).rgba);
-
-	return colour;
+    // Do any transformation needed.
+    vec2 uv = transform_uv(view_uv, layer);
+    vec4 colour = texture(source[source_image_index], uv);
+    return apply_chroma_key(colour, layer);
 }
 
 vec3 get_direction(vec2 uv)
