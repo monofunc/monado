@@ -10,6 +10,7 @@
 #pragma once
 
 #include "xrt/xrt_compiler.h"
+#include "xrt/xrt_system.h"
 
 
 /*!
@@ -32,7 +33,6 @@ struct xrt_frame_context;
 struct xrt_settings_tracking;
 struct time_state;
 struct gui_scene_manager;
-struct xrt_system_devices;
 
 
 /*!

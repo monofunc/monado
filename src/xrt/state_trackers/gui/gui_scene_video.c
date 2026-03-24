@@ -171,6 +171,41 @@ scene_render(struct gui_scene *scene, struct gui_program *p)
 	if (vs->xfs == NULL) {
 		xrt_prober_list_video_devices(p->xp, on_video_device, vs);
 
+		for (size_t i = 0; i < p->xsysd->xdev_count; i++) {
+			struct xrt_fs **frameservers;
+			size_t num_frameservers;
+			xrt_result_t result =
+			    xrt_device_get_frameservers(p->xsysd->xdevs[i], &frameservers, &num_frameservers);
+
+			if (result == XRT_ERROR_NOT_IMPLEMENTED) {
+				continue;
+			}
+
+			// @todo figure out how to handle actual errors
+			if (result != XRT_SUCCESS) {
+				continue;
+			}
+
+			for (size_t ifs = 0; ifs < num_frameservers; ifs++) {
+				struct xrt_fs *frameserver = frameservers[ifs];
+
+				char buf[550] = {0};
+				snprintf(buf, sizeof(buf), "'%s' '%s'\n", frameserver->name, frameserver->serial);
+				if (!igButton(buf, button_dims)) {
+					continue;
+				}
+
+				vs->xfs = frameserver;
+				vs->xfctx = U_TYPED_CALLOC(struct xrt_frame_context);
+				xrt_fs_enumerate_modes(vs->xfs, &vs->modes, &vs->num_modes);
+
+				break;
+			}
+
+			if (frameservers)
+				free(frameservers);
+		}
+
 #ifdef XRT_BUILD_DRIVER_DEPTHAI
 		igSeparator();
 		if (igButton("DepthAI (Monocular)", button_dims)) {
@@ -262,6 +297,8 @@ gui_scene_select_video_calibrate(struct gui_program *p)
 		return;
 	}
 	struct video_select *vs = create();
+
+	gui_prober_select(p);
 
 	gui_scene_push_front(p, &vs->base);
 }
