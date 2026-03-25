@@ -378,6 +378,15 @@ convert_imu_to_openxr(struct vive_device *d, struct xrt_vec3 *gyro, struct xrt_v
 		gyro->z = -gyro->z;
 		break;
 	}
+	case VIVE_VARIANT_COSMOS: {
+		accel->x = -accel->x;
+		accel->y = accel->y;
+		accel->z = -accel->z;
+		gyro->x = -gyro->x;
+		gyro->y = gyro->y;
+		gyro->z = -gyro->z;
+		break;
+	}
 	case VIVE_VARIANT_INDEX: { // Flip all axis and re-order.
 		struct xrt_vec3 accel_fixed;
 		accel_fixed.x = -accel->y;
@@ -1230,6 +1239,7 @@ vive_device_create(struct os_hid_device *mainboard_dev,
 	case VIVE_VARIANT_VIVE: snprintf(d->base.str, XRT_DEVICE_NAME_LEN, "HTC Vive (vive)"); break;
 	case VIVE_VARIANT_PRO: snprintf(d->base.str, XRT_DEVICE_NAME_LEN, "HTC Vive Pro (vive)"); break;
 	case VIVE_VARIANT_PRO2: snprintf(d->base.str, XRT_DEVICE_NAME_LEN, "HTC Vive Pro 2 (vive)"); break;
+	case VIVE_VARIANT_COSMOS: snprintf(d->base.str, XRT_DEVICE_NAME_LEN, "HTC Vive Cosmos (vive)"); break;
 	case VIVE_VARIANT_INDEX: snprintf(d->base.str, XRT_DEVICE_NAME_LEN, "Valve Index (vive)"); break;
 	case VIVE_VARIANT_BEYOND: snprintf(d->base.str, XRT_DEVICE_NAME_LEN, "Bigscreen Beyond (vive)"); break;
 	case VIVE_UNKNOWN: snprintf(d->base.str, XRT_DEVICE_NAME_LEN, "Unknown HMD (vive)"); break;
