@@ -68,6 +68,9 @@ static const char *required_device_extensions[] = {
 #elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_WIN32_HANDLE)
     VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
 
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+    VK_EXT_METAL_OBJECTS_EXTENSION_NAME,
+
 #else
 #error "Need port!"
 #endif
@@ -78,6 +81,8 @@ static const char *required_device_extensions[] = {
 #elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_WIN32_HANDLE)
     VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
     VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,
+
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
 
 #else
 #error "Need port!"
@@ -147,6 +152,10 @@ TEST_CASE("client_compositor", "[.][needgpu]")
 	    vk->external.fence_win32_handle,              //
 	    vk->external.binary_semaphore_win32_handle,   //
 	    vk->external.timeline_semaphore_win32_handle, //
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+	    false, // fence_sync_fd
+	    false, // binary_semaphore_sync_fd
+	    false, // timeline_semaphore_sync_fd
 #else
 #error "Need port for fence sync handles checkers"
 #endif

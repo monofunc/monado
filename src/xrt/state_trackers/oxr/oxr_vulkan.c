@@ -148,6 +148,8 @@ static const char *required_vk_device_extensions[] = {
 
 #elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_WIN32_HANDLE)
     VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+
 #else
 #error "Need port!"
 #endif
@@ -158,6 +160,8 @@ static const char *required_vk_device_extensions[] = {
 #elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_WIN32_HANDLE)
     VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME, //
     VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,     //
+
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
 
 #else
 #error "Need port!"
@@ -171,6 +175,8 @@ static const char *optional_device_extensions[] = {
     VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME,    //
     VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME,        //
 #elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_WIN32_HANDLE) // Not optional
+
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
 
 #else
 #error "Need port!"

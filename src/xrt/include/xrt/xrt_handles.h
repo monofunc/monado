@@ -236,18 +236,53 @@ xrt_graphics_buffer_is_valid(xrt_graphics_buffer_handle_t handle)
  */
 #define XRT_GRAPHICS_BUFFER_HANDLE_INVALID NULL
 
-#elif defined(XRT_OS_ANDROID) && !defined(XRT_OS_ANDROID_USE_AHB) || defined(XRT_OS_LINUX) || defined(XRT_OS_OSX)
+#elif defined(XRT_OS_OSX)
+
+#include <mach/mach_types.h>
+
+/*!
+ * The type underlying buffers shared between compositor clients and the main
+ * compositor.
+ *
+ * Mach port send right from MTLSharedTextureHandle.
+ */
+typedef mach_port_t xrt_graphics_buffer_handle_t;
+
+/*!
+ * Defined to allow detection of the underlying type.
+ *
+ * @relates xrt_graphics_buffer_handle_t
+ */
+#define XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT 1
+
+/*!
+ * Check whether a graphics buffer handle is valid.
+ *
+ * @public @memberof xrt_graphics_buffer_handle_t
+ */
+static inline bool
+xrt_graphics_buffer_is_valid(xrt_graphics_buffer_handle_t handle)
+{
+	return handle != MACH_PORT_NULL;
+}
+
+/*!
+ * An invalid value for a graphics buffer.
+ *
+ * Note that there may be more than one value that's invalid - use
+ * xrt_graphics_buffer_is_valid() instead of comparing against this!
+ *
+ * @relates xrt_graphics_buffer_handle_t
+ */
+#define XRT_GRAPHICS_BUFFER_HANDLE_INVALID (MACH_PORT_NULL)
+
+#elif defined(XRT_OS_ANDROID) && !defined(XRT_OS_ANDROID_USE_AHB) || defined(XRT_OS_LINUX)
 
 /*!
  * The type underlying buffers shared between compositor clients and the main
  * compositor.
  *
  * On Linux, this is a file descriptor.
- *
- * We selected the graphics handle to be FDs on OSX because that allowed the
- * code to compile, but it's probably not what we want to actually use on OSX.
- * So we will need to change that down the line, as it looks like OSX uses byte
- * only arrays to share MTLTextures.
  */
 typedef int xrt_graphics_buffer_handle_t;
 
@@ -336,7 +371,52 @@ xrt_graphics_buffer_is_valid(xrt_graphics_buffer_handle_t handle)
 #error "Not yet implemented for this platform"
 #endif
 
-#ifdef XRT_OS_UNIX
+#if defined(XRT_OS_OSX)
+
+
+/*
+ *
+ * xrt_graphics_sync_handle_t
+ *
+ */
+
+/*!
+ * The type underlying synchronization primitives (semaphores, etc) shared
+ * between compositor clients and the main compositor.
+ *
+ * Mach port send right from MTLSharedEvent.
+ */
+typedef mach_port_t xrt_graphics_sync_handle_t;
+
+/*!
+ * Defined to allow detection of the underlying type.
+ *
+ * @relates xrt_graphics_sync_handle_t
+ */
+#define XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT 1
+
+/*!
+ * Check whether a graphics sync handle is valid.
+ *
+ * @public @memberof xrt_graphics_sync_handle_t
+ */
+static inline bool
+xrt_graphics_sync_handle_is_valid(xrt_graphics_sync_handle_t handle)
+{
+	return handle != MACH_PORT_NULL;
+}
+
+/*!
+ * An invalid value for a graphics sync primitive.
+ *
+ * Note that there may be more than one value that's invalid - use
+ * xrt_graphics_sync_handle_is_valid() instead of comparing against this!
+ *
+ * @relates xrt_graphics_sync_handle_t
+ */
+#define XRT_GRAPHICS_SYNC_HANDLE_INVALID (MACH_PORT_NULL)
+
+#elif defined(XRT_OS_UNIX)
 
 
 /*
@@ -422,8 +502,9 @@ xrt_graphics_sync_handle_is_valid(xrt_graphics_sync_handle_t handle)
 #endif
 
 #if (!defined(XRT_GRAPHICS_BUFFER_HANDLE_REFERENCE_ADDED_BY_VULKAN_IMPORT)) &&                                         \
-    (!defined(XRT_GRAPHICS_BUFFER_HANDLE_CONSUMED_BY_VULKAN_IMPORT))
-// Exactly one of these must be defined in each platform.
+    (!defined(XRT_GRAPHICS_BUFFER_HANDLE_CONSUMED_BY_VULKAN_IMPORT)) &&                                                \
+    (!defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT))
+// Exactly one of these must be defined, except Mach port path.
 #error "Needs port: Must define a macro indicating the Vulkan image import buffer behavior"
 #endif
 

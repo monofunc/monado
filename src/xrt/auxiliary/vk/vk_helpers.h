@@ -149,6 +149,9 @@ struct vk_bundle
 		bool color_image_export_ahardwarebuffer;
 		bool depth_image_import_ahardwarebuffer;
 		bool depth_image_export_ahardwarebuffer;
+
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+		bool metal_objects;
 #endif
 
 #if defined(XRT_GRAPHICS_SYNC_HANDLE_IS_FD)
@@ -168,6 +171,8 @@ struct vk_bundle
 
 		bool timeline_semaphore_d3d12_fence;
 		bool timeline_semaphore_win32_handle;
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+
 #else
 #error "Need port for fence sync handles checkers"
 #endif

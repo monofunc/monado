@@ -61,6 +61,8 @@ get_image_memory_handle_type(void)
 	return VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
 #elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_FD)
 	return VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+	return 0;
 #else
 #error "need port"
 #endif
@@ -166,7 +168,9 @@ create_image(struct vk_bundle *vk, const struct xrt_swapchain_create_info *info,
 	    .handleTypes = memory_handle_type,
 	    .pNext = next_chain,
 	};
-	CHAIN(external_memory_image_create_info);
+	if (memory_handle_type != 0) {
+		CHAIN(external_memory_image_create_info);
+	}
 
 	// Format list helper needed for the below.
 	struct format_list_helper flh = XRT_STRUCT_INIT;
@@ -344,7 +348,9 @@ create_image(struct vk_bundle *vk, const struct xrt_swapchain_create_info *info,
 	    .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR,
 	    .handleTypes = memory_handle_type,
 	};
-	CHAIN(export_alloc_info);
+	if (memory_handle_type != 0) {
+		CHAIN(export_alloc_info);
+	}
 
 	ret = vk_alloc_and_bind_image_memory(   //
 	    vk,                                 // vk_bundle

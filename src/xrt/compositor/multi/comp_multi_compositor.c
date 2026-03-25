@@ -32,7 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef XRT_GRAPHICS_SYNC_HANDLE_IS_FD
+#if defined(XRT_GRAPHICS_SYNC_HANDLE_IS_FD) || defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
 #include <unistd.h>
 #endif
 

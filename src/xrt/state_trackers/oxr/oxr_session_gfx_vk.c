@@ -102,6 +102,9 @@ oxr_session_populate_vk(struct oxr_logger *log,
 		external_fence_fd_enabled = true;
 		external_semaphore_fd_enabled = true;
 	}
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+	(void)external_fence_fd_enabled;
+	(void)external_semaphore_fd_enabled;
 #endif
 
 	if (!timeline_semaphore_enabled &&

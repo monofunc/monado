@@ -28,7 +28,9 @@
 
 #include <xrt/xrt_handles.h>
 
+#if !defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
 DEBUG_GET_ONCE_BOOL_OPTION(vk_ignore_memory_size_mismatch, "XRT_VK_IGNORE_MEMORY_SIZE_MISMATCH", false)
+#endif
 
 
 /*
@@ -1222,10 +1224,15 @@ vk_create_image_from_native(struct vk_bundle *vk,
 	};
 
 	// TODO memoryTypeBits from VkMemoryWin32HandlePropertiesKHR
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+	VK_ERROR(vk, "vk_create_image_from_native: Metal path uses allocation collection");
+	vk->vkDestroyImage(vk->device, image, NULL);
+	return VK_ERROR_FEATURE_NOT_PRESENT;
 #else
 #error "need port"
 #endif
 
+#if !defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
 	if (handle_type == VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID) {
 		/*
 		 * Skip check in this case
@@ -1293,6 +1300,7 @@ vk_create_image_from_native(struct vk_bundle *vk,
 
 	*out_image = image;
 	return ret;
+#endif // !XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT
 }
 
 #if defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_FD)
@@ -1365,6 +1373,14 @@ get_device_memory_handle(struct vk_bundle *vk, VkDeviceMemory device_memory, xrt
 	*out_handle = handle;
 
 	return ret;
+}
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+
+static VkResult
+get_device_memory_handle(struct vk_bundle *vk, VkDeviceMemory device_memory, xrt_graphics_buffer_handle_t *out_handle)
+{
+	VK_ERROR(vk, "get_device_memory_handle: Metal path uses MTLSharedTextureHandle");
+	return VK_ERROR_FEATURE_NOT_PRESENT;
 }
 #else
 #error "Needs port"
