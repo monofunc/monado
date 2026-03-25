@@ -23,6 +23,9 @@
 #include "vp2/vp2_config.h"
 #include "vp2/vp2_hid.h"
 
+#include "cosmos/cosmos_config.h"
+#include "cosmos/cosmos_hid.h"
+
 #include "survive_interface.h"
 #include "survive_api.h"
 
@@ -113,6 +116,8 @@ struct survive_device
 			struct vive_config config;
 
 			struct vp2_hid *vp2_hid;
+
+			struct cosmos_hid *cosmos_hid;
 		} hmd;
 
 		struct

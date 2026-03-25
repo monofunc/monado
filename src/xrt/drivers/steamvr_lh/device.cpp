@@ -29,6 +29,7 @@
 #include "vive/vive_poses.h"
 
 #include "vp2/vp2_config.h"
+#include "cosmos/cosmos_config.h"
 
 #include "openvr_driver.h"
 
@@ -929,8 +930,8 @@ HmdDevice::get_view_poses(const xrt_vec3 *default_eye_relation,
 	if (override_ipd_mm != -1.0f) {
 		// Convert from mm -> m
 		eye_relation.x = override_ipd_mm / 1000.0f;
-	} else if (this->variant == VIVE_VARIANT_PRO2) {
-		// Default to 63mm on Vive Pro 2, the IPD reading is completely borked and always sends 15mm
+	} else if (this->variant == VIVE_VARIANT_PRO2 || this->variant == VIVE_VARIANT_COSMOS) {
+		// Default to 63mm on Vive Pro 2 & Cosmos, the IPD reading is completely borked and always sends 15mm
 		eye_relation.x = 0.063f;
 	}
 
@@ -960,13 +961,27 @@ HmdDevice::get_view_poses(const xrt_vec3 *default_eye_relation,
 xrt_result_t
 HmdDevice::compute_distortion(uint32_t view, float u, float v, xrt_uv_triplet *out_result)
 {
-	// Vive Pro 2 has it's own special distortion model
+	// Vive Pro 2 & Cosmos have their own special distortion models
 	if (this->variant == VIVE_VARIANT_PRO2 && this->vp2.hid != nullptr) {
 		vp2_config *config = vp2_get_config(this->vp2.hid);
 
 		struct xrt_vec2 uv = {u, v};
 
 		// If computing through VP2 method fails, fall back to the standard method.
+		if (htc_config_compute_distortion(&config->base, view, &uv, out_result)) {
+			return XRT_SUCCESS;
+		}
+	}
+
+	if (this->variant == VIVE_VARIANT_COSMOS && this->cosmos.hid != nullptr) {
+		cosmos_config *config = cosmos_get_config(this->cosmos.hid);
+
+		struct xrt_vec2 uv = {u, v};
+
+		// Cosmos has a vertically flipped distortion map.
+		v = 1.0f - v;
+
+		// If computing through Cosmos method fails, fall back to the standard method.
 		if (htc_config_compute_distortion(&config->base, view, &uv, out_result)) {
 			return XRT_SUCCESS;
 		}
@@ -1357,6 +1372,64 @@ HmdDevice::init_vive_pro_2(struct xrt_prober *xp)
 	htc_config_get_fov(&config->base, 1, &this->hmd_parts->base.distortion.fov[1]);
 
 	this->supported.brightness_control = true;
+
+	return ret == 0;
+}
+
+bool
+HmdDevice::init_vive_cosmos(struct xrt_prober *xp)
+{
+	xrt_result_t xret;
+	int ret = 0;
+
+	struct xrt_prober_device **devices = nullptr;
+	size_t device_count;
+
+	xret = xrt_prober_lock_list(xp, &devices, &device_count);
+	if (xret != XRT_SUCCESS) {
+		DEV_ERR("Failed to lock prober device list");
+		return false;
+	}
+
+	for (size_t i = 0; i < device_count; i++) {
+		struct xrt_prober_device *dev = devices[i];
+
+		if (dev->vendor_id == COSMOS_VID && dev->product_id == COSMOS_PID) {
+			DEV_INFO("Found Vive Cosmos HID device");
+			struct os_hid_device *hid_dev = nullptr;
+
+			ret = xrt_prober_open_hid_interface(xp, dev, 0, &hid_dev);
+			if (ret != 0) {
+				DEV_ERR("Failed to open Vive Cosmos HID interface");
+				break;
+			}
+
+			ret = cosmos_hid_open(hid_dev, &this->cosmos.hid);
+			if (ret != 0) {
+				DEV_ERR("Failed to open Vive Cosmos HID device");
+				break;
+			}
+			break;
+		}
+	}
+
+	xrt_prober_unlock_list(xp, &devices);
+
+	int width, height;
+	cosmos_resolution_get_extents(&width, &height);
+
+	for (int i = 0; i < 2; i++) {
+		this->hmd_parts->base.views[i].display.w_pixels = width / 2;
+		this->hmd_parts->base.views[i].display.h_pixels = height;
+
+		this->hmd_parts->base.views[i].viewport.w_pixels = width / 2;
+		this->hmd_parts->base.views[i].viewport.h_pixels = height;
+	}
+
+	this->hmd_parts->base.views[1].viewport.x_pixels = width / 2;
+
+	this->hmd_parts->base.screens[0].w_pixels = width;
+	this->hmd_parts->base.screens[0].h_pixels = height;
 
 	return ret == 0;
 }

@@ -17,6 +17,7 @@
 #include "vive/vive_common.h"
 
 #include "vp2/vp2_hid.h"
+#include "cosmos/cosmos_hid.h"
 
 #include "openvr_driver.h"
 
@@ -145,6 +146,19 @@ struct VivePro2Data
 	}
 };
 
+struct ViveCosmosData
+{
+	cosmos_hid *hid{nullptr};
+
+	~ViveCosmosData()
+	{
+		if (hid != nullptr) {
+			cosmos_hid_destroy(hid);
+			hid = nullptr;
+		}
+	}
+};
+
 class HmdDevice : public Device
 {
 public:
@@ -164,6 +178,10 @@ public:
 	};
 
 	struct VivePro2Data vp2
+	{
+	};
+
+	struct ViveCosmosData cosmos
 	{
 	};
 
@@ -208,6 +226,9 @@ public:
 
 	bool
 	init_vive_pro_2(struct xrt_prober *xp);
+
+	bool
+	init_vive_cosmos(struct xrt_prober *xp);
 
 private:
 	std::unique_ptr<Parts> hmd_parts{nullptr};

@@ -47,6 +47,8 @@
 #include <assert.h>
 #include <string.h>
 
+#include "survive_cosmos.h"
+
 
 // If we haven't gotten a config for devices this long after startup, just start without those devices
 #define DEFAULT_WAIT_TIMEOUT 3.5f
@@ -889,6 +891,10 @@ _create_hmd_device(struct survive_system *sys, const struct SurviveSimpleObject 
 		SURVIVE_ERROR(survive, "Failed to initialize Valve Pro 2 specific features. Some things may not work.");
 	}
 
+	if (survive->hmd.config.variant == VIVE_VARIANT_COSMOS && !survive_cosmos_init(survive, sys)) {
+		SURVIVE_ERROR(survive, "Failed to initialize Vive Cosmos specific features. Some things may not work.");
+	}
+
 	SURVIVE_INFO(survive, "survive HMD present");
 	m_relation_history_create(&survive->relation_hist);
 
@@ -902,6 +908,9 @@ _create_hmd_device(struct survive_system *sys, const struct SurviveSimpleObject 
 	case VIVE_VARIANT_PRO: snprintf(survive->base.str, XRT_DEVICE_NAME_LEN, "HTC Vive Pro (libsurvive)"); break;
 	case VIVE_VARIANT_INDEX: snprintf(survive->base.str, XRT_DEVICE_NAME_LEN, "Valve Index (libsurvive)"); break;
 	case VIVE_VARIANT_PRO2: snprintf(survive->base.str, XRT_DEVICE_NAME_LEN, "HTC Vive Pro 2 (libsurvive)"); break;
+	case VIVE_VARIANT_COSMOS:
+		snprintf(survive->base.str, XRT_DEVICE_NAME_LEN, "HTC Vive Cosmos (libsurvive)");
+		break;
 	case VIVE_VARIANT_BEYOND:
 		snprintf(survive->base.str, XRT_DEVICE_NAME_LEN, "Bigscreen Beyond (libsurvive)");
 		break;
