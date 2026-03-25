@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.monado.compositor</string>
+	<key>MachServices</key>
+	<dict>
+		<key>org.monado.compositor</key>
+		<true/>
+	</dict>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/path/to/monado-broker</string>
+	</array>
+	<key>StandardOutPath</key>
+	<string>/var/tmp/monado/monado-broker.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/tmp/monado/monado-broker-error.log</string>
+</dict>
+</plist>
