@@ -42,6 +42,10 @@ if(XRT_FEATURE_STEAMVR_PLUGIN)
 	add_subdirectory(steamvr_drv)
 endif()
 
+if(XRT_FEATURE_SERVICE AND APPLE)
+	add_subdirectory(broker)
+endif()
+
 if(XRT_FEATURE_SERVICE
    AND XRT_HAVE_SDL2
    AND XRT_HAVE_VULKAN
