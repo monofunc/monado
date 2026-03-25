@@ -35,10 +35,7 @@
 
 #include "depthai/depthai.hpp"
 
-#include <stdio.h>
-#include <assert.h>
 #include <unistd.h>
-#include <pthread.h>
 
 #include <memory>
 #include <sstream>
@@ -141,11 +138,14 @@ struct depthai_fs
 
 	struct u_sink_debug debug_sinks[4];
 
-	dai::Device *device;
-	dai::DataOutputQueue *image_queue;
-	dai::DataOutputQueue *imu_queue;
+	std::shared_ptr<dai::Device> device;
+	std::shared_ptr<dai::Pipeline> pipeline;
+	std::shared_ptr<dai::MessageQueue> image_queue_l;
+	std::shared_ptr<dai::MessageQueue> image_queue_r;
+	std::shared_ptr<dai::MessageQueue> imu_queue;
 
-	dai::DataInputQueue *control_queue;
+	std::shared_ptr<dai::InputQueue> control_queue_l;
+	std::shared_ptr<dai::InputQueue> control_queue_r;
 
 	dai::ColorCameraProperties::SensorResolution color_sensor_resolution;
 	dai::ColorCameraProperties::ColorOrder color_order;
@@ -224,12 +224,13 @@ depthai_get_gray_cameras_calibration(struct depthai_fs *depthai, struct t_stereo
 	try {
 		calibData = depthai->device->readCalibration();
 		std::tie(left.intrinsics, left.width, left.height) =
-		    calibData.getDefaultIntrinsics(dai::CameraBoardSocket::LEFT);
+		    calibData.getDefaultIntrinsics(dai::CameraBoardSocket::CAM_B);
 		std::tie(right.intrinsics, right.width, right.height) =
-		    calibData.getDefaultIntrinsics(dai::CameraBoardSocket::RIGHT);
-		left.distortion = calibData.getDistortionCoefficients(dai::CameraBoardSocket::LEFT);
-		right.distortion = calibData.getDistortionCoefficients(dai::CameraBoardSocket::RIGHT);
-		extrinsics = calibData.getCameraExtrinsics(dai::CameraBoardSocket::LEFT, dai::CameraBoardSocket::RIGHT);
+		    calibData.getDefaultIntrinsics(dai::CameraBoardSocket::CAM_C);
+		left.distortion = calibData.getDistortionCoefficients(dai::CameraBoardSocket::CAM_B);
+		right.distortion = calibData.getDistortionCoefficients(dai::CameraBoardSocket::CAM_C);
+		extrinsics =
+		    calibData.getCameraExtrinsics(dai::CameraBoardSocket::CAM_B, dai::CameraBoardSocket::CAM_C);
 	} catch (std::exception &e) {
 		std::string what = e.what();
 		U_LOG_E("DepthAI error: %s", what.c_str());
@@ -244,7 +245,7 @@ depthai_get_gray_cameras_calibration(struct depthai_fs *depthai, struct t_stereo
 
 	// Good enough assumption that they're using the same distortion model
 	enum t_camera_distortion_model type = T_DISTORTION_OPENCV_RADTAN_14;
-	if (calibData.getDistortionModel(dai::CameraBoardSocket::LEFT) == dai::CameraModel::Fisheye) {
+	if (calibData.getDistortionModel(dai::CameraBoardSocket::CAM_B) == dai::CameraModel::Fisheye) {
 		type = T_DISTORTION_FISHEYE_KB4;
 	}
 
@@ -321,14 +322,11 @@ depthai_guess_camera_type(struct depthai_fs *depthai)
 	std::unordered_map<dai::CameraBoardSocket, std::string> sensornames = depthai->device->getCameraSensorNames();
 
 	bool ov9282 = false;
-
 	bool ov7251 = false;
-
-
 
 	for (size_t i = 0; i < sockets.size(); i++) {
 		dai::CameraBoardSocket sock = sockets[i];
-		std::string sensorname = sensornames.at(sock);
+		const std::string &sensorname = sensornames.at(sock);
 		if (sensorname == "OV9282" || sensorname == "OV9*82") {
 			ov9282 = true;
 		} else if (sensorname == "OV7251") {
@@ -376,11 +374,10 @@ depthai_print_calib(struct depthai_fs *depthai)
 
 
 static void
-depthai_do_one_frame(struct depthai_fs *depthai)
+depthai_do_one_frame(struct depthai_fs *depthai, const std::shared_ptr<dai::ImgFrame> &imgFrame)
 {
-	std::shared_ptr<dai::ImgFrame> imgFrame = depthai->image_queue->get<dai::ImgFrame>();
 	if (!imgFrame) {
-		std::cout << "Not ImgFrame" << std::endl;
+		DEPTHAI_ERROR(depthai, "Error getting ImgFrame from DepthAI, dropping this iteration");
 		return; // Nothing to do.
 	}
 
@@ -450,9 +447,10 @@ depthai_maybe_send_exposure_command(struct depthai_fs *depthai)
 		return;
 	}
 
-	dai::CameraControl ctrl;
-	ctrl.setManualExposure(depthai->manual_exposure.exposure_time, depthai->manual_exposure.iso);
-	depthai->control_queue->send(ctrl);
+	std::shared_ptr<dai::CameraControl> ctrl = std::make_shared<dai::CameraControl>();
+	ctrl->setManualExposure(depthai->manual_exposure.exposure_time, depthai->manual_exposure.iso);
+	depthai->control_queue_l->send(ctrl);
+	depthai->control_queue_r->send(ctrl);
 
 	depthai->manual_exposure.last_exposure_time = depthai->manual_exposure.exposure_time;
 	depthai->manual_exposure.last_iso = depthai->manual_exposure.iso;
@@ -470,7 +468,7 @@ depthai_maybe_send_floodlight_command(struct depthai_fs *depthai)
 		return;
 	}
 
-	depthai->device->setIrFloodLightBrightness(depthai->floodlights.mA.val);
+	depthai->device->setIrFloodLightIntensity(depthai->floodlights.mA.val);
 }
 
 
@@ -483,12 +481,20 @@ depthai_mainloop(void *ptr)
 	os_thread_helper_name(&depthai->image_thread, "DepthAI: Image");
 
 	DEPTHAI_DEBUG(depthai, "DepthAI: Image thread called");
+	int i = 0;
 
 	os_thread_helper_lock(&depthai->image_thread);
 	while (os_thread_helper_is_running_locked(&depthai->image_thread)) {
 		os_thread_helper_unlock(&depthai->image_thread);
 
-		depthai_do_one_frame(depthai);
+		std::shared_ptr<dai::ImgFrame> imgFrame;
+		if (i == 0) {
+			imgFrame = depthai->image_queue_l->get<dai::ImgFrame>();
+		} else {
+			imgFrame = depthai->image_queue_r->get<dai::ImgFrame>();
+		}
+		i = (i + 1) % 2;
+		depthai_do_one_frame(depthai, imgFrame);
 
 		depthai_maybe_send_exposure_command(depthai);
 		depthai_maybe_send_floodlight_command(depthai);
@@ -657,13 +663,19 @@ depthai_destroy(struct depthai_fs *depthai)
 	}
 
 	// To work around use after free issue detected by ASan, v2.13.3 has this bug.
-	if (depthai->image_queue) {
-		depthai->image_queue->close();
+	if (depthai->image_queue_l) {
+		depthai->image_queue_l->close();
+	}
+	if (depthai->image_queue_r) {
+		depthai->image_queue_r->close();
 	}
 	if (depthai->imu_queue) {
 		depthai->imu_queue->close();
 	}
-	delete depthai->device;
+	if (depthai->device) {
+		depthai->device->close();
+		delete depthai->device.get();
+	}
 
 	free(depthai);
 
@@ -698,7 +710,7 @@ depthai_setup_monocular_pipeline(struct depthai_fs *depthai, enum depthai_camera
 		depthai->width = 1280;
 		depthai->height = 800;
 		depthai->format = XRT_FORMAT_L8;
-		depthai->camera_board_socket = dai::CameraBoardSocket::LEFT;
+		depthai->camera_board_socket = dai::CameraBoardSocket::CAM_B;
 		depthai->grayscale_sensor_resolution = dai::MonoCameraProperties::SensorResolution::THE_800_P;
 		depthai->image_orientation = dai::CameraImageOrientation::AUTO;
 		depthai->fps = 60; // Currently only supports 60.
@@ -707,7 +719,7 @@ depthai_setup_monocular_pipeline(struct depthai_fs *depthai, enum depthai_camera
 		depthai->width = 1280;
 		depthai->height = 800;
 		depthai->format = XRT_FORMAT_L8;
-		depthai->camera_board_socket = dai::CameraBoardSocket::RIGHT;
+		depthai->camera_board_socket = dai::CameraBoardSocket::CAM_C;
 		depthai->grayscale_sensor_resolution = dai::MonoCameraProperties::SensorResolution::THE_800_P;
 		depthai->image_orientation = dai::CameraImageOrientation::AUTO;
 		depthai->fps = 60; // Currently only supports 60.
@@ -716,7 +728,7 @@ depthai_setup_monocular_pipeline(struct depthai_fs *depthai, enum depthai_camera
 		depthai->width = 640;
 		depthai->height = 480;
 		depthai->format = XRT_FORMAT_L8;
-		depthai->camera_board_socket = dai::CameraBoardSocket::LEFT;
+		depthai->camera_board_socket = dai::CameraBoardSocket::CAM_B;
 		depthai->grayscale_sensor_resolution = dai::MonoCameraProperties::SensorResolution::THE_480_P;
 		depthai->image_orientation = dai::CameraImageOrientation::AUTO;
 		depthai->fps = 60; // Currently only supports 60.
@@ -725,7 +737,7 @@ depthai_setup_monocular_pipeline(struct depthai_fs *depthai, enum depthai_camera
 		depthai->width = 640;
 		depthai->height = 480;
 		depthai->format = XRT_FORMAT_L8;
-		depthai->camera_board_socket = dai::CameraBoardSocket::RIGHT;
+		depthai->camera_board_socket = dai::CameraBoardSocket::CAM_C;
 		depthai->grayscale_sensor_resolution = dai::MonoCameraProperties::SensorResolution::THE_480_P;
 		depthai->image_orientation = dai::CameraImageOrientation::AUTO;
 		depthai->fps = 60; // Currently only supports 60.
@@ -733,16 +745,13 @@ depthai_setup_monocular_pipeline(struct depthai_fs *depthai, enum depthai_camera
 	default: assert(false);
 	}
 
-	dai::Pipeline p = {};
+	depthai->pipeline = std::make_shared<dai::Pipeline>(depthai->device);
 
-	auto xlinkOut = p.create<dai::node::XLinkOut>();
-	xlinkOut->setStreamName("preview");
-
-	std::shared_ptr<dai::node::ColorCamera> colorCam = nullptr;
-	std::shared_ptr<dai::node::MonoCamera> grayCam = nullptr;
+	std::shared_ptr<dai::node::ColorCamera> colorCam;
+	std::shared_ptr<dai::node::MonoCamera> grayCam;
 
 	if (depthai->format == XRT_FORMAT_R8G8B8) {
-		colorCam = p.create<dai::node::ColorCamera>();
+		colorCam = depthai->pipeline->create<dai::node::ColorCamera>();
 		colorCam->setPreviewSize(depthai->width, depthai->height);
 		colorCam->setResolution(depthai->color_sensor_resolution);
 		colorCam->setImageOrientation(depthai->image_orientation);
@@ -751,25 +760,26 @@ depthai_setup_monocular_pipeline(struct depthai_fs *depthai, enum depthai_camera
 		colorCam->setColorOrder(depthai->color_order);
 
 		// Link plugins CAM -> XLINK
-		colorCam->preview.link(xlinkOut->input);
+		auto cap = std::make_shared<dai::ImgFrameCapability>();
+		cap->size.fixed(std::make_pair(depthai->width, depthai->height));
+		depthai->image_queue_l = colorCam->requestOutput(*cap, true)->createOutputQueue();
 	}
 
 	if (depthai->format == XRT_FORMAT_L8) {
-		grayCam = p.create<dai::node::MonoCamera>();
+		grayCam = depthai->pipeline->create<dai::node::MonoCamera>();
 		grayCam->setBoardSocket(depthai->camera_board_socket);
 		grayCam->setResolution(depthai->grayscale_sensor_resolution);
 		grayCam->setImageOrientation(depthai->image_orientation);
 		grayCam->setFps(depthai->fps);
 
 		// Link plugins CAM -> XLINK
-		grayCam->out.link(xlinkOut->input);
+		depthai->image_queue_l = grayCam->out.createOutputQueue();
 	}
 
-	p.setXLinkChunkSize(0);
+	depthai->pipeline->setXLinkChunkSize(0);
 
 	// Start the pipeline
-	depthai->device->startPipeline(p);
-	depthai->image_queue = depthai->device->getOutputQueue("preview", 1, false).get(); // out of shared pointer
+	depthai->pipeline->start();
 }
 
 static void
@@ -788,49 +798,43 @@ depthai_setup_stereo_grayscale_pipeline(struct depthai_fs *depthai)
 			depthai->grayscale_sensor_resolution = dai::MonoCameraProperties::SensorResolution::THE_800_P;
 		}
 		depthai->format = XRT_FORMAT_L8;
-		depthai->camera_board_socket = dai::CameraBoardSocket::LEFT;
+		depthai->camera_board_socket = dai::CameraBoardSocket::CAM_B;
 		depthai->image_orientation = dai::CameraImageOrientation::AUTO;
 	} else {
 		// OV_7251 L/R
 		depthai->width = 640;
 		depthai->height = 480;
 		depthai->format = XRT_FORMAT_L8;
-		depthai->camera_board_socket = dai::CameraBoardSocket::LEFT;
+		depthai->camera_board_socket = dai::CameraBoardSocket::CAM_B;
 		depthai->grayscale_sensor_resolution = dai::MonoCameraProperties::SensorResolution::THE_480_P;
 		depthai->image_orientation = dai::CameraImageOrientation::AUTO;
 	}
 
-	dai::Pipeline p = {};
-
-	const char *name_images = "image_frames";
-	const char *name_imu = "imu_samples";
-
-	auto controlIn = p.create<dai::node::XLinkIn>();
-	controlIn->setStreamName("control");
+	depthai->pipeline = std::make_shared<dai::Pipeline>(depthai->device);
 
 	if (depthai->want_cameras) {
-
-		std::shared_ptr<dai::node::XLinkOut> xlinkOut = p.create<dai::node::XLinkOut>();
-		xlinkOut->setStreamName(name_images);
-
 		dai::CameraBoardSocket sockets[2] = {
-		    dai::CameraBoardSocket::LEFT,
-		    dai::CameraBoardSocket::RIGHT,
+		    dai::CameraBoardSocket::CAM_B,
+		    dai::CameraBoardSocket::CAM_C,
 		};
-
+		std::shared_ptr<dai::MessageQueue> collected_frames;
 		for (int i = 0; i < 2; i++) {
-			std::shared_ptr<dai::node::MonoCamera> grayCam = nullptr;
+			std::shared_ptr<dai::node::MonoCamera> grayCam;
 
-			grayCam = p.create<dai::node::MonoCamera>();
+			grayCam = depthai->pipeline->create<dai::node::MonoCamera>();
 			grayCam->setBoardSocket(sockets[i]);
 			grayCam->setResolution(depthai->grayscale_sensor_resolution);
 			grayCam->setImageOrientation(depthai->image_orientation);
 			grayCam->setFps(depthai->fps);
 
-			// Link plugins CAM -> XLINK
-			grayCam->out.link(xlinkOut->input);
-			// Link control to camera
-			controlIn->out.link(grayCam->inputControl);
+			if (i == 0) {
+				// Link plugins CAM -> XLINK
+				depthai->image_queue_l = grayCam->out.createOutputQueue();
+				depthai->control_queue_l = grayCam->inputControl.createInputQueue();
+			} else {
+				depthai->image_queue_r = grayCam->out.createOutputQueue();
+				depthai->control_queue_r = grayCam->inputControl.createInputQueue();
+			}
 		}
 	}
 
@@ -876,30 +880,17 @@ depthai_setup_stereo_grayscale_pipeline(struct depthai_fs *depthai)
 			max_batch_size = batch_size;
 		}
 
-		std::shared_ptr<dai::node::XLinkOut> xlinkOut_imu = p.create<dai::node::XLinkOut>();
-		xlinkOut_imu->setStreamName(name_imu);
-
-		auto imu = p.create<dai::node::IMU>();
+		auto imu = depthai->pipeline->create<dai::node::IMU>();
 		imu->enableIMUSensor({dai::IMUSensor::ACCELEROMETER_RAW, dai::IMUSensor::GYROSCOPE_RAW}, imu_hz);
 		imu->setBatchReportThreshold(batch_size);
 		imu->setMaxBatchReports(max_batch_size);
-		imu->out.link(xlinkOut_imu->input);
+		depthai->imu_queue = imu->out.createOutputQueue();
 	}
 
-	p.setXLinkChunkSize(0);
+	depthai->pipeline->setXLinkChunkSize(0);
 
 	// Start the pipeline
-	depthai->device->startPipeline(p);
-	if (depthai->want_cameras) {
-		depthai->image_queue =
-		    depthai->device->getOutputQueue(name_images, 4, false).get(); // out of shared pointer
-	}
-	if (depthai->want_imu) {
-		depthai->imu_queue = depthai->device->getOutputQueue(name_imu, 4, false).get(); // out of shared pointer
-	}
-
-
-	depthai->control_queue = depthai->device->getInputQueue("control").get();
+	depthai->pipeline->start();
 
 	if (depthai->floodlights.has) {
 		float mA = depthai->floodlights.mA.val;
@@ -910,7 +901,7 @@ depthai_setup_stereo_grayscale_pipeline(struct depthai_fs *depthai)
 		}
 
 		if (mA > 0.0f) {
-			depthai->device->setIrFloodLightBrightness(mA);
+			depthai->device->setIrFloodLightIntensity(mA);
 		}
 	}
 
@@ -926,16 +917,12 @@ depthai_setup_stereo_rgb_pipeline(struct depthai_fs *depthai)
 	depthai->width = 1280;
 	depthai->height = 800;
 	depthai->format = XRT_FORMAT_R8G8B8;
-	depthai->camera_board_socket = dai::CameraBoardSocket::LEFT;
+	depthai->camera_board_socket = dai::CameraBoardSocket::CAM_B;
 	depthai->color_sensor_resolution = dai::ColorCameraProperties::SensorResolution::THE_800_P;
 	depthai->image_orientation = dai::CameraImageOrientation::AUTO;
 	depthai->fps = 30; // Supports up to 60, but pushing 60fps over USB is typically hard
 
-	dai::Pipeline p = {};
-
-	const char *name = "frames";
-	std::shared_ptr<dai::node::XLinkOut> xlinkOut = p.create<dai::node::XLinkOut>();
-	xlinkOut->setStreamName(name);
+	depthai->pipeline = std::make_shared<dai::Pipeline>(depthai->device);
 
 	dai::CameraBoardSocket sockets[2] = {
 	    dai::CameraBoardSocket::CAM_B,
@@ -945,7 +932,7 @@ depthai_setup_stereo_rgb_pipeline(struct depthai_fs *depthai)
 	for (int i = 0; i < 2; i++) {
 		std::shared_ptr<dai::node::ColorCamera> grayCam = nullptr;
 
-		grayCam = p.create<dai::node::ColorCamera>();
+		grayCam = depthai->pipeline->create<dai::node::ColorCamera>();
 		grayCam->setPreviewSize(1280, 800);
 		grayCam->setBoardSocket(sockets[i]);
 		grayCam->setResolution(depthai->color_sensor_resolution);
@@ -954,15 +941,13 @@ depthai_setup_stereo_rgb_pipeline(struct depthai_fs *depthai)
 		grayCam->setFps(depthai->fps);
 		grayCam->setColorOrder(dai::ColorCameraProperties::ColorOrder::RGB);
 
-		// Link plugins CAM -> XLINK
-		grayCam->preview.link(xlinkOut->input);
+		depthai->image_queue_l = grayCam->preview.createOutputQueue();
 	}
 
-	p.setXLinkChunkSize(0);
+	depthai->pipeline->setXLinkChunkSize(0);
 
 	// Start the pipeline
-	depthai->device->startPipeline(p);
-	depthai->queue = depthai->device->getOutputQueue(name, 4, false).get(); // out of shared pointer
+	depthai->pipeline->start();
 }
 #endif
 
@@ -1117,9 +1102,9 @@ static struct depthai_fs *
 depthai_create_and_do_minimal_setup(void)
 {
 	// Try to create a device and see if that fail first.
-	dai::Device *d;
+	std::shared_ptr<dai::Device> d;
 	try {
-		d = new dai::Device();
+		d = std::make_shared<dai::Device>();
 	} catch (std::exception &e) {
 		std::string what = e.what();
 		U_LOG_E("DepthAI error: %s", what.c_str());
@@ -1137,6 +1122,8 @@ depthai_create_and_do_minimal_setup(void)
 	depthai->node.destroy = depthai_fs_node_destroy;
 	depthai->log_level = debug_get_log_option_depthai_log();
 	depthai->device = d;
+	// d->setLogLevel(dai::LogLevel::DEBUG);
+	// d->setLogOutputLevel(dai::LogLevel::DEBUG);
 
 	depthai->manual_exposure.active = false;
 	// Low values, useful for marker calibration on a monitor.
@@ -1158,7 +1145,6 @@ depthai_create_and_do_minimal_setup(void)
 	depthai->floodlights.mA.min = 0.0f;
 	depthai->floodlights.mA.max = 1500.0f;
 	depthai->floodlights.mA.step = 1.0f;
-
 
 
 	u_var_add_root(depthai, "DepthAI Source", 0);
