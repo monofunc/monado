@@ -181,6 +181,8 @@ fill_in_device_features(struct vk_bundle *vk, const uint32_t queue_family_index)
 	free(props);
 }
 
+#if !defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+
 static void
 get_external_image_support(struct vk_bundle *vk,
                            bool depth,
@@ -316,6 +318,8 @@ is_timeline_semaphore_bit_supported(struct vk_bundle *vk, VkExternalSemaphoreHan
 	return importable && exportable;
 }
 
+#endif // !XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT
+
 static void
 fill_in_external_object_properties(struct vk_bundle *vk)
 {
@@ -373,6 +377,9 @@ fill_in_external_object_properties(struct vk_bundle *vk)
 	get_external_image_support(vk, true, VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID,
 	                           &vk->external.depth_image_import_ahardwarebuffer,
 	                           &vk->external.depth_image_export_ahardwarebuffer);
+
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+
 #endif
 #if defined(XRT_GRAPHICS_SYNC_HANDLE_IS_FD)
 
@@ -407,6 +414,8 @@ fill_in_external_object_properties(struct vk_bundle *vk)
 	    vk, VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE_BIT);
 	vk->external.timeline_semaphore_win32_handle = is_timeline_semaphore_bit_supported( //
 	    vk, VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT);
+
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
 
 #else
 #error "Need port for fence sync handles checkers"

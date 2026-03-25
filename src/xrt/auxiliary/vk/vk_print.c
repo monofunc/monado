@@ -205,6 +205,10 @@ vk_print_external_handles_info(struct vk_bundle *vk, enum u_logging_level log_le
 	          vk->external.depth_image_export_ahardwarebuffer ? "true" : "false"      //
 	);                                                                                //
 
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+
+	U_LOG_IFL(log_level, vk->log_level, "Mach port buffer handles via VK_EXT_metal_objects");
+
 #endif
 
 #if defined(XRT_GRAPHICS_SYNC_HANDLE_IS_FD)
@@ -244,6 +248,10 @@ vk_print_external_handles_info(struct vk_bundle *vk, enum u_logging_level log_le
 	          vk->external.timeline_semaphore_d3d12_fence ? "true" : "false",   //
 	          "VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT(timeline)",   //
 	          vk->external.timeline_semaphore_win32_handle ? "true" : "false"); //
+
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+
+	U_LOG_IFL(log_level, vk->log_level, "Mach port sync handles via VK_EXT_metal_objects");
 
 #else
 #error "Need port for fence sync handles printers"

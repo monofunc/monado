@@ -100,6 +100,25 @@ ref_graphics_handle(xrt_graphics_buffer_handle_t handle)
 #define release_graphics_handle(HANDLE) fd_close(HANDLE, __FILE__, __LINE__, __func__)
 #define ref_graphics_handle(HANDLE) fd_dup(HANDLE, __FILE__, __LINE__, __func__)
 
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+#include <mach/mach.h>
+
+static inline void
+release_graphics_handle(xrt_graphics_buffer_handle_t handle)
+{
+	mach_port_deallocate(mach_task_self(), handle);
+}
+
+static inline xrt_graphics_buffer_handle_t
+ref_graphics_handle(xrt_graphics_buffer_handle_t handle)
+{
+	kern_return_t kr = mach_port_mod_refs(mach_task_self(), handle, MACH_PORT_RIGHT_SEND, 1);
+	if (kr != KERN_SUCCESS) {
+		return XRT_GRAPHICS_BUFFER_HANDLE_INVALID;
+	}
+	return handle;
+}
+
 #elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_WIN32_HANDLE)
 
 static inline void
@@ -153,7 +172,26 @@ u_graphics_buffer_unref(xrt_graphics_buffer_handle_t *handle_ptr)
  *
  */
 
-#if defined(XRT_GRAPHICS_SYNC_HANDLE_IS_FD)
+#if defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+#include <mach/mach.h>
+
+static inline void
+release_sync_handle(xrt_graphics_sync_handle_t handle)
+{
+	mach_port_deallocate(mach_task_self(), handle);
+}
+
+static inline xrt_graphics_sync_handle_t
+ref_sync_handle(xrt_graphics_sync_handle_t handle)
+{
+	kern_return_t kr = mach_port_mod_refs(mach_task_self(), handle, MACH_PORT_RIGHT_SEND, 1);
+	if (kr != KERN_SUCCESS) {
+		return XRT_GRAPHICS_SYNC_HANDLE_INVALID;
+	}
+	return handle;
+}
+
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_FD)
 #include <unistd.h>
 
 // To get the right function name and location.
