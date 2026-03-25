@@ -1,5 +1,5 @@
 # Copyright 2019-2024, Collabora, Ltd.
-# Copyright 2025, NVIDIA CORPORATION.
+# Copyright 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: BSL-1.0
 
 ###
@@ -11,7 +11,7 @@ add_library(comp_client STATIC)
 target_link_libraries(
 	comp_client
 	PUBLIC xrt-interfaces comp_includes
-	PRIVATE aux_util
+	PRIVATE aux_util aux_allocation
 	)
 
 if(XRT_HAVE_VULKAN)
@@ -70,5 +70,12 @@ endif()
 if(XRT_HAVE_D3D12)
 	target_sources(
 		comp_client PRIVATE comp_d3d12_client.cpp comp_d3d12_client.h comp_d3d12_glue.c
+		)
+endif()
+
+if(APPLE)
+	target_sources(comp_client PRIVATE comp_metal_client.m comp_metal_glue.m)
+	target_link_libraries(
+		comp_client PRIVATE aux_metal "-framework Metal" "-framework IOSurface" objc
 		)
 endif()

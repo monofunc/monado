@@ -1,5 +1,5 @@
 // Copyright 2018-2024, Collabora, Ltd.
-// Copyright 2026, NVIDIA CORPORATION.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -139,6 +139,7 @@ enum oxr_session_graphics_ext
 	OXR_SESSION_GRAPHICS_EXT_XLIB_GL,
 	OXR_SESSION_GRAPHICS_EXT_ANDROID_GLES,
 	OXR_SESSION_GRAPHICS_EXT_EGL,
+	OXR_SESSION_GRAPHICS_EXT_METAL,
 };
 
 #ifdef __cplusplus

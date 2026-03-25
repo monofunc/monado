@@ -1,4 +1,5 @@
 // Copyright 2019-2024, Collabora, Ltd.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -17,9 +18,13 @@
 
 // Note: Most of the time, the instance extensions required do **not** vary by
 // platform!
-const char *xrt_gfx_vk_instance_extensions = VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME
-    " " VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME " " VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME
-    " " VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+const char *xrt_gfx_vk_instance_extensions =
+#if !defined(XRT_OS_OSX)
+    VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME " "     //
+    VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME " "    //
+    VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME " " //
+#endif
+    VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
 
 // The device extensions do vary by platform, but in a very regular way.
 // This should match the list in comp_compositor, except it shouldn't include
@@ -30,7 +35,9 @@ const char *xrt_gfx_vk_device_extensions = VK_KHR_DEDICATED_ALLOCATION_EXTENSION
     " " VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME
 
 // Platform version of "external_memory"
-#if defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_FD)
+#if defined(XRT_OS_OSX)
+    " " VK_EXT_METAL_OBJECTS_EXTENSION_NAME
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_FD)
     " " VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME
 
 #elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_AHARDWAREBUFFER)

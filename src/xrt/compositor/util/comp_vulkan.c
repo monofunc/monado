@@ -1,5 +1,5 @@
 // Copyright 2019-2023, Collabora, Ltd.
-// Copyright 2025-2026, NVIDIA CORPORATION.
+// Copyright 2024-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -221,6 +221,13 @@ create_instance(struct vk_bundle *vk, const struct comp_vulkan_arguments *vk_arg
 	    .ppEnabledExtensionNames = u_extension_list_get_data(instance_ext_list),
 	};
 
+#ifdef VK_KHR_portability_enumeration
+	// Are we accepting portability devices, like MoltenVK.
+	if (u_extension_list_contains(instance_ext_list, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)) {
+		instance_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+	}
+#endif
+
 	ret = vk->vkCreateInstance(&instance_info, NULL, &vk->instance);
 	if (ret != VK_SUCCESS) {
 		VK_ERROR_RET(vk, "vkCreateInstance", "Failed to create Vulkan instance", ret);
@@ -381,6 +388,9 @@ comp_vulkan_init_bundle(struct vk_bundle *vk,
 void
 comp_vulkan_formats_check(struct vk_bundle *vk, struct comp_vulkan_formats *formats)
 {
+#if defined(XRT_OS_OSX)
+	formats->has_R8G8B8A8_SRGB = true;
+#else
 #define CHECK_COLOR(FORMAT)                                                                                            \
 	formats->has_##FORMAT = vk_csci_is_format_supported(vk, VK_FORMAT_##FORMAT, 0, XRT_SWAPCHAIN_USAGE_COLOR);
 #define CHECK_DS(FORMAT)                                                                                               \
@@ -391,6 +401,7 @@ comp_vulkan_formats_check(struct vk_bundle *vk, struct comp_vulkan_formats *form
 
 #undef CHECK_COLOR
 #undef CHECK_DS
+#endif
 
 #if defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_AHARDWAREBUFFER)
 	/*

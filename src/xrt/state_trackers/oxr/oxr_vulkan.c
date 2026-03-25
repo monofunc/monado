@@ -105,9 +105,13 @@ DEBUG_GET_ONCE_LOG_OPTION(compositor_log, "XRT_COMPOSITOR_LOG", U_LOGGING_WARN)
 
 //! @todo extension lists are duplicated as long strings in comp_vk_glue.c
 static const char *required_vk_instance_extensions[] = {
-    VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,      //
-    VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,     //
-    VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,  //
+#if defined(XRT_OS_OSX)
+    VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME, //
+#else
+    VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,     //
+    VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,    //
+    VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME, //
+#endif
     VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, //
 };
 
@@ -121,14 +125,18 @@ static const char *optional_vk_instance_extensions[] = {
 // This should match the list in comp_compositor, except it shouldn't include
 // VK_KHR_SWAPCHAIN_EXTENSION_NAME
 static const char *required_vk_device_extensions[] = {
-    VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,      //
-    VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME,            //
-    VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,           //
-    VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,        //
+    VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME, //
+#if !defined(XRT_OS_OSX)
+    VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME,     //
+    VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,    //
+    VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME, //
+#endif
     VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, //
 
 // Platform version of "external_memory"
-#if defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_FD)
+#if defined(XRT_OS_OSX)
+    VK_EXT_METAL_OBJECTS_EXTENSION_NAME,
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_FD)
     VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
 
 #elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_AHARDWAREBUFFER)
@@ -148,8 +156,8 @@ static const char *required_vk_device_extensions[] = {
 #if defined(XRT_GRAPHICS_SYNC_HANDLE_IS_FD) // Optional
 
 #elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_WIN32_HANDLE)
-    VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
-    VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,
+    VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME, //
+    VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,     //
 
 #else
 #error "Need port!"
@@ -157,10 +165,11 @@ static const char *required_vk_device_extensions[] = {
 };
 
 static const char *optional_device_extensions[] = {
-#if defined(XRT_GRAPHICS_SYNC_HANDLE_IS_FD)
-    VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME,
-    VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME,
-
+#if defined(XRT_OS_OSX)
+// Not optional here.
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_FD)
+    VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME,    //
+    VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME,        //
 #elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_WIN32_HANDLE) // Not optional
 
 #else
@@ -173,7 +182,7 @@ static const char *optional_device_extensions[] = {
 #ifdef VK_KHR_timeline_semaphore
     VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME,
 #else
-    NULL, // avoid zero sized array with UB
+    NULL,                                           // avoid zero sized array with UB
 #endif
 };
 
@@ -282,6 +291,13 @@ oxr_vk_create_vulkan_instance(struct oxr_logger *log,
 	VkInstanceCreateInfo modified_info = *createInfo->vulkanCreateInfo;
 	modified_info.ppEnabledExtensionNames = u_extension_list_get_data(instance_ext_list);
 	modified_info.enabledExtensionCount = u_extension_list_get_size(instance_ext_list);
+
+#ifdef VK_KHR_portability_enumeration
+	// Are we accepting portability devices, like MoltenVK.
+	if (u_extension_list_contains(instance_ext_list, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)) {
+		modified_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+	}
+#endif
 
 	*vulkanResult = loaded_CreateInstance(&modified_info, createInfo->vulkanAllocator, vulkanInstance);
 

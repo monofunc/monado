@@ -1,4 +1,5 @@
 // Copyright 2019-2024, Collabora, Ltd.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -14,6 +15,7 @@
 #include "vk/vk_helpers.h"
 #include "vk/vk_cmd_pool.h"
 #include "xrt/xrt_gfx_vk.h"
+#include "xrt/xrt_allocation_collection.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,11 +45,11 @@ struct client_vk_swapchain
 	//! Owning reference to the backing native swapchain.
 	struct xrt_swapchain_native *xscn;
 
+	//! Owning reference to the allocation collection providing VkImages.
+	struct xrt_allocation_collection *xac;
+
 	//! Non-owning reference to our parent compositor.
 	struct client_vk_compositor *c;
-
-	// Memory
-	VkDeviceMemory mems[XRT_MAX_SWAPCHAIN_IMAGES];
 
 	// Prerecorded swapchain image ownership/layout transition barriers
 	VkCommandBuffer acquire[XRT_MAX_SWAPCHAIN_IMAGES];

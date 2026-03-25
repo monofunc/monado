@@ -1,5 +1,5 @@
 // Copyright 2019-2024, Collabora, Ltd.
-// Copyright 2025, NVIDIA CORPORATION.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -44,6 +44,7 @@ extern "C" {
  *
  */
 
+struct xrt_allocation_collection;
 struct xrt_device;
 struct xrt_image_native;
 struct xrt_compositor;
@@ -2143,6 +2144,41 @@ struct xrt_compositor_d3d12
 };
 #endif
 
+#if defined(XRT_OS_OSX) || defined(XRT_DOXYGEN)
+/*
+ *
+ * Metal interface.
+ *
+ */
+
+/*!
+ * Base class for a Metal client swapchain.
+ *
+ * @ingroup xrt_iface comp_client
+ * @extends xrt_swapchain
+ */
+struct xrt_swapchain_metal
+{
+	//! @public Base
+	struct xrt_swapchain base;
+
+	//! Metal textures to be used by the caller.
+	void *images[XRT_MAX_SWAPCHAIN_IMAGES];
+};
+
+/*!
+ * Base class for a Metal client compositor.
+ *
+ * @ingroup xrt_iface comp_client
+ * @extends xrt_compositor
+ */
+struct xrt_compositor_metal
+{
+	//! @public Base
+	struct xrt_compositor base;
+};
+#endif // XRT_OS_OSX
+
 /*
  *
  * Native interface.
@@ -2209,6 +2245,12 @@ struct xrt_swapchain_native
 	 * not synchronized between service and any apps via the IPC layer.
 	 */
 	xrt_limited_unique_id_t limited_unique_id;
+
+	/*!
+	 * Optional allocation collection that may be used by client compositors
+	 * to avoid allocating their own textures when the devices match.
+	 */
+	struct xrt_allocation_collection *xac;
 
 	struct xrt_image_native images[XRT_MAX_SWAPCHAIN_IMAGES];
 };

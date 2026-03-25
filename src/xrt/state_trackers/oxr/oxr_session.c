@@ -26,6 +26,11 @@
 
 #endif // XRT_HAVE_VULKAN
 
+#ifdef XR_USE_GRAPHICS_API_METAL
+#include "xrt/xrt_gfx_metal.h" // IWYU pragma: keep
+
+#endif // XR_USE_GRAPHICS_API_METAL
+
 #include "os/os_time.h"
 
 #include "util/u_debug.h"
@@ -1374,6 +1379,30 @@ oxr_session_create_impl(struct oxr_logger *log,
 		return oxr_session_populate_d3d12(log, sys, d3d12, *out_session);
 	}
 #endif
+
+#ifdef XR_USE_GRAPHICS_API_METAL
+	XrGraphicsBindingMetalKHR const *metal =
+	    OXR_GET_INPUT_FROM_CHAIN(createInfo, XR_TYPE_GRAPHICS_BINDING_METAL_KHR, XrGraphicsBindingMetalKHR);
+	if (metal != NULL) {
+		// we know the fields of this struct are OK by now since they were checked with XrSessionCreateInfo
+
+		OXR_CHECK_XSYSC(log, sys);
+
+		if (!sys->gotten_requirements) {
+			return oxr_error(log, XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING,
+			                 "Has not called xrGetMetalGraphicsRequirementsKHR");
+		}
+
+		ret = oxr_session_allocate_and_init(log, sys, OXR_SESSION_GRAPHICS_EXT_METAL, out_session);
+		OXR_CHECK_XR_SUCCESS(log, ret, "Failed to allocate session");
+
+		ret = oxr_create_xrt_session_and_native_compositor(log, xsi, *out_session);
+		OXR_CHECK_XR_SUCCESS(log, ret, "Failed to create session/compositor");
+
+		return oxr_session_populate_metal(log, sys, metal, *out_session);
+	}
+#endif
+
 	/*
 	 * Add any new graphics binding structs here - before the headless
 	 * check. (order for non-headless checks not specified in standard.)
