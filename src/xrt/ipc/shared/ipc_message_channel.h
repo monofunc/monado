@@ -10,7 +10,12 @@
 #pragma once
 
 #include <xrt/xrt_handles.h>
+#include <xrt/xrt_config_os.h>
 #include <xrt/xrt_results.h>
+
+#if defined(XRT_OS_OSX)
+#include <mach/mach_types.h>
+#endif
 
 #include <stddef.h>
 #include <stdbool.h>
@@ -24,11 +29,16 @@ extern "C" {
 #endif
 
 /*!
- * Wrapper for a socket and flags.
+ * Wrapper for IPC transport state.
  */
 struct ipc_message_channel
 {
+#if defined(XRT_OS_OSX)
+	mach_port_t send_port;
+	mach_port_t recv_port;
+#else
 	xrt_ipc_handle_t ipc_handle;
+#endif
 	enum u_logging_level log_level;
 };
 
