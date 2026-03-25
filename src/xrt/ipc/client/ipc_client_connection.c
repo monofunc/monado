@@ -205,7 +205,122 @@ ipc_client_socket_connect(struct ipc_connection *ipc_c)
 	return true;
 }
 
-#else
+#elif defined(XRT_OS_OSX)
+
+#include <mach/mach.h>
+#include <servers/bootstrap.h>
+
+#ifndef XRT_IPC_MACH_SERVICE_NAME
+#define XRT_IPC_MACH_SERVICE_NAME "org.monado.compositor"
+#endif
+
+// Handshake message structs
+struct ipc_mach_connect_msg
+{
+	mach_msg_header_t header;
+	mach_msg_body_t body;
+	mach_msg_port_descriptor_t client_port;
+};
+
+struct ipc_mach_connect_ack_msg
+{
+	mach_msg_header_t header;
+	mach_msg_body_t body;
+	mach_msg_port_descriptor_t server_port;
+	char shmem_name[64];
+};
+
+static bool
+ipc_client_socket_connect(struct ipc_connection *ipc_c)
+{
+	kern_return_t kr;
+
+	// Look up the server's service port
+	mach_port_t service_port = MACH_PORT_NULL;
+	kr = bootstrap_look_up(bootstrap_port, XRT_IPC_MACH_SERVICE_NAME, &service_port);
+	if (kr != KERN_SUCCESS) {
+		IPC_ERROR(ipc_c, "bootstrap_look_up failed: %s", mach_error_string(kr));
+		return false;
+	}
+
+	// Allocate our receive port
+	mach_port_t client_recv_port = MACH_PORT_NULL;
+	kr = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &client_recv_port);
+	if (kr != KERN_SUCCESS) {
+		IPC_ERROR(ipc_c, "mach_port_allocate failed: %s", mach_error_string(kr));
+		mach_port_deallocate(mach_task_self(), service_port);
+		return false;
+	}
+
+	// Create a send right so the server can reply to us
+	kr = mach_port_insert_right(mach_task_self(), client_recv_port, client_recv_port, MACH_MSG_TYPE_MAKE_SEND);
+	if (kr != KERN_SUCCESS) {
+		IPC_ERROR(ipc_c, "mach_port_insert_right failed: %s", mach_error_string(kr));
+		mach_port_mod_refs(mach_task_self(), client_recv_port, MACH_PORT_RIGHT_RECEIVE, -1);
+		mach_port_deallocate(mach_task_self(), service_port);
+		return false;
+	}
+
+	// Send CONNECT to service port with our recv port
+	struct ipc_mach_connect_msg connect_msg = {0};
+	connect_msg.header.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0) | MACH_MSGH_BITS_COMPLEX;
+	connect_msg.header.msgh_size = sizeof(connect_msg);
+	connect_msg.header.msgh_remote_port = service_port;
+	connect_msg.header.msgh_local_port = MACH_PORT_NULL;
+	connect_msg.body.msgh_descriptor_count = 1;
+	connect_msg.client_port.name = client_recv_port;
+	connect_msg.client_port.disposition = MACH_MSG_TYPE_COPY_SEND;
+	connect_msg.client_port.type = MACH_MSG_PORT_DESCRIPTOR;
+
+	kr = mach_msg(&connect_msg.header, MACH_SEND_MSG, sizeof(connect_msg), 0, MACH_PORT_NULL,
+	              MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+	if (kr != KERN_SUCCESS) {
+		IPC_ERROR(ipc_c, "Failed to send CONNECT: %s", mach_error_string(kr));
+		mach_port_mod_refs(mach_task_self(), client_recv_port, MACH_PORT_RIGHT_RECEIVE, -1);
+		mach_port_deallocate(mach_task_self(), service_port);
+		return false;
+	}
+
+	// Done with service port
+	mach_port_deallocate(mach_task_self(), service_port);
+
+	// Receive CONNECT_ACK with server's port + shmem name (5s timeout)
+	// Use oversized buffer, complex messages may include kernel trailers
+	union {
+		struct ipc_mach_connect_ack_msg msg;
+		uint8_t buf[512];
+	} ack_buf = {0};
+	struct ipc_mach_connect_ack_msg *ack = &ack_buf.msg;
+	ack->header.msgh_size = sizeof(ack_buf);
+	ack->header.msgh_local_port = client_recv_port;
+
+	kr = mach_msg(&ack->header, MACH_RCV_MSG | MACH_RCV_TIMEOUT, 0, sizeof(ack_buf), client_recv_port, 5000,
+	              MACH_PORT_NULL);
+	if (kr != KERN_SUCCESS) {
+		IPC_ERROR(ipc_c, "Failed to receive CONNECT_ACK: %s", mach_error_string(kr));
+		mach_port_mod_refs(mach_task_self(), client_recv_port, MACH_PORT_RIGHT_RECEIVE, -1);
+		return false;
+	}
+
+	// Extract server's per-client recv port (we got a send right)
+	mach_port_t server_send_port = ack->server_port.name;
+	if (server_send_port == MACH_PORT_NULL) {
+		IPC_ERROR(ipc_c, "Server sent NULL port in ACK");
+		mach_port_mod_refs(mach_task_self(), client_recv_port, MACH_PORT_RIGHT_RECEIVE, -1);
+		return false;
+	}
+
+	// Set up the message channel
+	ipc_c->imc.send_port = server_send_port;
+	ipc_c->imc.recv_port = client_recv_port;
+
+	IPC_INFO(ipc_c, "Connected via Mach IPC (send=%u, recv=%u, shmem=%s)", server_send_port, client_recv_port,
+	         ack->shmem_name);
+
+	return true;
+}
+
+#elif defined(XRT_OS_UNIX)
 
 static bool
 ipc_client_socket_connect(struct ipc_connection *ipc_c)
@@ -363,7 +478,9 @@ ipc_client_connection_init(struct ipc_connection *ipc_c,
 	xrt_result_t xret;
 
 	U_ZERO(ipc_c);
+#if !defined(XRT_OS_OSX)
 	ipc_c->imc.ipc_handle = XRT_IPC_HANDLE_INVALID;
+#endif
 	ipc_c->imc.log_level = log_level;
 	ipc_c->ism_handle = XRT_SHMEM_HANDLE_INVALID;
 

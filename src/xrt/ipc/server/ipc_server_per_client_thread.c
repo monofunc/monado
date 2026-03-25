@@ -26,7 +26,9 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#if !defined(XRT_OS_OSX)
 #include <sys/epoll.h>
+#endif
 #include <sys/socket.h>
 
 #endif // XRT_OS_WINDOWS
@@ -177,7 +179,64 @@ common_shutdown(volatile struct ipc_client_state *ics)
  *
  */
 
-#ifndef XRT_OS_WINDOWS // Linux & Android
+#if defined(XRT_OS_OSX)
+
+#include <mach/mach.h>
+
+struct ipc_mach_recv_msg
+{
+	mach_msg_header_t header;
+	uint32_t data_size;
+	uint8_t data[2048];
+};
+
+static void
+client_loop(volatile struct ipc_client_state *ics)
+{
+	U_TRACE_SET_THREAD_NAME("IPC Client");
+
+	ics->server->callbacks->client_connected(ics->server, ics->client_state.id, ics->server->callback_data);
+
+	struct ipc_message_channel *imc = (struct ipc_message_channel *)&ics->imc;
+
+	while (ics->server->running) {
+		struct ipc_mach_recv_msg msg = {0};
+		msg.header.msgh_size = sizeof(msg);
+		msg.header.msgh_local_port = imc->recv_port;
+
+		kern_return_t kr = mach_msg(&msg.header, MACH_RCV_MSG | MACH_RCV_TIMEOUT, 0, sizeof(msg),
+		                            imc->recv_port, 500, MACH_PORT_NULL);
+
+		if (kr == MACH_RCV_TIMED_OUT) {
+			continue;
+		}
+
+		if (kr != KERN_SUCCESS) {
+			IPC_ERROR(ics->server, "mach_msg recv failed: %s", mach_error_string(kr));
+			break;
+		}
+
+		if (msg.data_size < sizeof(ipc_command_t)) {
+			IPC_ERROR(ics->server, "Mach msg too small: %u", msg.data_size);
+			break;
+		}
+
+		IPC_TRACE_BEGIN(ipc_dispatch);
+		xrt_result_t result = ipc_dispatch(ics, (ipc_command_t *)msg.data);
+		IPC_TRACE_END(ipc_dispatch);
+
+		if (result != XRT_SUCCESS) {
+			IPC_ERROR(ics->server, "Dispatch failed: %d", result);
+			break;
+		}
+	}
+
+	ics->server->callbacks->client_disconnected(ics->server, ics->client_state.id, ics->server->callback_data);
+
+	common_shutdown(ics);
+}
+
+#elif !defined(XRT_OS_WINDOWS) // Linux & Android
 
 static int
 setup_epoll(volatile struct ipc_client_state *ics)
