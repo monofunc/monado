@@ -142,24 +142,6 @@ enum xrt_allocation_type
 	XRT_ALLOCATION_TYPE_METAL_TEXTURE,
 
 	/*!
-	 * IOSurfaceRef handle.
-	 *
-	 * Reference counting note:
-	 *
-	 * The allocation collection retains ownership of the IOSurfaceRef objects.
-	 * The returned pointers are only valid as long as the allocation
-	 * collection exists.
-	 *
-	 * Callers:
-	 * - MUST NOT call CFRelease on these pointers.
-	 * - MUST ensure the allocation collection outlives their use of
-	 *   the surfaces.
-	 * - If longer lifetime is needed, caller SHOULD call
-	 *   CFRetain, then CFRelease when done.
-	 */
-	XRT_ALLOCATION_TYPE_IOSURFACE,
-
-	/*!
 	 * Native image handle (@ref xrt_image_native).
 	 *
 	 * Ownership note:
