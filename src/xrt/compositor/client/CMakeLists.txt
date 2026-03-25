@@ -76,6 +76,6 @@ endif()
 if(APPLE)
 	target_sources(comp_client PRIVATE comp_metal_client.m comp_metal_glue.m)
 	target_link_libraries(
-		comp_client PRIVATE aux_metal "-framework Metal" "-framework IOSurface" objc
+		comp_client PRIVATE aux_metal "-framework Metal" objc
 		)
 endif()

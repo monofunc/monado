@@ -36,9 +36,13 @@ a_allocator_allocate(struct vk_bundle *vk,
 	xrt_result_t xret = vk_xac_allocate(vk, xscci, image_count, out_xac);
 	XVK_CHK_ALWAYS_RET(xret, "vk_xac_allocate");
 #elif defined(XRT_OS_OSX)
-	// On macOS, use Metal-backed allocation collection.
+#if defined(XRT_FEATURE_SERVICE)
+	xrt_result_t xret = mtl_image_collection_create_shared_from_vk(vk, xscci, image_count, out_xac);
+	XVK_CHK_ALWAYS_RET(xret, "mtl_image_collection_create_shared_from_vk");
+#else
 	xrt_result_t xret = mtl_image_collection_create_from_vk(vk, xscci, image_count, out_xac);
 	XVK_CHK_ALWAYS_RET(xret, "mtl_image_collection_create_from_vk");
+#endif
 #else
 #error "Unsupported platform"
 #endif
@@ -56,9 +60,43 @@ a_allocator_import_from_natives(struct vk_bundle *vk,
 	// This is platform-independent as it imports existing native handles.
 	return vk_xac_from_natives(vk, xscci, native_images, image_count, out_xac);
 #elif defined(XRT_OS_OSX)
-	// Not supported yet.
-	U_LOG_E("Importing from native images is not supported on macOS yet");
-	return XRT_ERROR_ALLOCATION;
+	if (!vk->has_EXT_metal_objects) {
+		U_LOG_E("VK_EXT_metal_objects extension not enabled");
+		return XRT_ERROR_VULKAN;
+	}
+
+	// Get the MTLDevice from Vulkan.
+	VkExportMetalDeviceInfoEXT device_info = {
+	    .sType = VK_STRUCTURE_TYPE_EXPORT_METAL_DEVICE_INFO_EXT,
+	};
+	VkExportMetalObjectsInfoEXT export_info = {
+	    .sType = VK_STRUCTURE_TYPE_EXPORT_METAL_OBJECTS_INFO_EXT,
+	    .pNext = &device_info,
+	};
+	vk->vkExportMetalObjectsEXT(vk->device, &export_info);
+
+	if (device_info.mtlDevice == NULL) {
+		U_LOG_E("Failed to export MTLDevice from Vulkan");
+		return XRT_ERROR_VULKAN;
+	}
+
+	// Extract Mach ports from native images and import via MTLSharedTextureHandle.
+	mach_port_t ports[XRT_MAX_SWAPCHAIN_IMAGES];
+	for (uint32_t i = 0; i < image_count; i++) {
+		ports[i] = native_images[i].handle;
+	}
+
+	struct xrt_allocation_collection *xac_mtl = NULL;
+	xrt_result_t xret =
+	    mtl_image_collection_import_from_port(device_info.mtlDevice, xscci, ports, image_count, &xac_mtl);
+	if (xret != XRT_SUCCESS) {
+		return xret;
+	}
+
+	// Wrap Metal textures as Vulkan images.
+	xret = mtl_image_collection_wrap_from_metal(vk, xac_mtl, out_xac);
+	xrt_allocation_collection_reference(&xac_mtl, NULL);
+	return xret;
 #else
 #error "Unsupported platform"
 #endif
@@ -92,7 +130,6 @@ a_allocator_ensure_vk_images(struct vk_bundle *vk,
 		case XRT_ALLOCATION_TYPE_VULKAN_IMAGE: supports_vk_image = true; break;
 		case XRT_ALLOCATION_TYPE_NATIVE_IMAGE: supports_native_images = true; break;
 		case XRT_ALLOCATION_TYPE_METAL_TEXTURE: supports_metal_texture = true; break;
-		case XRT_ALLOCATION_TYPE_IOSURFACE: break; // Not used.
 		}
 	}
 

@@ -8,9 +8,12 @@
  */
 
 #import <Metal/Metal.h>
-#import <IOSurface/IOSurface.h>
+
+#include <mach/mach.h>
 
 #include "xrt/xrt_config_vulkan.h"
+
+#include "xrt/xrt_compositor.h"
 
 #include "util/u_misc.h"
 #include "util/u_logging.h"
@@ -19,6 +22,7 @@
 
 #include "mtl_format.h"
 #include "mtl_image_collection.h"
+#include "mtl_shared_texture.h"
 
 
 /*
@@ -26,9 +30,6 @@
  * Structs.
  *
  */
-
-// Not used for now.
-#undef USE_IOSURFACE
 
 /*!
  * Implementation of @ref xrt_allocation_collection that supports
@@ -48,11 +49,11 @@ struct mtl_image_collection
 	//! Vulkan images wrapping the Metal textures.
 	VkImage images[XRT_MAX_SWAPCHAIN_IMAGES];
 
-	//! Metal textures backed by IOSurfaces.
+	//! Metal textures.
 	id<MTLTexture> textures[XRT_MAX_SWAPCHAIN_IMAGES];
 
-	//! IOSurfaces backing the Metal textures.
-	IOSurfaceRef surfaces[XRT_MAX_SWAPCHAIN_IMAGES];
+	//! Textures created via newSharedTextureWithDescriptor (can export Mach ports).
+	bool is_shared;
 
 	//! Swapchain creation info used to create this collection.
 	struct xrt_swapchain_create_info info;
@@ -72,103 +73,21 @@ mtl_image_collection(struct xrt_allocation_collection *xac)
 }
 
 /*!
- * Get the bytes per pixel for a Metal pixel format.
- */
-static uint32_t
-get_bytes_per_pixel(MTLPixelFormat format)
-{
-	switch (format) {
-	case MTLPixelFormatBGRA8Unorm:
-	case MTLPixelFormatBGRA8Unorm_sRGB:
-	case MTLPixelFormatRGBA8Unorm:
-	case MTLPixelFormatRGBA8Unorm_sRGB:
-	case MTLPixelFormatRGB10A2Unorm:
-	case MTLPixelFormatDepth32Float: return 4;
-	case MTLPixelFormatRGBA16Float:
-	case MTLPixelFormatDepth32Float_Stencil8: return 8;
-	default:
-		// Default to 4 bytes per pixel.
-		return 4;
-	}
-}
-
-/*!
- * Get the IOSurface pixel format for a Metal pixel format.
- * Returns 0 if the format is not supported.
- */
-static uint32_t
-get_iosurface_pixel_format(MTLPixelFormat format)
-{
-	switch (format) {
-	case MTLPixelFormatBGRA8Unorm:
-	case MTLPixelFormatBGRA8Unorm_sRGB: return 'BGRA'; // kCVPixelFormatType_32BGRA
-	case MTLPixelFormatRGBA8Unorm:
-	case MTLPixelFormatRGBA8Unorm_sRGB: return 'RGBA'; // kCVPixelFormatType_32RGBA
-	case MTLPixelFormatRGBA16Float: return 'RGhA';     // kCVPixelFormatType_64RGBAHalf
-	case MTLPixelFormatRGB10A2Unorm: return 'l10r';    // kCVPixelFormatType_ARGB2101010LEPacked (closest match)
-	default:
-		// For formats without a direct IOSurface equivalent, return 0.
-		// The caller should handle this appropriately.
-		return 0;
-	}
-}
-
-/*!
- * Create an IOSurface with the given properties.
- */
-XRT_MAYBE_UNUSED static IOSurfaceRef
-create_iosurface(const struct xrt_swapchain_create_info *info, MTLPixelFormat mtl_format)
-{
-	uint32_t bytes_per_pixel = get_bytes_per_pixel(mtl_format);
-	uint32_t bytes_per_row = info->width * bytes_per_pixel;
-	uint32_t pixel_format = get_iosurface_pixel_format(mtl_format);
-
-	// Build IOSurface properties dictionary.
-	NSDictionary *properties = @{
-		(id)kIOSurfaceWidth : @(info->width),
-		(id)kIOSurfaceHeight : @(info->height),
-		(id)kIOSurfaceBytesPerElement : @(bytes_per_pixel),
-		(id)kIOSurfaceBytesPerRow : @(bytes_per_row),
-		(id)kIOSurfaceAllocSize : @(bytes_per_row * info->height),
-		// Note: For some formats like depth, there's no matching IOSurface pixel format.
-		// We only set it if we have a valid mapping.
-		(id)kIOSurfacePixelFormat : pixel_format != 0 ? @(pixel_format) : @(0),
-	};
-
-	IOSurfaceRef surface = IOSurfaceCreate((__bridge CFDictionaryRef)properties);
-
-	return surface;
-}
-
-/*!
- * Create a Metal texture descriptor and IOSurface-backed texture from swapchain create info.
+ * Create a Metal texture descriptor and texture from swapchain create info.
  * This is the pure Metal version without any Vulkan dependencies.
  *
  * @param mtl_device    The Metal device to create the texture on.
  * @param info          Swapchain creation info.
  * @param mtl_format    The Metal pixel format.
  * @param out_texture   Output: the created Metal texture (retained).
- * @param out_surface   Output: the backing IOSurface (retained).
  * @return true on success, false on failure.
  */
 static bool
 create_texture_for_metal(id<MTLDevice> mtl_device,
                          const struct xrt_swapchain_create_info *info,
                          MTLPixelFormat mtl_format,
-                         id<MTLTexture> *out_texture,
-                         IOSurfaceRef *out_surface)
+                         id<MTLTexture> *out_texture)
 {
-#if defined(USE_IOSURFACE)
-	// Create the IOSurface that will back the texture.
-	IOSurfaceRef surface = create_iosurface(info, mtl_format);
-	if (surface == NULL) {
-		U_LOG_E("Failed to create IOSurface");
-		return false;
-	}
-#else
-	IOSurfaceRef surface = NULL;
-#endif
-
 	// Create Metal texture descriptor.
 	MTLTextureDescriptor *desc = [[MTLTextureDescriptor alloc] init];
 	desc.width = info->width;
@@ -179,8 +98,7 @@ create_texture_for_metal(id<MTLDevice> mtl_device,
 	desc.sampleCount = info->sample_count > 0 ? info->sample_count : 1;
 	desc.textureType = info->array_size > 1 ? MTLTextureType2DArray : MTLTextureType2D;
 	desc.pixelFormat = mtl_format;
-	// IOSurface-backed textures must use MTLStorageModeShared on macOS.
-	desc.storageMode = MTLStorageModeShared;
+	desc.storageMode = MTLStorageModePrivate;
 
 	// Set Metal usage based on XRT swapchain bits.
 	MTLTextureUsage mtl_usage = 0;
@@ -200,23 +118,16 @@ create_texture_for_metal(id<MTLDevice> mtl_device,
 	mtl_usage |= MTLTextureUsageShaderRead;
 	desc.usage = mtl_usage;
 
-#if defined(USE_IOSURFACE)
-	// Create the Metal texture from the IOSurface.
-	id<MTLTexture> texture = [mtl_device newTextureWithDescriptor:desc iosurface:surface plane:0];
-#else
-	// Create the Metal texture from the IOSurface.
+	// Create the Metal texture.
 	id<MTLTexture> texture = [mtl_device newTextureWithDescriptor:desc];
-#endif
 	[desc release];
 
 	if (texture == nil) {
-		U_LOG_E("Failed to create Metal texture from IOSurface");
-		CFRelease(surface);
+		U_LOG_E("Failed to create Metal texture");
 		return false;
 	}
 
 	*out_texture = texture;
-	*out_surface = surface;
 
 	return true;
 }
@@ -229,8 +140,7 @@ create_image_for_metal(struct vk_bundle *vk,
                        id<MTLDevice> mtl_device,
                        const struct xrt_swapchain_create_info *info,
                        VkImage *out_image,
-                       id<MTLTexture> *out_texture,
-                       IOSurfaceRef *out_surface)
+                       id<MTLTexture> *out_texture)
 {
 	VkResult ret;
 	VkFormat vk_format = (VkFormat)info->format;
@@ -248,10 +158,9 @@ create_image_for_metal(struct vk_bundle *vk,
 		return VK_ERROR_FEATURE_NOT_PRESENT;
 	}
 
-	// Create the IOSurface-backed Metal texture using the shared helper.
+	// Create the Metal texture using the shared helper.
 	id<MTLTexture> texture = nil;
-	IOSurfaceRef surface = NULL;
-	if (!create_texture_for_metal(mtl_device, info, mtl_format, &texture, &surface)) {
+	if (!create_texture_for_metal(mtl_device, info, mtl_format, &texture)) {
 		U_LOG_E("Failed to create Metal texture");
 		return VK_ERROR_OUT_OF_DEVICE_MEMORY;
 	}
@@ -269,12 +178,14 @@ create_image_for_metal(struct vk_bundle *vk,
 	}
 
 	// Import the Metal texture into the Vulkan image.
-	// Per the Vulkan spec, the pNext chain must include one VkImportMetalTextureInfoEXT
-	// structure for each plane in the VkImage. For non-planar images, use VK_IMAGE_ASPECT_COLOR_BIT.
+	VkImageAspectFlagBits plane = (info->bits & XRT_SWAPCHAIN_USAGE_DEPTH_STENCIL)
+	                                  ? VK_IMAGE_ASPECT_DEPTH_BIT
+	                                  : VK_IMAGE_ASPECT_COLOR_BIT;
+
 	VkImportMetalTextureInfoEXT import_texture_info = {
 	    .sType = VK_STRUCTURE_TYPE_IMPORT_METAL_TEXTURE_INFO_EXT,
 	    .pNext = NULL,
-	    .plane = VK_IMAGE_ASPECT_COLOR_BIT,
+	    .plane = plane,
 	    .mtlTexture = (__bridge MTLTexture_id)texture,
 	};
 
@@ -299,13 +210,11 @@ create_image_for_metal(struct vk_bundle *vk,
 	VK_CHK_ONLY_PRINT(ret, "vkCreateImage");
 	if (ret != VK_SUCCESS) {
 		[texture release];
-		CFRelease(surface);
 		return ret;
 	}
 
 	*out_texture = texture;
 	*out_image = image;
-	*out_surface = surface;
 
 	return VK_SUCCESS;
 }
@@ -348,16 +257,6 @@ mtl_image_collection_fini(struct mtl_image_collection *mic)
 
 		[mic->textures[i] release];
 		mic->textures[i] = nil;
-	}
-
-	// Release IOSurfaces backing the Metal textures.
-	for (uint32_t i = 0; i < mic->base.image_count; i++) {
-		if (mic->surfaces[i] == NULL) {
-			continue;
-		}
-
-		CFRelease(mic->surfaces[i]);
-		mic->surfaces[i] = NULL;
 	}
 
 	// Release Metal device.
@@ -437,16 +336,31 @@ mtl_xac_get_all(struct xrt_allocation_collection *xac, enum xrt_allocation_type 
 		}
 		return XRT_SUCCESS;
 	}
-	case XRT_ALLOCATION_TYPE_IOSURFACE: {
-		if (element_size != sizeof(IOSurfaceRef)) {
-			U_LOG_E("Invalid element size for IOSurfaceRef: %zu (expected %zu)", element_size,
-			        sizeof(IOSurfaceRef));
+	case XRT_ALLOCATION_TYPE_NATIVE_IMAGE: {
+		if (!mic->is_shared) {
+			U_LOG_E("NATIVE_IMAGE not supported for non-shared collection");
 			return XRT_ERROR_IPC_FAILURE;
 		}
-		IOSurfaceRef *surfaces = (IOSurfaceRef *)ptr;
-		// See XRT_ALLOCATION_TYPE_IOSURFACE for reference semantics.
+		if (element_size != sizeof(struct xrt_image_native)) {
+			U_LOG_E("Invalid element size for xrt_image_native: %zu (expected %zu)", element_size,
+			        sizeof(struct xrt_image_native));
+			return XRT_ERROR_IPC_FAILURE;
+		}
+		struct xrt_image_native *natives = (struct xrt_image_native *)ptr;
 		for (uint32_t i = 0; i < mic->base.image_count; i++) {
-			surfaces[i] = mic->surfaces[i];
+			mach_port_t port = mtl_shared_texture_to_mach_port((void *)mic->textures[i]);
+			if (port == MACH_PORT_NULL) {
+				U_LOG_E("Failed to export Mach port for texture %u", i);
+				for (uint32_t j = 0; j < i; j++) {
+					mach_port_deallocate(mach_task_self(), natives[j].handle);
+					natives[j].handle = MACH_PORT_NULL;
+				}
+				return XRT_ERROR_IPC_FAILURE;
+			}
+			natives[i].handle = port;
+			natives[i].size = 0;
+			natives[i].use_dedicated_allocation = false;
+			natives[i].is_dxgi_handle = false;
 		}
 		return XRT_SUCCESS;
 	}
@@ -501,7 +415,7 @@ mtl_image_collection_create(void *mtl_device,
 		return XRT_ERROR_ALLOCATION;
 	}
 
-	// Initialize base structure for pure Metal (MTLTexture and IOSurface supported).
+	// Initialize base structure for pure Metal (MTLTexture supported).
 	mic->base.reference.count = 1;
 	mic->base.image_count = image_count;
 	mic->base.supported_properties_count = 2;
@@ -509,9 +423,6 @@ mtl_image_collection_create(void *mtl_device,
 	mic->base.supported_properties[1].property = XRT_ALLOCATION_PROPERTY_METAL_DEVICE;
 	mic->base.supported_types_count = 1;
 	mic->base.supported_types[0].type = XRT_ALLOCATION_TYPE_METAL_TEXTURE;
-#if defined(USE_IOSURFACE)
-	mic->base.supported_types[mic->base.supported_types_count++].type = XRT_ALLOCATION_TYPE_IOSURFACE;
-#endif
 	mic->base.get_property = mtl_xac_get_property;
 	mic->base.get_all = mtl_xac_get_all;
 	mic->base.destroy = mtl_xac_destroy;
@@ -525,14 +436,13 @@ mtl_image_collection_create(void *mtl_device,
 	// Store the swapchain creation info.
 	mic->info = *xscci;
 
-	// Create IOSurface-backed Metal textures.
+	// Create Metal textures.
 	for (i = 0; i < image_count; i++) {
 		bool bret = create_texture_for_metal( //
 		    mic->device,                      //
 		    xscci,                            //
 		    mtl_format,                       //
-		    &mic->textures[i],                //
-		    &mic->surfaces[i]);               //
+		    &mic->textures[i]);               //
 		if (!bret) {
 			U_LOG_E("Failed to create Metal texture %u", i);
 			goto err_textures;
@@ -610,9 +520,6 @@ mtl_image_collection_create_from_vk(struct vk_bundle *vk,
 	mic->base.supported_types_count = 2;
 	mic->base.supported_types[0].type = XRT_ALLOCATION_TYPE_VULKAN_IMAGE;
 	mic->base.supported_types[1].type = XRT_ALLOCATION_TYPE_METAL_TEXTURE;
-#if defined(USE_IOSURFACE)
-	mic->base.supported_types[mic->base.supported_types_count++].type = XRT_ALLOCATION_TYPE_IOSURFACE;
-#endif
 	mic->base.get_property = mtl_xac_get_property;
 	mic->base.get_all = mtl_xac_get_all;
 	mic->base.destroy = mtl_xac_destroy;
@@ -625,15 +532,14 @@ mtl_image_collection_create_from_vk(struct vk_bundle *vk,
 	// Store the swapchain creation info.
 	mic->info = *xscci;
 
-	// Create IOSurface-backed Metal textures and import them into Vulkan images.
+	// Create Metal textures and import them into Vulkan images.
 	for (i = 0; i < image_count; i++) {
 		ret = create_image_for_metal( //
 		    vk,                       //
 		    mic->device,              //
 		    xscci,                    //
 		    &mic->images[i],          //
-		    &mic->textures[i],        //
-		    &mic->surfaces[i]);       //
+		    &mic->textures[i]);       //
 		VK_CHK_WITH_GOTO(ret, "create_image_for_metal", err_images);
 	}
 
@@ -777,9 +683,6 @@ mtl_image_collection_wrap_from_metal(struct vk_bundle *vk,
 	mic->base.supported_types_count = 2;
 	mic->base.supported_types[0].type = XRT_ALLOCATION_TYPE_VULKAN_IMAGE;
 	mic->base.supported_types[1].type = XRT_ALLOCATION_TYPE_METAL_TEXTURE;
-#if defined(USE_IOSURFACE)
-	mic->base.supported_types[mic->base.supported_types_count++].type = XRT_ALLOCATION_TYPE_IOSURFACE;
-#endif
 	mic->base.get_property = mtl_xac_get_property;
 	mic->base.get_all = mtl_xac_get_all;
 	mic->base.destroy = mtl_xac_destroy;
@@ -828,10 +731,14 @@ mtl_image_collection_wrap_from_metal(struct vk_bundle *vk,
 		mic->textures[i] = [texture retain];
 
 		// Import the Metal texture into the Vulkan image.
+		VkImageAspectFlagBits plane = (info.bits & XRT_SWAPCHAIN_USAGE_DEPTH_STENCIL)
+		                                  ? VK_IMAGE_ASPECT_DEPTH_BIT
+		                                  : VK_IMAGE_ASPECT_COLOR_BIT;
+
 		VkImportMetalTextureInfoEXT import_texture_info = {
 		    .sType = VK_STRUCTURE_TYPE_IMPORT_METAL_TEXTURE_INFO_EXT,
 		    .pNext = NULL,
-		    .plane = VK_IMAGE_ASPECT_COLOR_BIT,
+		    .plane = plane,
 		    .mtlTexture = (__bridge MTLTexture_id)texture,
 		};
 
@@ -861,17 +768,10 @@ mtl_image_collection_wrap_from_metal(struct vk_bundle *vk,
 		}
 
 		mic->images[i] = image;
-
-		// Note: We don't retain IOSurfaces here because we don't have direct access to them
-		// from the input allocation collection. The IOSurfaces are owned by the input
-		// allocation collection and will be kept alive by it. This is fine because the
-		// Metal textures we've retained keep a reference to their backing IOSurfaces.
-		mic->surfaces[i] = NULL;
 	}
 
 	*out_xac = &mic->base;
 
-	U_LOG_E("YES");
 	return XRT_SUCCESS;
 
 err_images:
@@ -900,4 +800,268 @@ err_cleanup:
 	free(mic);
 
 	return xrt_ret;
+}
+
+xrt_result_t
+mtl_image_collection_create_shared_from_vk(struct vk_bundle *vk,
+                                            const struct xrt_swapchain_create_info *xscci,
+                                            uint32_t image_count,
+                                            struct xrt_allocation_collection **out_xac)
+{
+	struct mtl_image_collection *mic = NULL;
+	VkResult vk_ret;
+	xrt_result_t xrt_ret;
+	uint32_t i;
+
+	assert(vk != NULL);
+	assert(xscci != NULL);
+	assert(xscci->format != 0);
+	assert(out_xac != NULL);
+	assert(image_count > 0);
+	assert(image_count <= XRT_MAX_SWAPCHAIN_IMAGES);
+
+	if (!vk->has_EXT_metal_objects) {
+		U_LOG_E("VK_EXT_metal_objects extension not enabled");
+		return XRT_ERROR_VULKAN;
+	}
+
+	// Export the Metal device from Vulkan using VK_EXT_metal_objects.
+	VkExportMetalDeviceInfoEXT device_info = {
+	    .sType = VK_STRUCTURE_TYPE_EXPORT_METAL_DEVICE_INFO_EXT,
+	    .pNext = NULL,
+	    .mtlDevice = NULL,
+	};
+
+	VkExportMetalObjectsInfoEXT export_info = {
+	    .sType = VK_STRUCTURE_TYPE_EXPORT_METAL_OBJECTS_INFO_EXT,
+	    .pNext = &device_info,
+	};
+
+	vk->vkExportMetalObjectsEXT(vk->device, &export_info);
+
+	if (device_info.mtlDevice == NULL) {
+		U_LOG_E("Failed to export MTLDevice from Vulkan");
+		return XRT_ERROR_VULKAN;
+	}
+
+	id<MTLDevice> mtl_device = (__bridge id<MTLDevice>)device_info.mtlDevice;
+
+	// Convert Vulkan format to Metal format.
+	VkFormat vk_format = (VkFormat)xscci->format;
+	MTLPixelFormat mtl_format = (MTLPixelFormat)mtl_format_from_vk(vk_format);
+	if (mtl_format == MTLPixelFormatInvalid) {
+		U_LOG_E("Unsupported Vulkan format for Metal: %d", vk_format);
+		return XRT_ERROR_VULKAN;
+	}
+
+	VkImageUsageFlags image_usage = vk_csci_get_image_usage_flags(vk, vk_format, xscci->bits);
+	if (image_usage == 0) {
+		U_LOG_E("Unsupported swapchain usage flags");
+		return XRT_ERROR_VULKAN;
+	}
+
+	// Compute Metal texture usage from swapchain bits.
+	MTLTextureUsage mtl_usage = 0;
+	if (xscci->bits & XRT_SWAPCHAIN_USAGE_COLOR) {
+		mtl_usage |= MTLTextureUsageRenderTarget;
+	}
+	if (xscci->bits & XRT_SWAPCHAIN_USAGE_DEPTH_STENCIL) {
+		mtl_usage |= MTLTextureUsageRenderTarget;
+	}
+	if (xscci->bits & XRT_SWAPCHAIN_USAGE_SAMPLED) {
+		mtl_usage |= MTLTextureUsageShaderRead;
+	}
+	if (xscci->bits & XRT_SWAPCHAIN_USAGE_UNORDERED_ACCESS) {
+		mtl_usage |= MTLTextureUsageShaderWrite;
+	}
+	// Always allow shader read for flexibility.
+	mtl_usage |= MTLTextureUsageShaderRead;
+
+	// Allocate the image collection structure.
+	mic = U_TYPED_CALLOC(struct mtl_image_collection);
+	if (mic == NULL) {
+		U_LOG_E("Failed to allocate mtl_image_collection");
+		return XRT_ERROR_ALLOCATION;
+	}
+
+	// Initialize base structure.
+	mic->base.reference.count = 1;
+	mic->base.image_count = image_count;
+	mic->base.supported_properties_count = 3;
+	mic->base.supported_properties[0].property = XRT_ALLOCATION_PROPERTY_SWAPCHAIN_INFO;
+	mic->base.supported_properties[1].property = XRT_ALLOCATION_PROPERTY_VK_BUNDLE;
+	mic->base.supported_properties[2].property = XRT_ALLOCATION_PROPERTY_METAL_DEVICE;
+	mic->base.supported_types_count = 3;
+	mic->base.supported_types[0].type = XRT_ALLOCATION_TYPE_VULKAN_IMAGE;
+	mic->base.supported_types[1].type = XRT_ALLOCATION_TYPE_METAL_TEXTURE;
+	mic->base.supported_types[2].type = XRT_ALLOCATION_TYPE_NATIVE_IMAGE;
+	mic->base.get_property = mtl_xac_get_property;
+	mic->base.get_all = mtl_xac_get_all;
+	mic->base.destroy = mtl_xac_destroy;
+
+	mic->vk = vk;
+	mic->is_shared = true;
+
+	// Retain the Metal device.
+	mic->device = [mtl_device retain];
+
+	// Store the swapchain creation info.
+	mic->info = *xscci;
+
+	// Build Vulkan image create flags.
+	VkImageCreateFlags image_create_flags = 0;
+	if ((xscci->bits & XRT_SWAPCHAIN_USAGE_MUTABLE_FORMAT) != 0) {
+		image_create_flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+	}
+	if ((xscci->create & XRT_SWAPCHAIN_CREATE_PROTECTED_CONTENT) != 0) {
+		image_create_flags |= VK_IMAGE_CREATE_PROTECTED_BIT;
+	}
+	if (xscci->face_count == 6) {
+		image_create_flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+	}
+
+	// Create shared Metal textures and import them into Vulkan images.
+	for (i = 0; i < image_count; i++) {
+		// Create a shared Metal texture via mtl_shared_texture_create.
+		void *texture_ptr = mtl_shared_texture_create( //
+		    (__bridge void *)mic->device,              //
+		    xscci->width,                              //
+		    xscci->height,                             //
+		    xscci->array_size > 0 ? xscci->array_size : 1, //
+		    xscci->sample_count > 0 ? xscci->sample_count : 1, //
+		    xscci->mip_count > 0 ? xscci->mip_count : 1, //
+		    (uint64_t)mtl_format,                      //
+		    (uint64_t)mtl_usage);                      //
+		if (texture_ptr == NULL) {
+			U_LOG_E("Failed to create shared Metal texture %u", i);
+			xrt_ret = XRT_ERROR_VULKAN;
+			goto err_images;
+		}
+
+		mic->textures[i] = (id<MTLTexture>)texture_ptr;
+
+		// Import the Metal texture into the Vulkan image.
+		VkImageAspectFlagBits plane = (xscci->bits & XRT_SWAPCHAIN_USAGE_DEPTH_STENCIL)
+		                                  ? VK_IMAGE_ASPECT_DEPTH_BIT
+		                                  : VK_IMAGE_ASPECT_COLOR_BIT;
+
+		VkImportMetalTextureInfoEXT import_texture_info = {
+		    .sType = VK_STRUCTURE_TYPE_IMPORT_METAL_TEXTURE_INFO_EXT,
+		    .pNext = NULL,
+		    .plane = plane,
+		    .mtlTexture = (__bridge MTLTexture_id)mic->textures[i],
+		};
+
+		VkImageCreateInfo create_info = {
+		    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		    .pNext = &import_texture_info,
+		    .flags = image_create_flags,
+		    .imageType = VK_IMAGE_TYPE_2D,
+		    .format = vk_format,
+		    .extent = {.width = xscci->width, .height = xscci->height, .depth = 1},
+		    .mipLevels = xscci->mip_count,
+		    .arrayLayers = xscci->array_size * xscci->face_count,
+		    .samples = VK_SAMPLE_COUNT_1_BIT,
+		    .tiling = VK_IMAGE_TILING_OPTIMAL,
+		    .usage = image_usage,
+		    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
+
+		VkImage image = VK_NULL_HANDLE;
+		vk_ret = vk->vkCreateImage(vk->device, &create_info, NULL, &image);
+		VK_CHK_ONLY_PRINT(vk_ret, "vkCreateImage");
+		if (vk_ret != VK_SUCCESS) {
+			U_LOG_E("Failed to import shared Metal texture %u as Vulkan image", i);
+			xrt_ret = XRT_ERROR_VULKAN;
+			goto err_images;
+		}
+
+		mic->images[i] = image;
+	}
+
+	*out_xac = &mic->base;
+
+	return XRT_SUCCESS;
+
+err_images:
+	mtl_image_collection_fini(mic);
+	free(mic);
+
+	return xrt_ret;
+}
+
+xrt_result_t
+mtl_image_collection_import_from_port(void *mtl_device,
+                                       const struct xrt_swapchain_create_info *xscci,
+                                       const mach_port_t *ports,
+                                       uint32_t image_count,
+                                       struct xrt_allocation_collection **out_xac)
+{
+	struct mtl_image_collection *mic = NULL;
+	uint32_t i;
+
+	assert(mtl_device != NULL);
+	assert(xscci != NULL);
+	assert(xscci->format != 0);
+	assert(ports != NULL);
+	assert(out_xac != NULL);
+	assert(image_count > 0);
+	assert(image_count <= XRT_MAX_SWAPCHAIN_IMAGES);
+
+	// Allocate the image collection structure.
+	mic = U_TYPED_CALLOC(struct mtl_image_collection);
+	if (mic == NULL) {
+		U_LOG_E("Failed to allocate mtl_image_collection");
+		return XRT_ERROR_ALLOCATION;
+	}
+
+	// Initialize base structure for pure Metal (no Vulkan).
+	mic->base.reference.count = 1;
+	mic->base.image_count = image_count;
+	mic->base.supported_properties_count = 2;
+	mic->base.supported_properties[0].property = XRT_ALLOCATION_PROPERTY_SWAPCHAIN_INFO;
+	mic->base.supported_properties[1].property = XRT_ALLOCATION_PROPERTY_METAL_DEVICE;
+	mic->base.supported_types_count = 1;
+	mic->base.supported_types[0].type = XRT_ALLOCATION_TYPE_METAL_TEXTURE;
+	mic->base.get_property = mtl_xac_get_property;
+	mic->base.get_all = mtl_xac_get_all;
+	mic->base.destroy = mtl_xac_destroy;
+
+	// No Vulkan bundle for pure Metal.
+	mic->vk = NULL;
+	mic->is_shared = false;
+
+	// Retain the Metal device.
+	mic->device = [(id<MTLDevice>)mtl_device retain];
+
+	// Store the swapchain creation info.
+	mic->info = *xscci;
+
+	// Import textures from Mach ports.
+	for (i = 0; i < image_count; i++) {
+		void *texture_ptr = mtl_shared_texture_from_mach_port(mtl_device, ports[i]);
+		if (texture_ptr == NULL) {
+			U_LOG_E("Failed to import shared texture from Mach port %u", i);
+			goto err_textures;
+		}
+
+		mic->textures[i] = (id<MTLTexture>)texture_ptr;
+	}
+
+	// All imports succeeded, deallocate send rights.
+	for (i = 0; i < image_count; i++) {
+		mach_port_deallocate(mach_task_self(), ports[i]);
+	}
+
+	*out_xac = &mic->base;
+
+	return XRT_SUCCESS;
+
+err_textures:
+	// On failure, do NOT deallocate any ports (caller retains ownership).
+	mtl_image_collection_fini(mic);
+	free(mic);
+
+	return XRT_ERROR_VULKAN;
 }
