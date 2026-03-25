@@ -15,8 +15,7 @@ add_library(
 	)
 target_link_libraries(aux_metal PUBLIC aux-includes aux_util aux_vk)
 target_link_libraries(
-	aux_metal PRIVATE "-framework Metal" "-framework IOSurface" "-framework Foundation"
-			  "-framework CoreFoundation"
+	aux_metal PRIVATE "-framework Metal" "-framework Foundation"
 	)
 set_source_files_properties(
 	mtl_shared_texture.m
