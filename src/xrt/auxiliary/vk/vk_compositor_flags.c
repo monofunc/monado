@@ -70,6 +70,8 @@ vk_cb_get_buffer_external_handle_type(struct vk_bundle *vk)
 	return VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
 #elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_WIN32_HANDLE)
 	return VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+	return 0;
 #else
 #error "need port"
 #endif
@@ -220,6 +222,8 @@ vk_csci_get_image_external_handle_type(struct vk_bundle *vk, struct xrt_image_na
 #elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_WIN32_HANDLE)
 	return (xin && xin->is_dxgi_handle) ? VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_KMT_BIT
 	                                    : VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+#elif defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+	return 0;
 #else
 #error "need port"
 #endif
@@ -233,6 +237,19 @@ vk_csci_get_image_external_support(struct vk_bundle *vk,
                                    bool *out_importable,
                                    bool *out_exportable)
 {
+#if defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+	(void)image_format;
+	(void)bits;
+	(void)handle_type;
+	if (out_importable) {
+		*out_importable = false;
+	}
+	if (out_exportable) {
+		*out_exportable = false;
+	}
+	return;
+#endif
+
 	VkImageUsageFlags image_usage = vk_csci_get_image_usage_flags(vk, image_format, bits);
 
 	// In->pNext
@@ -389,6 +406,9 @@ vk_csci_is_format_supported(struct vk_bundle *vk,
 	 * Check exportability.
 	 */
 
+#if defined(XRT_GRAPHICS_BUFFER_HANDLE_IS_MACH_PORT)
+	return true;
+#else
 	VkExternalMemoryHandleTypeFlags handle_type = vk_csci_get_image_external_handle_type(vk, NULL);
 	VkResult ret;
 
@@ -446,4 +466,5 @@ vk_csci_is_format_supported(struct vk_bundle *vk,
 	}
 
 	return true;
+#endif
 }

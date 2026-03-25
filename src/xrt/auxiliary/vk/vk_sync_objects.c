@@ -38,6 +38,8 @@ vk_get_semaphore_handle_type(struct vk_bundle *vk)
 	if (vk->external.binary_semaphore_win32_handle) {
 		return VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT;
 	}
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+
 #else
 #error "Need to port semaphore type code."
 #endif
@@ -59,6 +61,8 @@ vk_get_timeline_semaphore_handle_type(struct vk_bundle *vk)
 	if (vk->external.timeline_semaphore_win32_handle) {
 		return VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT;
 	}
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+
 #else
 #error "Need to port semaphore type code."
 #endif
@@ -112,6 +116,10 @@ vk_create_and_submit_fence_native(struct vk_bundle *vk, xrt_graphics_sync_handle
 	const VkExternalFenceHandleTypeFlags handle_type = VK_EXTERNAL_FENCE_HANDLE_TYPE_SYNC_FD_BIT;
 #elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_WIN32_HANDLE)
 	const VkExternalFenceHandleTypeFlags handle_type = VK_EXTERNAL_FENCE_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+	const VkExternalFenceHandleTypeFlags handle_type = 0;
+	VK_ERROR(vk, "vk_create_and_submit_fence_native: not used on macOS, use MTLSharedEvent path");
+	return VK_ERROR_FEATURE_NOT_PRESENT;
 #else
 #error "Need port to export fence sync handles"
 #endif
@@ -190,6 +198,10 @@ vk_create_and_submit_fence_native(struct vk_bundle *vk, xrt_graphics_sync_handle
 		vk->vkDestroyFence(vk->device, fence, NULL);
 		return ret;
 	}
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+	VK_ERROR(vk, "vk_create_and_submit_fence_native: not used on macOS, use MTLSharedEvent path");
+	vk->vkDestroyFence(vk->device, fence, NULL);
+	return VK_ERROR_FEATURE_NOT_PRESENT;
 #else
 #error "Need port to import fence sync handles"
 #endif
@@ -267,6 +279,10 @@ create_semaphore_and_native(struct vk_bundle *vk,
 		vk->vkDestroySemaphore(vk->device, semaphore, NULL);
 		return ret;
 	}
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+	VK_ERROR(vk, "create_semaphore_and_native: not used on macOS, use MTLSharedEvent path");
+	vk->vkDestroySemaphore(vk->device, semaphore, NULL);
+	return VK_ERROR_FEATURE_NOT_PRESENT;
 #else
 #error "Need to port semaphore creation code."
 #endif
@@ -392,6 +408,10 @@ vk_create_fence_sync_from_native(struct vk_bundle *vk, xrt_graphics_sync_handle_
 		VK_ERROR(vk, "vkImportFenceFdKHR: %s", vk_result_string(ret));
 		return ret;
 	}
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+	VK_ERROR(vk, "vk_create_fence_sync_from_native: not used on macOS, use MTLSharedEvent path");
+	vk->vkDestroyFence(vk->device, fence, NULL);
+	return VK_ERROR_FEATURE_NOT_PRESENT;
 #else
 #error "Need port to import fence sync handles"
 #endif
@@ -450,6 +470,10 @@ create_semaphore_from_native(struct vk_bundle *vk,
 		vk->vkDestroySemaphore(vk->device, *out_sem, NULL);
 		return ret;
 	}
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+	VK_ERROR(vk, "create_semaphore_from_native: not used on macOS, use MTLSharedEvent path");
+	vk->vkDestroySemaphore(vk->device, *out_sem, NULL);
+	return VK_ERROR_FEATURE_NOT_PRESENT;
 #else
 #error "Not implemented for this underlying handle type!"
 #endif
@@ -466,6 +490,9 @@ vk_create_semaphore_from_native(struct vk_bundle *vk, xrt_graphics_sync_handle_t
 	handle_type = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT;
 #elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_WIN32_HANDLE)
 	handle_type = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+	VK_ERROR(vk, "vk_create_semaphore_from_native: not used on macOS, use MTLSharedEvent path");
+	return VK_ERROR_FEATURE_NOT_PRESENT;
 #else
 #error "Not implemented for this underlying handle type!"
 #endif

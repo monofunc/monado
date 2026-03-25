@@ -80,7 +80,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef XRT_GRAPHICS_SYNC_HANDLE_IS_FD
+#if defined(XRT_GRAPHICS_SYNC_HANDLE_IS_FD) || defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
 #include <unistd.h>
 #endif
 
@@ -572,6 +572,8 @@ static const char *required_device_extensions[] = {
     VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
     VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,
 
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+
 #else
 #error "Need port!"
 #endif
@@ -592,6 +594,8 @@ static const char *optional_device_extensions[] = {
     // Requires Vulkan 1.3.268.1
     VK_ANDROID_EXTERNAL_FORMAT_RESOLVE_EXTENSION_NAME //
 #endif
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+
 #else
 #error "Need port!"
 #endif

@@ -214,6 +214,8 @@ submit_fence(struct client_vk_compositor *c, xrt_result_t *out_xret)
 	bool sync_fence = vk->external.fence_sync_fd;
 #elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_WIN32_HANDLE)
 	bool sync_fence = vk->external.fence_win32_handle;
+#elif defined(XRT_GRAPHICS_SYNC_HANDLE_IS_MACH_PORT)
+	bool sync_fence = false;
 #else
 #error "Need port to export fence sync handles"
 #endif
