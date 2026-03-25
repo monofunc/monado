@@ -122,6 +122,94 @@ struct t_blobwatch
 	void (*destroy)(struct t_blobwatch *tbw);
 };
 
+/*!
+ * @interface t_constellation_tracker_tracking_source
+ *
+ * A constellation tracker tracking source is an arbitrary source of tracking data for the constellation tracker. This
+ * is used by the constellation tracker to get the current pose of a device to eliminate bad guesses, or if a camera is
+ * anchored to a tracking source (a camera on a headset device), this can be used by the constellation tracker to locate
+ * that camera relative to the world.
+ */
+struct t_constellation_tracker_tracking_source
+{
+	void (*get_tracked_pose)(struct t_constellation_tracker_tracking_source *,
+	                         int64_t when_ns,
+	                         struct xrt_space_relation *out_relation);
+};
+
+struct t_constellation_tracker_led
+{
+	//! The position of the LED in the model.
+	struct xrt_vec3 position;
+	//! The normal of the LED, determines where it is facing
+	struct xrt_vec3 normal;
+	//! The visible radius of the LED in meters.
+	float radius_m;
+	//! The angle from dead on where the LED is no longer visible, in radians.
+	float visibility_angle;
+	//! A unique ID for this LED, which distinguishes it from all other LEDs.
+	t_constellation_led_id_it id;
+};
+
+/*!
+ * @interface t_constellation_tracker_led_model
+ *
+ * The LED model is a series of points which define the real-world positions of all LEDs. Some LED models may have
+ * self-occluding areas, such as WMR, where inner LEDs can be blocked by the ring, such occlusions are modelled through
+ * the LED visibility computation function.
+ */
+struct t_constellation_tracker_led_model
+{
+	//! The LEDs in this model.
+	struct t_constellation_tracker_led *leds;
+	//! The number of LEDs in this model.
+	size_t num_leds;
+
+	/*!
+	 * A function to compute whether a given LED is visible from a given position. This is used to allow devices to
+	 * better model complex occlusion scenarios, like the inward facing LEDs on the WMR rings.
+	 *
+	 * @param led_model The LED model containing the LED in question.
+	 * @param led The index of the LED in question in the model.
+	 * @param T_obj_cam The transform from the object the LED is on to the camera, in column major form. The object
+	 * is typically the device we are trying to track, but it could also be something else, like a tracking origin,
+	 * if that is what the LED positions are relative to.
+	 *
+	 * @return Whether the LED is visible from the given position.
+	 */
+	bool (*compute_led_visibility)(struct t_constellation_tracker_led_model *led_model,
+	                               size_t led,
+	                               struct xrt_vec3 T_obj_cam);
+};
+
+struct t_constellation_tracker_sample
+{
+	//! The time the original blobservation was made.
+	int64_t timestamp_ns;
+	//! The pose of the device at the time of the blobservation.
+	struct xrt_pose pose;
+};
+
+/*!
+ * @interface t_constellation_tracker_device
+ *
+ * A constellation tracker device is a device that the constellation tracker will attempt to track in 6dof. The
+ * constellation tracker will provide the device with samples of it's current pose as it tracks it.
+ */
+struct t_constellation_tracker_device
+{
+	/*!
+	 * A function that the constellation tracker will call to push a new sample of the device's pose as it tracks
+	 * it.
+	 *
+	 * @param connection The device to push the sample to.
+	 * @param sample The sample containing the current pose of the device and the timestamp of the original
+	 * blobservation that led to this pose being computed.
+	 */
+	void (*push_constellation_tracker_sample)(struct t_constellation_tracker_device *connection,
+	                                          struct t_constellation_tracker_sample *sample);
+};
+
 
 //! @public @memberof t_blob_sink
 XRT_NONNULL_ALL static inline void
@@ -165,6 +253,33 @@ t_blobwatch_destroy(struct t_blobwatch **tbw_ptr)
 
 	tbw->destroy(tbw);
 	*tbw_ptr = NULL;
+}
+
+//! @public @memberof t_constellation_tracker_tracking_source
+XRT_NONNULL_ALL static inline void
+t_constellation_tracker_tracking_source_get_tracked_pose(
+    struct t_constellation_tracker_tracking_source *tracking_source,
+    int64_t when_ns,
+    struct xrt_space_relation *out_relation)
+{
+	tracking_source->get_tracked_pose(tracking_source, when_ns, out_relation);
+}
+
+//! @public @memberof t_constellation_tracker_led_model
+XRT_NONNULL_ALL static inline bool
+t_constellation_tracker_led_model_compute_led_visibility(struct t_constellation_tracker_led_model *led_model,
+                                                         size_t led,
+                                                         struct xrt_vec3 T_obj_cam)
+{
+	return led_model->compute_led_visibility(led_model, led, T_obj_cam);
+}
+
+//! @public @memberof t_constellation_tracker_device
+XRT_NONNULL_ALL static inline void
+t_constellation_tracker_device_push_sample(struct t_constellation_tracker_device *device,
+                                           struct t_constellation_tracker_sample *sample)
+{
+	device->push_constellation_tracker_sample(device, sample);
 }
 
 #ifdef __cplusplus
