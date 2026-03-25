@@ -72,6 +72,8 @@ target_include_directories(
 
 if(WIN32)
 	target_sources(ipc_shared PRIVATE shared/ipc_message_channel_windows.cpp)
+elseif(APPLE)
+	target_sources(ipc_shared PRIVATE shared/ipc_message_channel_mach.c)
 else()
 	target_sources(ipc_shared PRIVATE shared/ipc_message_channel_unix.c)
 endif()
@@ -171,6 +173,10 @@ if(ANDROID)
 		ipc_shared
 		PUBLIC ${ANDROID_LIBRARY}
 		PRIVATE aux_android ipc_android
+		)
+elseif(APPLE)
+	target_sources(
+		ipc_server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server/ipc_server_mainloop_macos.c
 		)
 elseif(XRT_HAVE_LINUX)
 	target_sources(

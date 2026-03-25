@@ -20,6 +20,10 @@
 #include "xrt/xrt_config_os.h"
 
 #include "os/os_time.h"
+
+#ifdef XRT_OS_OSX
+#include <mach/mach.h>
+#endif
 #include "util/u_var.h"
 #include "util/u_misc.h"
 #include "util/u_debug.h"
@@ -558,7 +562,11 @@ find_client_locked(struct ipc_server *s, uint32_t client_id)
 		}
 
 		// Just in case of state data.
+#if defined(XRT_OS_OSX)
+		if (ics->imc.recv_port == MACH_PORT_NULL) {
+#else
 		if (!xrt_ipc_handle_is_valid(ics->imc.ipc_handle)) {
+#endif
 			IPC_WARN(s, "Encountered invalid state while searching for client with ID '%d'", client_id);
 			return NULL;
 		}
@@ -889,7 +897,9 @@ ipc_server_handle_client_connected(struct ipc_server *vs, xrt_ipc_handle_t ipc_h
 	// Set state.
 	ics->local_space_overseer_index = UINT32_MAX;
 	ics->client_state.id = id;
+#if !defined(XRT_OS_OSX)
 	ics->imc.ipc_handle = ipc_handle;
+#endif
 	ics->server = vs;
 	ics->server_thread_index = cs_index;
 
@@ -913,6 +923,86 @@ ipc_server_handle_client_connected(struct ipc_server *vs, xrt_ipc_handle_t ipc_h
 	// Unlock when we are done.
 	os_mutex_unlock(&vs->global_state.lock);
 }
+
+#if defined(XRT_OS_OSX)
+void
+ipc_server_handle_client_connected_mach(struct ipc_server *vs,
+                                        mach_port_t client_send_port,
+                                        mach_port_t server_recv_port)
+{
+	volatile struct ipc_client_state *ics = NULL;
+	int32_t cs_index = -1;
+
+	os_mutex_lock(&vs->global_state.lock);
+
+	vs->global_state.connected_client_count++;
+	vs->last_client_disconnect_ns = 0;
+
+	for (uint32_t i = 0; i < IPC_MAX_CLIENTS; i++) {
+		volatile struct ipc_client_state *_cs = &vs->threads[i].ics;
+		if (_cs->server_thread_index < 0) {
+			ics = _cs;
+			cs_index = i;
+			break;
+		}
+	}
+
+	if (ics == NULL) {
+		mach_port_deallocate(mach_task_self(), client_send_port);
+		mach_port_mod_refs(mach_task_self(), server_recv_port, MACH_PORT_RIGHT_RECEIVE, -1);
+		os_mutex_unlock(&vs->global_state.lock);
+		U_LOG_E("Max client count reached!");
+		return;
+	}
+
+	struct ipc_thread *it = &vs->threads[cs_index];
+	if (it->state != IPC_THREAD_READY && it->state != IPC_THREAD_STOPPING) {
+		mach_port_deallocate(mach_task_self(), client_send_port);
+		mach_port_mod_refs(mach_task_self(), server_recv_port, MACH_PORT_RIGHT_RECEIVE, -1);
+		os_mutex_unlock(&vs->global_state.lock);
+		U_LOG_E("Client state management error!");
+		return;
+	}
+
+	if (it->state != IPC_THREAD_READY) {
+		os_thread_join(&it->thread);
+		os_thread_destroy(&it->thread);
+		it->state = IPC_THREAD_READY;
+	}
+
+	it->state = IPC_THREAD_STARTING;
+
+	uint32_t id = allocate_id_locked(vs);
+
+	U_ZERO((struct ipc_client_state *)ics);
+
+	ics->local_space_overseer_index = UINT32_MAX;
+	ics->client_state.id = id;
+	ics->imc.send_port = client_send_port;
+	ics->imc.recv_port = server_recv_port;
+	ics->server = vs;
+	ics->server_thread_index = cs_index;
+
+	ics->plane_detection_size = 0;
+	ics->plane_detection_count = 0;
+	ics->plane_detection_ids = NULL;
+	ics->plane_detection_xdev = NULL;
+
+	xrt_result_t xret = init_shm_and_instance_state(vs, ics);
+	if (xret != XRT_SUCCESS) {
+		// Clean up Mach ports on failure
+		ipc_message_channel_close((struct ipc_message_channel *)&ics->imc);
+		it->state = IPC_THREAD_READY;
+		os_mutex_unlock(&vs->global_state.lock);
+		U_LOG_E("Failed to allocate shared memory!");
+		return;
+	}
+
+	os_thread_start(&it->thread, ipc_server_client_thread, (void *)ics);
+
+	os_mutex_unlock(&vs->global_state.lock);
+}
+#endif
 
 xrt_result_t
 ipc_server_get_system_properties(struct ipc_server *vs, struct xrt_system_properties *out_properties)

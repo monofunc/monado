@@ -323,6 +323,14 @@ struct ipc_server_mainloop
 #define XRT_IPC_GOT_IMPL
 #endif
 
+#if defined(XRT_OS_OSX) || defined(XRT_DOXYGEN)
+#if defined(XRT_OS_OSX)
+#include <mach/mach_types.h>
+#endif
+	mach_port_t service_port;
+#define XRT_IPC_GOT_IMPL
+#endif
+
 #ifndef XRT_IPC_GOT_IMPL
 #error "Need port"
 #endif
@@ -543,6 +551,17 @@ ipc_server_client_destroy_session_and_compositor(volatile struct ipc_client_stat
  */
 void
 ipc_server_handle_client_connected(struct ipc_server *vs, xrt_ipc_handle_t ipc_handle);
+
+#if defined(XRT_OS_OSX)
+/*!
+ * Called when a client connects via Mach IPC.
+ * Stores the send/recv port pair in the client's message channel.
+ */
+void
+ipc_server_handle_client_connected_mach(struct ipc_server *vs,
+                                        mach_port_t client_send_port,
+                                        mach_port_t server_recv_port);
+#endif
 
 /*!
  * Perform whatever needs to be done when the mainloop polling encounters a failure.
