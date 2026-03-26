@@ -23,6 +23,8 @@
 
 #ifdef XRT_OS_OSX
 #include <mach/mach.h>
+#include <pthread.h>
+#include <CoreFoundation/CoreFoundation.h>
 #endif
 #include "util/u_var.h"
 #include "util/u_misc.h"
@@ -381,15 +383,40 @@ error:
 	return xret;
 }
 
+#if defined(XRT_OS_OSX)
+static void *
+ipc_poll_thread(void *ptr)
+{
+	struct ipc_server *s = (struct ipc_server *)ptr;
+	while (s->running) {
+		ipc_server_mainloop_poll(s, &s->ml);
+	}
+	return NULL;
+}
+#endif
+
 static int
 main_loop(struct ipc_server *s)
 {
+#if defined(XRT_OS_OSX)
+	// IPC accept loop on background thread so main thread
+	// can service Cocoa event pump via CFRunLoop.
+	pthread_t poll_thread;
+	pthread_create(&poll_thread, NULL, ipc_poll_thread, s);
+
+	while (s->running) {
+		CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, false);
+	}
+
+	pthread_join(poll_thread, NULL);
+#else
 	while (s->running) {
 		os_nanosleep(U_TIME_1S_IN_NS / 20);
 
 		// Check polling.
 		ipc_server_mainloop_poll(s, &s->ml);
 	}
+#endif
 
 	return 0;
 }
