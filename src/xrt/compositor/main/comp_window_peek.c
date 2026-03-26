@@ -23,6 +23,12 @@
 #endif
 #include <SDL2/SDL_vulkan.h>
 
+#if defined(XRT_OS_OSX)
+#include <dispatch/dispatch.h>
+#include <pthread.h>
+#include <unistd.h>
+#endif
+
 
 DEBUG_GET_ONCE_OPTION(window_peek, "XRT_WINDOW_PEEK", NULL)
 
@@ -61,7 +67,11 @@ create_images(struct comp_window_peek *w)
 	    .extent = {w->width, w->height},
 	    .color_space = w->c->settings.color_space,
 	    .image_usage = PEEK_IMAGE_USAGE,
+#if defined(XRT_OS_OSX)
+	    .present_mode = VK_PRESENT_MODE_FIFO_KHR,
+#else
 	    .present_mode = VK_PRESENT_MODE_MAILBOX_KHR,
+#endif
 	};
 
 	static_assert(ARRAY_SIZE(info.formats) == ARRAY_SIZE(w->c->settings.formats), "Miss-match format array sizes");
@@ -80,6 +90,24 @@ window_peek_run_thread(void *ptr)
 	w->running = true;
 	w->hidden = false;
 	while (w->running) {
+#if defined(XRT_OS_OSX)
+		// Cocoa requires event pumping on the main thread.
+		// The IPC main loop runs CFRunLoopRunInMode which
+		// services the main dispatch queue for us.
+		struct comp_window_peek *bw = w;
+		dispatch_sync(dispatch_get_main_queue(), ^{
+		    SDL_Event event;
+		    while (SDL_PollEvent(&event)) {
+			    switch (event.type) {
+			    case SDL_QUIT:
+				    SDL_HideWindow(bw->window);
+				    bw->hidden = true;
+				    break;
+			    default: break;
+			    }
+		    }
+		});
+#else
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
@@ -114,6 +142,7 @@ window_peek_run_thread(void *ptr)
 				w->running = false;
 			}
 		}
+#endif
 	}
 
 	return NULL;
@@ -168,6 +197,13 @@ comp_window_peek_create(struct comp_compositor *c)
 
 	struct vk_bundle *vk = get_vk(w);
 
+#if defined(XRT_OS_OSX)
+	__block SDL_Window *sdl_window = NULL;
+	__block VkSurfaceKHR sdl_surface = VK_NULL_HANDLE;
+	__block bool sdl_ok = false;
+	VkInstance vk_instance = vk->instance;
+#endif
+
 	VkResult ret = vk_cmd_pool_init(vk, &w->pool, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 	if (ret != VK_SUCCESS) {
 		COMP_ERROR(c, "vk_cmd_pool_init: %s", vk_result_string(ret));
@@ -189,6 +225,55 @@ comp_window_peek_create(struct comp_compositor *c)
 	 * SDL
 	 */
 
+#if defined(XRT_OS_OSX)
+	void (^sdl_init_block)(void) = ^{
+	    if (SDL_WasInit(SDL_INIT_VIDEO) == 0) {
+		    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+			    return;
+		    }
+	    }
+
+	    int bx = SDL_WINDOWPOS_UNDEFINED;
+	    int by = SDL_WINDOWPOS_UNDEFINED;
+	    int bflags = SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN;
+
+	    sdl_window = SDL_CreateWindow(xdev->str, bx, by, width, height, bflags);
+	    if (sdl_window == NULL) {
+		    return;
+	    }
+
+	    if (!SDL_Vulkan_CreateSurface(sdl_window, vk_instance, &sdl_surface)) {
+		    SDL_DestroyWindow(sdl_window);
+		    sdl_window = NULL;
+		    return;
+	    }
+
+	    SDL_PumpEvents();
+	    sdl_ok = true;
+	};
+
+	if (pthread_main_np()) {
+		sdl_init_block();
+	} else {
+		dispatch_sync(dispatch_get_main_queue(), sdl_init_block);
+	}
+
+	if (!sdl_ok) {
+		COMP_ERROR(c, "Failed to init SDL2 window: %s", SDL_GetError());
+		goto err_pool;
+	}
+
+	w->window = sdl_window;
+	w->width = width;
+	w->height = height;
+
+	comp_target_swapchain_init_and_set_fnptrs(&w->base, COMP_TARGET_FORCE_FAKE_DISPLAY_TIMING);
+
+	w->base.base.name = "peek";
+	w->base.base.c = c;
+	w->base.display = VK_NULL_HANDLE;
+	w->base.surface.handle = sdl_surface;
+#else
 	// Only initialize SDL if it hasn't been initialized yet
 	if (SDL_WasInit(SDL_INIT_VIDEO) == 0) {
 		if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -224,6 +309,7 @@ comp_window_peek_create(struct comp_compositor *c)
 		COMP_ERROR(c, "Failed to create SDL surface: %s", SDL_GetError());
 		goto err_window;
 	}
+#endif
 
 
 	/*
@@ -242,8 +328,10 @@ comp_window_peek_create(struct comp_compositor *c)
 	return w;
 
 
+#if !defined(XRT_OS_OSX)
 err_window:
 	SDL_DestroyWindow(w->window);
+#endif
 
 err_pool:
 	vk_cmd_pool_destroy(vk, &w->pool);
@@ -281,7 +369,19 @@ comp_window_peek_destroy(struct comp_window_peek **w_ptr)
 
 	comp_target_swapchain_cleanup(&w->base);
 
+#if defined(XRT_OS_OSX)
+	SDL_Window *dw = w->window;
+	void (^destroy_block)(void) = ^{
+	    SDL_DestroyWindow(dw);
+	};
+	if (pthread_main_np()) {
+		destroy_block();
+	} else {
+		dispatch_sync(dispatch_get_main_queue(), destroy_block);
+	}
+#else
 	SDL_DestroyWindow(w->window);
+#endif
 
 	free(w);
 
