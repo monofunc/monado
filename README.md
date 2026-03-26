@@ -1,3 +1,12 @@
+> [!WARNING]
+> This is a vibe-coded macOS port of Monado. It works but has not been thoroughly tested. Use at your own risk.
+
+Known issues:
+
+* Peek window does not work in inproc mode. SDL event handling requires the main thread, which the application owns.
+
+---
+
 # Monado - XR Runtime (XRT)
 
 <!--
