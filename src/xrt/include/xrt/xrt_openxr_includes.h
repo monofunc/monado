@@ -72,3 +72,5 @@ typedef __eglMustCastToProperFunctionPointerType (*PFNEGLGETPROCADDRESSPROC)(con
 #include "openxr/XR_MNDX_system_buttons.h"
 #include "openxr/XR_MNDX_xdev_space.h"
 #include "openxr/XR_MNDX_flipvr.h"
+
+#include "openxr/XR_NVX1_action_context.h"

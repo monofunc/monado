@@ -1,4 +1,5 @@
 // Copyright 2019-2024, Collabora, Ltd.
+// Copyright 2025-2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -13,6 +14,7 @@
 #include "util/u_handles.h"
 #include "util/u_trace_marker.h"
 #include "util/u_debug.h"
+#include "allocation/a_allocator.h"
 
 #include "comp_vk_client.h"
 
@@ -267,22 +269,11 @@ client_vk_swapchain_destroy(struct xrt_swapchain *xsc)
 	COMP_TRACE_MARKER();
 
 	struct client_vk_swapchain *sc = client_vk_swapchain(xsc);
-	struct client_vk_compositor *c = sc->c;
-	struct vk_bundle *vk = &c->vk;
 
-	for (uint32_t i = 0; i < sc->base.base.image_count; i++) {
-		if (sc->base.images[i] != VK_NULL_HANDLE) {
-			vk->vkDestroyImage(vk->device, sc->base.images[i], NULL);
-			sc->base.images[i] = VK_NULL_HANDLE;
-		}
+	// Drop our reference to the allocation collection, does NULL checking.
+	xrt_allocation_collection_reference(&sc->xac, NULL);
 
-		if (sc->mems[i] != VK_NULL_HANDLE) {
-			vk->vkFreeMemory(vk->device, sc->mems[i], NULL);
-			sc->mems[i] = VK_NULL_HANDLE;
-		}
-	}
-
-	// Drop our reference, does NULL checking.
+	// Drop our reference to the native swapchain, does NULL checking.
 	xrt_swapchain_native_reference(&sc->xscn, NULL);
 
 	free(sc);
@@ -683,15 +674,38 @@ client_vk_swapchain_create(struct xrt_compositor *xc,
 	sc->c = c;
 	sc->xscn = xscn;
 
-	for (uint32_t i = 0; i < xsc->image_count; i++) {
-		ret = vk_create_image_from_native(vk, &xinfo, &xscn->images[i], &sc->base.images[i], &sc->mems[i]);
-
-		if (ret != VK_SUCCESS) {
-			return XRT_ERROR_VULKAN;
+	// Get or create an allocation collection with VkImages.
+	if (xscn->xac == NULL) {
+		// No allocation collection, import from native images.
+		xret = a_allocator_import_from_natives(vk, &xinfo, xscn->images, xsc->image_count, &sc->xac);
+		if (xret != XRT_SUCCESS) {
+			VK_ERROR(vk, "Failed to import from native images: %u", xret);
+			free(sc);
+			return xret;
 		}
+	} else {
+		// Allocation collection exists, ensure it supports VkImages.
+		xret = a_allocator_ensure_vk_images(vk, xscn->xac, &sc->xac);
+		if (xret != XRT_SUCCESS) {
+			VK_ERROR(vk, "Failed to ensure VkImages: %u", xret);
+			free(sc);
+			return xret;
+		}
+	}
 
-		VK_NAME_IMAGE(vk, sc->base.images[i], "vk_image_collection image");
-		VK_NAME_DEVICE_MEMORY(vk, sc->mems[i], "vk_image_collection device_memory");
+	// Get the VkImages from the allocation collection.
+	xret = xrt_allocation_collection_get_all(sc->xac, XRT_ALLOCATION_TYPE_VULKAN_IMAGE, sizeof(VkImage),
+	                                         sc->base.images);
+	if (xret != XRT_SUCCESS) {
+		VK_ERROR(vk, "Failed to get VkImages from allocation collection: %u", xret);
+		xrt_allocation_collection_reference(&sc->xac, NULL);
+		free(sc);
+		return xret;
+	}
+
+	// Name the images for debugging.
+	for (uint32_t i = 0; i < xsc->image_count; i++) {
+		VK_NAME_IMAGE(vk, sc->base.images[i], "client_vk_swapchain image");
 	}
 
 	vk_cmd_pool_lock(&c->pool);
