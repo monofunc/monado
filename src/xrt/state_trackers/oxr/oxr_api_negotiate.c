@@ -445,6 +445,15 @@ handle_non_null(struct oxr_instance *inst, struct oxr_logger *log, const char *n
 
 	ENTRY_IF_VERSION_AT_LEAST(xrLocateSpaces, 1, 1);
 
+#ifdef OXR_HAVE_NVX1_action_context
+	ENTRY_IF_EXT(xrCreateInstanceActionContextNV, NVX1_action_context);
+	ENTRY_IF_EXT(xrDestroyInstanceActionContextNV, NVX1_action_context);
+	ENTRY_IF_EXT(xrCreateSessionActionContextNV, NVX1_action_context);
+	ENTRY_IF_EXT(xrDestroySessionActionContextNV, NVX1_action_context);
+	ENTRY_IF_EXT(xrSyncActions2NV, NVX1_action_context);
+	ENTRY_IF_EXT(xrGetCurrentInteractionProfile2NV, NVX1_action_context);
+#endif
+
 	/*
 	 * Not logging here because there's no need to loudly advertise
 	 * which extensions the loader knows about (it calls this on

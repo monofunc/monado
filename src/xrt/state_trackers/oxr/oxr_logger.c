@@ -224,15 +224,22 @@ oxr_result_to_string(XrResult result)
 {
 	// clang-format off
 	switch (result) {
-
-#define ENTRY(NAME, VALUE) \
-	case VALUE: return #NAME;
+#define ENTRY(NAME, VALUE) case VALUE: return #NAME;
 	XR_LIST_ENUM_XrResult(ENTRY)
 #undef ENTRY
-
-	default: return "<UNKNOWN>";
 	}
+
+#define ENTRY(NAME) if (result == NAME) { return #NAME; }
+
+#ifdef OXR_HAVE_NVX1_action_context
+	ENTRY(XR_ERROR_ACTION_SETS_DIFFERENT_INSTANCE_ACTION_CONTEXT_NV)
+	ENTRY(XR_ERROR_ACTION_SET_ALREADY_ATTACHED_TO_SESSION_CONTEXT_NV)
+#endif
+
+#undef ENTRY
+
 	// clang-format on
+	return "<UNKNOWN>";
 }
 
 
