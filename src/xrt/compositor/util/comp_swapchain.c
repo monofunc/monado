@@ -367,14 +367,6 @@ get_and_store_vk_images(struct vk_bundle *vk, struct comp_swapchain *sc)
 XRT_MAYBE_UNUSED static XRT_CHECK_RESULT xrt_result_t
 get_and_store_native_images(struct vk_bundle *vk, struct comp_swapchain *sc)
 {
-#if defined(XRT_OS_OSX)
-	// Native handles are not used on macOS with Metal, leave them invalid.
-	for (uint32_t i = 0; i < sc->base.base.image_count; i++) {
-		sc->base.images[i].handle = XRT_GRAPHICS_BUFFER_HANDLE_INVALID;
-		sc->base.images[i].size = 0;
-		sc->base.images[i].use_dedicated_allocation = false;
-	}
-#else
 	struct xrt_image_native natives[XRT_MAX_SWAPCHAIN_IMAGES] = {0};
 
 	xrt_result_t xret = xrt_allocation_collection_get_all( //
@@ -390,7 +382,6 @@ get_and_store_native_images(struct vk_bundle *vk, struct comp_swapchain *sc)
 	for (uint32_t i = 0; i < sc->base.base.image_count; i++) {
 		sc->base.images[i] = natives[i];
 	}
-#endif
 
 	return XRT_SUCCESS;
 }
