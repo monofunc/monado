@@ -101,7 +101,33 @@ window_peek_run_thread(void *ptr)
 			    switch (event.type) {
 			    case SDL_QUIT:
 				    SDL_HideWindow(bw->window);
-				    bw->hidden = true;
+				    bw->running = false;
+				    break;
+			    case SDL_WINDOWEVENT:
+				    switch (event.window.event) {
+				    case SDL_WINDOWEVENT_HIDDEN: bw->hidden = true; break;
+				    case SDL_WINDOWEVENT_SHOWN: bw->hidden = false; break;
+				    case SDL_WINDOWEVENT_SIZE_CHANGED:
+					    bw->width = event.window.data1;
+					    bw->height = event.window.data2;
+					    break;
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+				    case SDL_WINDOWEVENT_DISPLAY_CHANGED:
+#endif
+				    case SDL_WINDOWEVENT_MOVED:
+					    SDL_GetWindowSize(bw->window, (int *)&bw->width, (int *)&bw->height);
+					    break;
+				    default: break;
+				    }
+				    break;
+			    case SDL_KEYDOWN:
+				    switch (event.key.keysym.sym) {
+				    case SDLK_ESCAPE:
+					    SDL_HideWindow(bw->window);
+					    bw->running = false;
+					    break;
+				    default: break;
+				    }
 				    break;
 			    default: break;
 			    }
@@ -405,6 +431,24 @@ comp_window_peek_blit(struct comp_window_peek *w, VkImage src, int32_t width, in
 
 	uint32_t current;
 	VkResult ret = comp_target_acquire(&w->base.base, &current);
+
+#if defined(XRT_OS_OSX)
+	if (ret == VK_ERROR_OUT_OF_DATE_KHR || ret == VK_SUBOPTIMAL_KHR) {
+		COMP_DEBUG(w->c, "comp_target_acquire: %s, recreating swapchain", vk_result_string(ret));
+
+		struct vk_bundle *vk = get_vk(w);
+		vk_queue_lock(vk->main_queue);
+		vk->vkQueueWaitIdle(vk->main_queue->queue);
+		vk_queue_unlock(vk->main_queue);
+
+		create_images(w);
+		w->width = w->base.base.width;
+		w->height = w->base.base.height;
+
+		ret = comp_target_acquire(&w->base.base, &current);
+	}
+#endif
+
 	if (ret != VK_SUCCESS) {
 		COMP_ERROR(w->c, "comp_target_acquire: %s", vk_result_string(ret));
 	}
