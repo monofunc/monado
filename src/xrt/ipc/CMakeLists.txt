@@ -178,6 +178,7 @@ elseif(APPLE)
 	target_sources(
 		ipc_server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server/ipc_server_mainloop_macos.c
 		)
+	target_link_libraries(ipc_server PRIVATE "-framework CoreFoundation")
 elseif(XRT_HAVE_LINUX)
 	target_sources(
 		ipc_server PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/server/ipc_server_mainloop_linux.c

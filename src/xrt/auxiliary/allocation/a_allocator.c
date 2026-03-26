@@ -7,6 +7,8 @@
  * @ingroup aux_allocation
  */
 
+#include "xrt/xrt_config_build.h"
+
 #include "util/u_handles.h"
 
 #include "vk/vk_helpers.h"
