@@ -23,6 +23,7 @@ extern "C" {
 struct oxr_action_set;
 struct oxr_extension_status;
 struct oxr_instance;
+struct oxr_instance_action_context;
 struct oxr_system;
 struct oxr_logger;
 struct oxr_subaction_paths;
@@ -101,6 +102,12 @@ struct oxr_subaction_paths;
 	OXR_VERIFY_FUTURE_VALID(log, new_thing)
 #define OXR_VERIFY_FACE_TRACKER_ANDROID_AND_INIT_LOG(log, thing, new_thing, name) \
 	OXR_VERIFY_AND_SET_AND_INIT(log, thing, new_thing, oxr_face_tracker_android, FTRACKER, name, new_thing->sess->sys->inst)
+#define OXR_VERIFY_INSTANCE_ACTION_CONTEXT_NV_AND_INIT_LOG(log, thing, new_thing, name) \
+	OXR_VERIFY_AND_SET_AND_INIT(log, thing, new_thing, oxr_instance_action_context_nv, INSTANCE_ACTION_CONTEXT_NV, \
+	                            name, new_thing->inst)
+#define OXR_VERIFY_SESSION_ACTION_CONTEXT_NV_AND_INIT_LOG(log, thing, new_thing, name) \
+	OXR_VERIFY_AND_SET_AND_INIT(log, thing, new_thing, oxr_session_action_context_nv, SESSION_ACTION_CONTEXT_NV, \
+	                            name, new_thing->sess->sys->inst)
 // clang-format on
 
 #define OXR_VERIFY_INSTANCE_NOT_NULL(log, arg, new_arg) OXR_VERIFY_SET(log, arg, new_arg, oxr_instance, INSTANCE);
@@ -110,6 +117,10 @@ struct oxr_subaction_paths;
 #define OXR_VERIFY_ACTION_NOT_NULL(log, arg, new_arg) OXR_VERIFY_SET(log, arg, new_arg, oxr_action, ACTION);
 #define OXR_VERIFY_SWAPCHAIN_NOT_NULL(log, arg, new_arg) OXR_VERIFY_SET(log, arg, new_arg, oxr_swapchain, SWAPCHAIN);
 #define OXR_VERIFY_ACTIONSET_NOT_NULL(log, arg, new_arg) OXR_VERIFY_SET(log, arg, new_arg, oxr_action_set, ACTIONSET);
+#define OXR_VERIFY_INSTANCE_ACTION_CONTEXT_NV_NOT_NULL(log, arg, new_arg)                                              \
+	OXR_VERIFY_SET(log, arg, new_arg, oxr_instance_action_context_nv, INSTANCE_ACTION_CONTEXT_NV);
+#define OXR_VERIFY_SESSION_ACTION_CONTEXT_NV_NOT_NULL(log, arg, new_arg)                                               \
+	OXR_VERIFY_SET(log, arg, new_arg, oxr_session_action_context_nv, SESSION_ACTION_CONTEXT_NV);
 #define OXR_VERIFY_XDEVLIST_NOT_NULL(log, arg, new_arg) OXR_VERIFY_SET(log, arg, new_arg, oxr_xdev_list, XDEVLIST);
 
 #define OXR_VERIFY_FUTURE_NOT_NULL(log, arg, new_arg) OXR_VERIFY_SET(log, arg, new_arg, oxr_future_ext, FUTURE);
@@ -440,6 +451,58 @@ oxr_verify_subaction_path_get(struct oxr_logger *log,
                               const struct oxr_subaction_paths *act_subaction_paths,
                               struct oxr_subaction_paths *out_subaction_paths,
                               const char *variable);
+
+/*!
+ * Verify that all action sets in the array belong to the same instance action
+ * context. Ensures the array has at least one element, then checks each handle
+ * is valid and that act_set->inst_context == expected_inst_context. Returns
+ * XR_ERROR_ACTION_SETS_DIFFERENT_INSTANCE_ACTION_CONTEXT_NV if any action set
+ * belongs to a different instance action context.
+ *
+ * @param log Logger for error reporting.
+ * @param countActionSets Number of action sets in the array (must be > 0).
+ * @param actionSets Array of XrActionSet handles (must be non-NULL).
+ * @param expected_inst_context Instance action context all action sets must belong to.
+ * @param variable_name Name of the argument for error messages (e.g. "bindInfo->actionSets" or
+ *                      "createInfo->actionSets").
+ */
+XrResult
+oxr_verify_action_sets_array(struct oxr_logger *log,
+                             uint32_t countActionSets,
+                             const XrActionSet *actionSets,
+                             struct oxr_instance_action_context *expected_inst_context,
+                             const char *variable_name);
+
+/*!
+ * Verify that all active action sets belong to the same instance action
+ * context. Each action set handle is validated, act_set->inst_context is
+ * checked against expected_inst_context, and each subaction path is verified.
+ * Returns XR_ERROR_ACTION_SETS_DIFFERENT_INSTANCE_ACTION_CONTEXT_NV if any
+ * action set belongs to a different instance action context.
+ *
+ * @param log Logger for error reporting.
+ * @param inst Instance for path verification.
+ * @param countActiveActionSets Number of active action sets in the array.
+ * @param activeActionSets Array of XrActiveActionSet must be non-NULL.
+ * @param expected_inst_context Instance action context all action sets must belong to.
+ * @param variable_name Name of the argument for error messages (e.g. "syncInfo->activeActionSets").
+ */
+XrResult
+oxr_verify_active_action_sets_sync(struct oxr_logger *log,
+                                   const struct oxr_instance *inst,
+                                   uint32_t countActiveActionSets,
+                                   const XrActiveActionSet *activeActionSets,
+                                   struct oxr_instance_action_context *expected_inst_context,
+                                   const char *variable_name);
+
+#if defined(OXR_HAVE_NVX1_action_context)
+XrResult
+oxr_verify_not_already_attached_to_session(struct oxr_logger *log,
+                                           struct oxr_session *sess,
+                                           const XrActionSet *action_sets,
+                                           uint32_t action_set_count,
+                                           const char *variable_name);
+#endif
 
 XrResult
 oxr_verify_extensions(struct oxr_logger *log, const struct oxr_extension_status *extensions);

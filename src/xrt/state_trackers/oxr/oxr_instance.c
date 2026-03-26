@@ -203,6 +203,7 @@ apply_quirks(struct oxr_logger *log, struct oxr_instance *inst, const XrInstance
 	inst->quirks.skip_end_session = false;
 	inst->quirks.disable_vulkan_format_depth = false;
 	inst->quirks.disable_vulkan_format_depth_stencil = false;
+	inst->quirks.disable_quad_views = false;
 	inst->quirks.no_validation_error_in_create_ref_space = false;
 	inst->quirks.parallel_views = false;
 	inst->quirks.no_texture_source_alpha = false;
@@ -402,6 +403,7 @@ oxr_instance_create(struct oxr_logger *log,
 	        "\tappinfo.detected.engine.version: %i.%i.%i\n"
 	        "\tquirks.disable_vulkan_format_depth: %s\n"
 	        "\tquirks.disable_vulkan_format_depth_stencil: %s\n"
+	        "\tquirks.disable_quad_views: %s\n"
 	        "\tquirks.no_validation_error_in_create_ref_space: %s\n"
 	        "\tquirks.skip_end_session: %s\n"
 	        "\tquirks.parallel_views: %s\n"
@@ -419,6 +421,7 @@ oxr_instance_create(struct oxr_logger *log,
 	        inst->appinfo.detected.engine.patch,                                     //
 	        inst->quirks.disable_vulkan_format_depth ? "true" : "false",             //
 	        inst->quirks.disable_vulkan_format_depth_stencil ? "true" : "false",     //
+	        inst->quirks.disable_quad_views ? "true" : "false",                      //
 	        inst->quirks.no_validation_error_in_create_ref_space ? "true" : "false", //
 	        inst->quirks.skip_end_session ? "true" : "false",                        //
 	        inst->quirks.parallel_views ? "true" : "false",                          //

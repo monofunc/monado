@@ -23,6 +23,7 @@
 #include "oxr_dpad_state.h"
 #include "oxr_input_transform.h"
 #include "oxr_generated_bindings.h"
+#include "oxr_nv_action_context.h"
 
 #include "../oxr_objects.h"
 #include "../oxr_logger.h"
@@ -1812,32 +1813,32 @@ oxr_handle_base_get_num_children(struct oxr_handle_base *hb)
 
 XrResult
 oxr_session_attach_action_sets(struct oxr_logger *log,
-                               struct oxr_session *sess,
+                               const struct oxr_interaction_profile_array *suggested_profiles,
+                               struct oxr_session_attached_actions *attached_actions,
+                               struct oxr_session_action_context *sess_context,
                                const XrSessionActionSetsAttachInfo *bindInfo)
 {
-	struct oxr_instance *inst = sess->sys->inst;
-	XrResult ret = XR_SUCCESS;
+	XrResult ret;
 
-	const struct oxr_instance_action_context *inst_context = inst->action_context;
-	struct oxr_session_attached_actions *attached_actions = &sess->attached_actions;
-	struct oxr_session_action_context *sess_context = &sess->action_context;
+	size_t count = bindInfo->countActionSets;
 
-	oxr_interaction_profile_array_clone(&inst_context->suggested_profiles, &sess_context->profiles_on_attachment);
+	sess_context->action_set_attachment_count = count;
+	sess_context->act_set_attachments = U_TYPED_ARRAY_CALLOC(struct oxr_action_set_attachment, count);
+	if (sess_context->act_set_attachments == NULL) {
+		// Actual clean-up.
+		sess_context->action_set_attachment_count = 0;
+		return oxr_error(log, XR_ERROR_RUNTIME_FAILURE, "Failed to allocate action set attachments");
+	}
 
-	// Allocate room for list. No need to check if anything has been
-	// attached the API function does that.
-	sess->action_context.action_set_attachment_count = bindInfo->countActionSets;
-	sess->action_context.act_set_attachments =
-	    U_TYPED_ARRAY_CALLOC(struct oxr_action_set_attachment, sess->action_context.action_set_attachment_count);
-
-	// Set up the per-session data for these action sets.
-	for (uint32_t i = 0; i < sess->action_context.action_set_attachment_count; i++) {
+	for (size_t i = 0; i < count; i++) {
 		struct oxr_action_set *act_set =
 		    XRT_CAST_OXR_HANDLE_TO_PTR(struct oxr_action_set *, bindInfo->actionSets[i]);
+		assert(act_set != NULL);
+
 		struct oxr_action_set_ref *act_set_ref = act_set->data;
 		act_set_ref->ever_attached = true;
 
-		struct oxr_action_set_attachment *act_set_attached = &sess->action_context.act_set_attachments[i];
+		struct oxr_action_set_attachment *act_set_attached = &sess_context->act_set_attachments[i];
 		ret = oxr_action_set_attachment_init( //
 		    log,                              //
 		    act_set_attached,                 //
@@ -1884,13 +1885,15 @@ oxr_session_attach_action_sets(struct oxr_logger *log,
 		}
 	}
 
+	oxr_interaction_profile_array_clone(suggested_profiles, &sess_context->profiles_on_attachment);
+
 	/*
 	 * We used to send XrEventDataInteractionProfileChanged here, but that's
 	 * wrong. The OpenXR spec says we should only send them after a
 	 * successful call to xrSyncActionData.
 	 */
 
-	return oxr_session_success_result(sess);
+	return XR_SUCCESS;
 }
 
 static XrResult
@@ -1955,11 +1958,42 @@ oxr_action_sync_data(struct oxr_logger *log,
                      const XrActiveActionSet *actionSets,
                      const XrActiveActionSetPrioritiesEXT *activePriorities)
 {
-	struct oxr_session_action_context *sess_context = &sess->action_context;
+	bool interaction_profile_changed = false;
+	XrResult ret = oxr_action_sync_data_with_context( //
+	    log,                                          //
+	    sess,                                         //
+	    &sess->action_context,                        //
+	    countActionSets,                              //
+	    actionSets,                                   //
+	    activePriorities,                             //
+	    &interaction_profile_changed);                //
+	if (ret != XR_SUCCESS) {
+		return ret;
+	}
+
+	if (interaction_profile_changed) {
+		oxr_event_push_XrEventDataInteractionProfileChanged(log, sess);
+	}
+
+	return oxr_session_success_focused_result(sess);
+}
+
+XrResult
+oxr_action_sync_data_with_context(struct oxr_logger *log,
+                                  struct oxr_session *sess,
+                                  struct oxr_session_action_context *sess_context,
+                                  uint32_t countActionSets,
+                                  const XrActiveActionSet *actionSets,
+                                  const XrActiveActionSetPrioritiesEXT *activePriorities,
+                                  bool *out_interaction_profile_changed)
+{
 	struct oxr_instance *inst = sess->sys->inst;
 
 	struct oxr_action_set *act_set = NULL;
 	struct oxr_action_set_attachment *act_set_attached = NULL;
+
+	// Reset.
+	*out_interaction_profile_changed = false;
 
 	/*
 	 * No side-effects allowed in this section as we are still
@@ -1999,23 +2033,17 @@ oxr_action_sync_data(struct oxr_logger *log,
 
 	// Should we redo the bindings?
 	{
-		bool interaction_profile_changed = false;
-
 		os_mutex_lock(&sess_context->sync_actions_mutex);
 		if (sess_context->dynamic_roles_generation_id < roles.roles.generation_id) {
 			sess_context->dynamic_roles_generation_id = roles.roles.generation_id;
-			session_update_action_bindings(    //
-			    log,                           //
-			    inst,                          //
-			    sess_context,                  //
-			    &roles,                        //
-			    &interaction_profile_changed); //
+			session_update_action_bindings(       //
+			    log,                              //
+			    inst,                             //
+			    sess_context,                     //
+			    &roles,                           //
+			    out_interaction_profile_changed); //
 		}
 		os_mutex_unlock(&sess_context->sync_actions_mutex);
-
-		if (interaction_profile_changed) {
-			oxr_event_push_XrEventDataInteractionProfileChanged(log, sess);
-		}
 	}
 
 	if (countActionSets == 0) {
@@ -2030,7 +2058,7 @@ oxr_action_sync_data(struct oxr_logger *log,
 	for (size_t i = 0; i < sess->sys->xsysd->xdev_count; i++) {
 		if (sess->sys->xsysd->xdevs[i]) {
 			xrt_result_t xret = xrt_device_update_inputs(sess->sys->xsysd->xdevs[i]);
-			OXR_CHECK_XRET(log, sess, xret, oxr_action_sync_data);
+			OXR_CHECK_XRET(log, sess, xret, oxr_action_sync_data_with_context);
 		}
 	}
 
@@ -2096,7 +2124,7 @@ oxr_action_sync_data(struct oxr_logger *log,
 		}
 	}
 
-	return oxr_session_success_focused_result(sess);
+	return XR_SUCCESS;
 }
 
 static void

@@ -111,6 +111,7 @@ EXTENSIONS = (
     ['XR_MSFT_hand_interaction', 'XRT_FEATURE_OPENXR_INTERACTION_MSFT_HAND'],
     ['XR_MSFT_unbounded_reference_space', 'XRT_FEATURE_OPENXR_SPACE_UNBOUNDED'],
     ['XR_OPPO_controller_interaction', 'XRT_FEATURE_OPENXR_INTERACTION_OPPO'],
+    ['XR_VARJO_quad_views'],
     # Experimental extensions, sorted alphabetically.
     ['XR_EXTX_overlay', 'XRT_FEATURE_OPENXR_OVERLAY'],
     ['XR_HTCX_vive_tracker_interaction', 'ALWAYS_DISABLED'],
@@ -124,6 +125,7 @@ EXTENSIONS = (
     ['XR_MNDX_psvr2_interaction', 'XRT_FEATURE_OPENXR_INTERACTION_MNDX'],
     ['XR_MNDX_system_buttons', 'XRT_FEATURE_OPENXR_INTERACTION_MNDX'],
     ['XR_MNDX_xdev_space', 'XRT_FEATURE_OPENXR_XDEV_SPACE'],
+    ['XR_NVX1_action_context'],
 )
 
 INVOCATION_PREFIX = 'OXR_EXTENSION_SUPPORT'
