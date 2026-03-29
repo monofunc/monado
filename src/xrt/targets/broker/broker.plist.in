@@ -3,10 +3,10 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>org.monado.compositor</string>
+	<string>@XRT_IPC_MACH_SERVICE_NAME@</string>
 	<key>MachServices</key>
 	<dict>
-		<key>org.monado.compositor</key>
+		<key>@XRT_IPC_MACH_SERVICE_NAME@</key>
 		<true/>
 	</dict>
 	<key>ProgramArguments</key>
@@ -14,8 +14,8 @@
 		<string>$<TARGET_FILE:monado-broker></string>
 	</array>
 	<key>StandardOutPath</key>
-	<string>/var/tmp/monado-broker.log</string>
+	<string>/var/tmp/@XRT_IPC_MACH_SERVICE_NAME@.log</string>
 	<key>StandardErrorPath</key>
-	<string>/var/tmp/monado-broker-error.log</string>
+	<string>/var/tmp/@XRT_IPC_MACH_SERVICE_NAME@-error.log</string>
 </dict>
 </plist>
