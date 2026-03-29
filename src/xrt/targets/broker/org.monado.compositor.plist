@@ -11,11 +11,11 @@
 	</dict>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/path/to/monado-broker</string>
+		<string>$<TARGET_FILE:monado-broker></string>
 	</array>
 	<key>StandardOutPath</key>
-	<string>/var/tmp/monado/monado-broker.log</string>
+	<string>/var/tmp/monado-broker.log</string>
 	<key>StandardErrorPath</key>
-	<string>/var/tmp/monado/monado-broker-error.log</string>
+	<string>/var/tmp/monado-broker-error.log</string>
 </dict>
 </plist>
