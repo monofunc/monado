@@ -79,6 +79,18 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo"
             }
+        },
+        {
+            "name": "client-debug-x86_64",
+            "displayName": "x86_64 IPC client for Wine/CrossOver",
+            "inherits": ".base-ninja",
+            "binaryDir": "${sourceDir}/build-x86_64",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_OSX_ARCHITECTURES": "x86_64",
+                "XRT_FEATURE_SERVICE": "ON",
+                "XRT_HAVE_SDL2": "OFF"
+            }
         }
     ],
     "buildPresets": [
