@@ -21,6 +21,8 @@ add_library(
 	u_autoexpgain.h
 	u_bitwise.c
 	u_bitwise.h
+	u_builder_helpers.c
+	u_builder_helpers.h
 	u_builder_search.c
 	u_builder_search.h
 	u_builders.c

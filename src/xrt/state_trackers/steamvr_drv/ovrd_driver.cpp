@@ -1,4 +1,5 @@
 // Copyright 2020,2024 Collabora, Ltd.
+// Copyright 2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -29,8 +30,8 @@ extern "C" {
 #include "os/os_time.h"
 #include "util/u_debug.h"
 #include "util/u_device.h"
-#include "util/u_builders.h"
 #include "util/u_hand_tracking.h"
+#include "util/u_builder_helpers.h"
 
 #include "xrt/xrt_space.h"
 #include "xrt/xrt_system.h"

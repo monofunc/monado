@@ -101,19 +101,6 @@ struct u_builder
  */
 
 /*!
- * Helper function for setting up tracking origins. Applies 3dof offsets for devices with XRT_TRACKING_TYPE_NONE.
- *
- * @ingroup aux_util
- */
-void
-u_builder_setup_tracking_origins(struct xrt_device *head,
-                                 struct xrt_device *eyes,
-                                 struct xrt_device *left,
-                                 struct xrt_device *right,
-                                 struct xrt_device *gamepad,
-                                 struct xrt_vec3 *global_tracking_origin_offset);
-
-/*!
  * Create a legacy space overseer, most builders probably want to have a more
  * advanced setup then this, especially stand alone ones. Uses
  * @ref u_builder_setup_tracking_origins internally and
