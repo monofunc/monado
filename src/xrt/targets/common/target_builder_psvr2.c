@@ -17,6 +17,7 @@
 #include "util/u_misc.h"
 #include "util/u_logging.h"
 #include "util/u_trace_marker.h"
+#include "util/u_builder_search.h"
 
 #include "psvr2/psvr2_interface.h"
 

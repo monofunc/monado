@@ -24,6 +24,7 @@
 #include "util/u_device.h"
 #include "util/u_sink.h"
 #include "util/u_file.h"
+#include "util/u_builder_search.h"
 
 #include "target_builder_interface.h"
 

@@ -23,6 +23,7 @@
 #include "util/u_logging.h"
 #include "util/u_builders.h"
 #include "util/u_config_json.h"
+#include "util/u_builder_search.h"
 
 #include "target_builder_interface.h"
 

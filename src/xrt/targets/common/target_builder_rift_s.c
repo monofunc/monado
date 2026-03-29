@@ -24,6 +24,7 @@
 #include "util/u_debug.h"
 #include "util/u_logging.h"
 #include "util/u_trace_marker.h"
+#include "util/u_builder_search.h"
 
 #ifdef XRT_BUILD_DRIVER_HANDTRACKING
 #include "ht_ctrl_emu/ht_ctrl_emu_interface.h"

@@ -24,6 +24,7 @@
 #include "util/u_trace_marker.h"
 #include "util/u_var.h"
 #include "util/u_sink.h"
+#include "util/u_builder_search.h"
 
 #include "rift/rift_interface.h"
 

@@ -29,6 +29,7 @@
 #include "util/u_sink.h"
 #include "util/u_file.h"
 #include "util/u_pretty_print.h"
+#include "util/u_builder_search.h"
 
 #include "target_builder_interface.h"
 

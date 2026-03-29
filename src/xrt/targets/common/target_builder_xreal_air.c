@@ -25,6 +25,7 @@
 #include "util/u_debug.h"
 #include "util/u_logging.h"
 #include "util/u_trace_marker.h"
+#include "util/u_builder_search.h"
 
 #include "xreal_air/xreal_air_hmd.h"
 #include "xreal_air/xreal_air_interface.h"
