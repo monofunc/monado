@@ -246,7 +246,6 @@ client_metal_compositor_layer_projection(struct xrt_compositor *xc,
 	}
 
 	struct xrt_layer_data d = *data;
-	d.flip_y = !d.flip_y;
 
 	return xrt_comp_layer_projection(xcn, xdev, xscn, &d);
 }
@@ -271,7 +270,6 @@ client_metal_compositor_layer_projection_depth(struct xrt_compositor *xc,
 	}
 
 	struct xrt_layer_data d = *data;
-	d.flip_y = !d.flip_y;
 
 	return xrt_comp_layer_projection_depth(xcn, xdev, xscn, d_xscn, &d);
 }
@@ -291,7 +289,6 @@ client_metal_compositor_layer_quad(struct xrt_compositor *xc,
 	xscfb = to_native_swapchain(xsc);
 
 	struct xrt_layer_data d = *data;
-	d.flip_y = !d.flip_y;
 
 	return xrt_comp_layer_quad(xcn, xdev, xscfb, &d);
 }
@@ -311,7 +308,6 @@ client_metal_compositor_layer_cube(struct xrt_compositor *xc,
 	xscfb = to_native_swapchain(xsc);
 
 	struct xrt_layer_data d = *data;
-	d.flip_y = !d.flip_y;
 
 	return xrt_comp_layer_cube(xcn, xdev, xscfb, &d);
 }
@@ -331,7 +327,6 @@ client_metal_compositor_layer_cylinder(struct xrt_compositor *xc,
 	xscfb = to_native_swapchain(xsc);
 
 	struct xrt_layer_data d = *data;
-	d.flip_y = !d.flip_y;
 
 	return xrt_comp_layer_cylinder(xcn, xdev, xscfb, &d);
 }
@@ -351,7 +346,6 @@ client_metal_compositor_layer_equirect1(struct xrt_compositor *xc,
 	xscfb = to_native_swapchain(xsc);
 
 	struct xrt_layer_data d = *data;
-	d.flip_y = !d.flip_y;
 
 	return xrt_comp_layer_equirect1(xcn, xdev, xscfb, &d);
 }
@@ -371,7 +365,6 @@ client_metal_compositor_layer_equirect2(struct xrt_compositor *xc,
 	xscfb = to_native_swapchain(xsc);
 
 	struct xrt_layer_data d = *data;
-	d.flip_y = !d.flip_y;
 
 	return xrt_comp_layer_equirect2(xcn, xdev, xscfb, &d);
 }
@@ -386,7 +379,6 @@ client_metal_compositor_layer_passthrough(struct xrt_compositor *xc,
 	assert(data->type == XRT_LAYER_PASSTHROUGH);
 
 	struct xrt_layer_data d = *data;
-	d.flip_y = !d.flip_y;
 
 	return xrt_comp_layer_passthrough(&c->xcn->base, xdev, &d);
 }
@@ -491,8 +483,29 @@ client_metal_swapchain_create(struct xrt_compositor *xc,
 		LOGI("Reusing allocation collection from native swapchain");
 		// Reuse the allocation collection from the native swapchain.
 		xrt_allocation_collection_reference(&sc->xac, xscn->xac);
+	} else if (xscn->base.image_count > 0 &&
+	           xrt_graphics_buffer_is_valid(xscn->images[0].handle)) {
+		LOGI("Importing shared textures from Mach ports (IPC service mode)");
+		// Collect the Mach port handles from the native swapchain images.
+		mach_port_t ports[XRT_MAX_SWAPCHAIN_IMAGES];
+		for (uint32_t i = 0; i < xscn->base.image_count; i++) {
+			ports[i] = xscn->images[i].handle;
+		}
+		// Import the server's shared textures via Mach port send rights.
+		xret = mtl_image_collection_import_from_port( //
+		    c->device,                                //
+		    &xinfo_copy,                              //
+		    ports,                                    //
+		    xscn->base.image_count,                   //
+		    &sc->xac);                                //
+		if (xret != XRT_SUCCESS) {
+			LOGE("Failed to import shared textures from Mach ports: %u", xret);
+			xrt_swapchain_native_reference(&xscn, NULL);
+			free(sc);
+			return xret;
+		}
 	} else {
-		LOGI("Creating out own image collection");
+		LOGI("Creating our own image collection");
 		// Create the image collection with Metal textures using the helper.
 		xret = mtl_image_collection_create( //
 		    c->device,                      //
