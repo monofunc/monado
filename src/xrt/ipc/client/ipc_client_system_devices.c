@@ -10,8 +10,8 @@
  */
 
 #include "ipc_client.h"
-#include "ipc_client_tracking_origin.h"
 #include "ipc_client_generated.h"
+#include "ipc_client_system_devices.h"
 
 #include "util/u_system_helpers.h"
 #include "util/u_var.h"

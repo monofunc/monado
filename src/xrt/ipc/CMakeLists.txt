@@ -100,6 +100,7 @@ add_library(
 	client/ipc_client_space_overseer.c
 	client/ipc_client_system.c
 	client/ipc_client_system_devices.c
+	client/ipc_client_system_devices.h
 	client/ipc_client_tracking_origin.c
 	client/ipc_client_tracking_origin.h
 	client/ipc_client_xdev.c
