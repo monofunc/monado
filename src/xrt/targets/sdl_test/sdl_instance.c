@@ -1,4 +1,5 @@
 // Copyright 2020-2023, Collabora, Ltd.
+// Copyright 2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -12,8 +13,9 @@
 
 #include "util/u_misc.h"
 #include "util/u_system.h"
-#include "util/u_builders.h"
 #include "util/u_trace_marker.h"
+
+#include "target_builder_helpers.h"
 
 #include "sdl_internal.h"
 
@@ -146,7 +148,7 @@ sdl_system_devices_init(struct sdl_program *sp)
 	sp->xsysd_base.xdev_count = 1;
 	sp->xsysd_base.static_roles.head = head;
 
-	u_builder_create_space_overseer_legacy( //
+	t_builder_create_space_overseer_legacy( //
 	    &sp->usys->broadcast,               // broadcast
 	    head,                               // head
 	    NULL,                               // eyes

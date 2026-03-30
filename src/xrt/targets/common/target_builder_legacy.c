@@ -1,4 +1,5 @@
 // Copyright 2022-2023, Collabora, Ltd.
+// Copyright 2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -12,9 +13,9 @@
 
 #include "util/u_misc.h"
 #include "util/u_device.h"
-#include "util/u_builders.h"
 #include "util/u_system_helpers.h"
 
+#include "target_builder_helpers.h"
 #include "target_builder_interface.h"
 
 #include <assert.h>
@@ -117,7 +118,7 @@ legacy_open_system_impl(struct xrt_builder *xb,
                         struct xrt_tracking_origin *origin,
                         struct xrt_system_devices *xsysd,
                         struct xrt_frame_context *xfctx,
-                        struct u_builder_roles_helper *ubrh)
+                        struct t_builder_roles_helper *tbrh)
 {
 	xrt_result_t xret;
 	int ret;
@@ -188,16 +189,16 @@ legacy_open_system_impl(struct xrt_builder *xb,
 	conforming_right_ht = u_system_devices_get_ht_device_conforming_right(xsysd);
 
 	// Assign to role(s).
-	ubrh->head = head;
-	ubrh->eyes = eyes;
-	ubrh->face = face;
-	ubrh->left = left;
-	ubrh->right = right;
-	ubrh->gamepad = gamepad;
-	ubrh->hand_tracking.unobstructed.left = unobstructed_left_ht;
-	ubrh->hand_tracking.unobstructed.right = unobstructed_right_ht;
-	ubrh->hand_tracking.conforming.left = conforming_left_ht;
-	ubrh->hand_tracking.conforming.right = conforming_right_ht;
+	tbrh->head = head;
+	tbrh->eyes = eyes;
+	tbrh->face = face;
+	tbrh->left = left;
+	tbrh->right = right;
+	tbrh->gamepad = gamepad;
+	tbrh->hand_tracking.unobstructed.left = unobstructed_left_ht;
+	tbrh->hand_tracking.unobstructed.right = unobstructed_right_ht;
+	tbrh->hand_tracking.conforming.left = conforming_left_ht;
+	tbrh->hand_tracking.conforming.right = conforming_right_ht;
 
 	return XRT_SUCCESS;
 }
@@ -218,18 +219,18 @@ legacy_destroy(struct xrt_builder *xb)
 struct xrt_builder *
 t_builder_legacy_create(void)
 {
-	struct u_builder *ub = U_TYPED_CALLOC(struct u_builder);
+	struct t_builder *ub = U_TYPED_CALLOC(struct t_builder);
 
 	// xrt_builder fields.
 	ub->base.estimate_system = legacy_estimate_system;
-	ub->base.open_system = u_builder_open_system_static_roles;
+	ub->base.open_system = t_builder_open_system_static_roles;
 	ub->base.destroy = legacy_destroy;
 	ub->base.identifier = "legacy";
 	ub->base.name = "Legacy probing system";
 	ub->base.driver_identifiers = driver_list;
 	ub->base.driver_identifier_count = ARRAY_SIZE(driver_list) - 1;
 
-	// u_builder fields.
+	// t_builder fields.
 	ub->open_system_static_roles = legacy_open_system_impl;
 
 	return &ub->base;

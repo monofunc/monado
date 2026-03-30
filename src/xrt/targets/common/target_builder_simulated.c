@@ -15,9 +15,9 @@
 
 #include "util/u_misc.h"
 #include "util/u_debug.h"
-#include "util/u_builders.h"
 #include "util/u_config_json.h"
 
+#include "target_builder_helpers.h"
 #include "target_builder_interface.h"
 
 #include "simulated/simulated_interface.h"
@@ -98,7 +98,7 @@ simulated_open_system_impl(struct xrt_builder *xb,
                            struct xrt_tracking_origin *origin,
                            struct xrt_system_devices *xsysd,
                            struct xrt_frame_context *xfctx,
-                           struct u_builder_roles_helper *ubrh)
+                           struct t_builder_roles_helper *tbrh)
 {
 	const struct xrt_pose head_center = {XRT_QUAT_IDENTITY, {0.0f, 1.6f, 0.0f}}; // "nominal height" 1.6m
 	const struct xrt_pose left_center = {XRT_QUAT_IDENTITY, {-0.2f, 1.3f, -0.5f}};
@@ -130,9 +130,9 @@ simulated_open_system_impl(struct xrt_builder *xb,
 	}
 
 	// Assign to role(s).
-	ubrh->head = head;
-	ubrh->left = left;
-	ubrh->right = right;
+	tbrh->head = head;
+	tbrh->left = left;
+	tbrh->right = right;
 
 	return XRT_SUCCESS;
 }
@@ -153,11 +153,11 @@ simulated_destroy(struct xrt_builder *xb)
 struct xrt_builder *
 t_builder_simulated_create(void)
 {
-	struct u_builder *ub = U_TYPED_CALLOC(struct u_builder);
+	struct t_builder *ub = U_TYPED_CALLOC(struct t_builder);
 
 	// xrt_builder fields.
 	ub->base.estimate_system = simulated_estimate_system;
-	ub->base.open_system = u_builder_open_system_static_roles;
+	ub->base.open_system = t_builder_open_system_static_roles;
 	ub->base.destroy = simulated_destroy;
 	ub->base.identifier = "simulated";
 	ub->base.name = "Simulated devices builder";
@@ -165,7 +165,7 @@ t_builder_simulated_create(void)
 	ub->base.driver_identifier_count = ARRAY_SIZE(driver_list);
 	ub->base.exclude_from_automatic_discovery = !debug_get_bool_option_simulated_enabled();
 
-	// u_builder fields.
+	// t_builder fields.
 	ub->open_system_static_roles = simulated_open_system_impl;
 
 	return &ub->base;

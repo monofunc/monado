@@ -17,7 +17,6 @@
 
 #include "constellation/t_rift_blobwatch.h"
 
-#include "util/u_builders.h"
 #include "util/u_debug.h"
 #include "util/u_misc.h"
 #include "util/u_logging.h"
@@ -25,6 +24,8 @@
 #include "util/u_var.h"
 #include "util/u_sink.h"
 #include "util/u_builder_search.h"
+
+#include "target_builder_helpers.h"
 
 #include "rift/rift_interface.h"
 
@@ -49,7 +50,7 @@
 
 struct rift_builder
 {
-	struct u_builder base;
+	struct t_builder base;
 
 	enum u_logging_level log_level;
 
@@ -160,7 +161,7 @@ rift_open_system_impl(struct xrt_builder *xb,
                       struct xrt_tracking_origin *origin,
                       struct xrt_system_devices *xsysd,
                       struct xrt_frame_context *xfctx,
-                      struct u_builder_roles_helper *ubrh)
+                      struct t_builder_roles_helper *tbrh)
 {
 	struct rift_builder *rb = rift_builder(xb);
 
@@ -238,10 +239,10 @@ rift_open_system_impl(struct xrt_builder *xb,
 		for (int i = 0; i < created_devices; i++) {
 			struct xrt_device *xdev = xdevs[i];
 			switch (xdev->device_type) {
-			case XRT_DEVICE_TYPE_HMD: ubrh->head = xdev; break;
-			case XRT_DEVICE_TYPE_LEFT_HAND_CONTROLLER: ubrh->left = xdev; break;
-			case XRT_DEVICE_TYPE_RIGHT_HAND_CONTROLLER: ubrh->right = xdev; break;
-			case XRT_DEVICE_TYPE_GAMEPAD: ubrh->gamepad = xdev; break;
+			case XRT_DEVICE_TYPE_HMD: tbrh->head = xdev; break;
+			case XRT_DEVICE_TYPE_LEFT_HAND_CONTROLLER: tbrh->left = xdev; break;
+			case XRT_DEVICE_TYPE_RIGHT_HAND_CONTROLLER: tbrh->right = xdev; break;
+			case XRT_DEVICE_TYPE_GAMEPAD: tbrh->gamepad = xdev; break;
 			default: break;
 			}
 		}
@@ -399,14 +400,14 @@ rift_builder_create(void)
 
 	// xrt_builder fields.
 	rb->base.base.estimate_system = rift_estimate_system;
-	rb->base.base.open_system = u_builder_open_system_static_roles;
+	rb->base.base.open_system = t_builder_open_system_static_roles;
 	rb->base.base.destroy = rift_destroy;
 	rb->base.base.identifier = "rift";
 	rb->base.base.name = "Oculus Rift";
 	rb->base.base.driver_identifiers = driver_list;
 	rb->base.base.driver_identifier_count = ARRAY_SIZE(driver_list);
 
-	// u_builder fields.
+	// t_builder fields.
 	rb->base.open_system_static_roles = rift_open_system_impl;
 
 	u_var_add_root(rb, "Rift Builder", false);

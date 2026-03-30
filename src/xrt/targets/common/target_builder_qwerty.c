@@ -13,8 +13,8 @@
 
 #include "util/u_misc.h"
 #include "util/u_debug.h"
-#include "util/u_builders.h"
 
+#include "target_builder_helpers.h"
 #include "target_builder_interface.h"
 
 #include "qwerty/qwerty_interface.h"
@@ -75,7 +75,7 @@ qwerty_open_system_impl(struct xrt_builder *xb,
                         struct xrt_tracking_origin *origin,
                         struct xrt_system_devices *xsysd,
                         struct xrt_frame_context *xfctx,
-                        struct u_builder_roles_helper *ubrh)
+                        struct t_builder_roles_helper *tbrh)
 {
 	struct xrt_device *head = NULL;
 	struct xrt_device *left = NULL;
@@ -97,9 +97,9 @@ qwerty_open_system_impl(struct xrt_builder *xb,
 	}
 
 	// Assign to role(s).
-	ubrh->head = head;
-	ubrh->left = left;
-	ubrh->right = right;
+	tbrh->head = head;
+	tbrh->left = left;
+	tbrh->right = right;
 
 	return XRT_SUCCESS;
 }
@@ -120,11 +120,11 @@ qwerty_destroy(struct xrt_builder *xb)
 struct xrt_builder *
 t_builder_qwerty_create(void)
 {
-	struct u_builder *ub = U_TYPED_CALLOC(struct u_builder);
+	struct t_builder *ub = U_TYPED_CALLOC(struct t_builder);
 
 	// xrt_builder fields.
 	ub->base.estimate_system = qwerty_estimate_system;
-	ub->base.open_system = u_builder_open_system_static_roles;
+	ub->base.open_system = t_builder_open_system_static_roles;
 	ub->base.destroy = qwerty_destroy;
 	ub->base.identifier = "qwerty";
 	ub->base.name = "Qwerty devices builder";
@@ -132,7 +132,7 @@ t_builder_qwerty_create(void)
 	ub->base.driver_identifier_count = ARRAY_SIZE(driver_list);
 	ub->base.exclude_from_automatic_discovery = !debug_get_bool_option_enable_qwerty();
 
-	// u_builder fields.
+	// t_builder fields.
 	ub->open_system_static_roles = qwerty_open_system_impl;
 
 	return &ub->base;

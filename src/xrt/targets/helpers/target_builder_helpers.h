@@ -5,7 +5,7 @@
  * @file
  * @brief  Helpers for @ref xrt_builder implementations.
  * @author Jakob Bornecrantz <jakob@collabora.com>
- * @ingroup aux_util
+ * @ingroup xrt_iface
  */
 
 #pragma once
@@ -18,36 +18,36 @@
 extern "C" {
 #endif
 
-struct u_builder_roles_helper;
+struct t_builder_roles_helper;
 
 
 /*!
- * Argument to @ref u_builder_roles_helper_open_system and implemented by
- * @ref u_builder::open_system_static_roles function.
+ * Argument to @ref t_builder_roles_helper_open_system and implemented by
+ * @ref t_builder::open_system_static_roles function.
  *
  * A builder implement this function is free to focus on only creating the
  * devices and assigning them initial roles. With this implementation details
  * of the @ref xrt_system_devices and @ref xrt_space_overseer is taken care of
  * by the caller of this function.
  *
- * @ingroup aux_util
+ * @ingroup xrt_iface
  */
-typedef xrt_result_t (*u_builder_open_system_fn)(struct xrt_builder *xb,
+typedef xrt_result_t (*t_builder_open_system_fn)(struct xrt_builder *xb,
                                                  cJSON *config,
                                                  struct xrt_prober *xp,
                                                  struct xrt_tracking_origin *origin,
                                                  struct xrt_system_devices *xsysd,
                                                  struct xrt_frame_context *xfctx,
-                                                 struct u_builder_roles_helper *ubrh);
+                                                 struct t_builder_roles_helper *tbrh);
 
 /*!
- * This small helper struct is for @ref u_builder_roles_helper_open_system,
+ * This small helper struct is for @ref t_builder_roles_helper_open_system,
  * lets a builder focus on opening devices rather then dealing with Monado
  * structs like @ref xrt_system_devices and the like.
  *
- * @ingroup aux_util
+ * @ingroup xrt_iface
  */
-struct u_builder_roles_helper
+struct t_builder_roles_helper
 {
 	struct xrt_device *head;
 	struct xrt_device *eyes;
@@ -77,20 +77,20 @@ struct u_builder_roles_helper
  * also comes with a set of integration that may not be what all builders want.
  * See the below functions for more information.
  *
- * * @ref u_builder_open_system_static_roles
- * * @ref u_builder_roles_helper_open_system
+ * * @ref t_builder_open_system_static_roles
+ * * @ref t_builder_roles_helper_open_system
  *
- * @ingroup aux_util
+ * @ingroup xrt_iface
  */
-struct u_builder
+struct t_builder
 {
 	//! Base for this struct.
 	struct xrt_builder base;
 
 	/*!
-	 * @copydoc u_builder_open_system_fn
+	 * @copydoc t_builder_open_system_fn
 	 */
-	u_builder_open_system_fn open_system_static_roles;
+	t_builder_open_system_fn open_system_static_roles;
 };
 
 
@@ -106,10 +106,10 @@ struct u_builder
  * @ref u_builder_setup_tracking_origins internally and
  * @ref u_space_overseer_legacy_setup.
  *
- * @ingroup aux_util
+ * @ingroup xrt_iface
  */
 void
-u_builder_create_space_overseer_legacy(struct xrt_session_event_sink *broadcast,
+t_builder_create_space_overseer_legacy(struct xrt_session_event_sink *broadcast,
                                        struct xrt_device *head,
                                        struct xrt_device *eyes,
                                        struct xrt_device *left,
@@ -128,32 +128,32 @@ u_builder_create_space_overseer_legacy(struct xrt_session_event_sink *broadcast,
  *
  * * @ref u_system_devices_static_allocate
  * * @ref u_system_devices_static_finalize
- * * @ref u_builder_create_space_overseer_legacy
+ * * @ref t_builder_create_space_overseer_legacy
  *
- * @ingroup aux_util
+ * @ingroup xrt_iface
  */
 xrt_result_t
-u_builder_roles_helper_open_system(struct xrt_builder *xb,
+t_builder_roles_helper_open_system(struct xrt_builder *xb,
                                    cJSON *config,
                                    struct xrt_prober *xp,
                                    struct xrt_session_event_sink *broadcast,
                                    struct xrt_system_devices **out_xsysd,
                                    struct xrt_space_overseer **out_xso,
-                                   u_builder_open_system_fn fn);
+                                   t_builder_open_system_fn fn);
 
 /*!
- * Implementation for xrt_builder::open_system to be used with @ref u_builder.
- * Uses @ref u_builder_roles_helper_open_system internally, a builder that uses
- * the @ref u_builder should use this function for xrt_builder::open_system.
+ * Implementation for xrt_builder::open_system to be used with @ref t_builder.
+ * Uses @ref t_builder_roles_helper_open_system internally, a builder that uses
+ * the @ref t_builder should use this function for xrt_builder::open_system.
  *
- * When using this function the builder must have @ref u_builder and implement
- * the @ref u_builder::open_system_static_roles function, see documentation for
- * @ref u_builder_open_system_fn about requirements.
+ * When using this function the builder must have @ref t_builder and implement
+ * the @ref t_builder::open_system_static_roles function, see documentation for
+ * @ref t_builder_open_system_fn about requirements.
  *
- * @ingroup aux_util
+ * @ingroup xrt_iface
  */
 xrt_result_t
-u_builder_open_system_static_roles(struct xrt_builder *xb,
+t_builder_open_system_static_roles(struct xrt_builder *xb,
                                    cJSON *config,
                                    struct xrt_prober *xp,
                                    struct xrt_session_event_sink *broadcast,

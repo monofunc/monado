@@ -5,7 +5,7 @@
  * @file
  * @brief  Helpers for @ref xrt_builder implementations.
  * @author Jakob Bornecrantz <jakob@collabora.com>
- * @ingroup aux_util
+ * @ingroup xrt_iface
  */
 
 #include "xrt/xrt_prober.h"
@@ -13,10 +13,11 @@
 #include "xrt/xrt_tracking.h"
 
 #include "util/u_debug.h"
-#include "util/u_builders.h"
 #include "util/u_system_helpers.h"
 #include "util/u_space_overseer.h"
 #include "util/u_builder_helpers.h"
+
+#include "target_builder_helpers.h"
 
 
 DEBUG_GET_ONCE_FLOAT_OPTION(tracking_origin_offset_x, "XRT_TRACKING_ORIGIN_OFFSET_X", 0.0f)
@@ -31,7 +32,7 @@ DEBUG_GET_ONCE_FLOAT_OPTION(tracking_origin_offset_z, "XRT_TRACKING_ORIGIN_OFFSE
  */
 
 void
-u_builder_create_space_overseer_legacy(struct xrt_session_event_sink *broadcast,
+t_builder_create_space_overseer_legacy(struct xrt_session_event_sink *broadcast,
                                        struct xrt_device *head,
                                        struct xrt_device *eyes,
                                        struct xrt_device *left,
@@ -85,15 +86,15 @@ u_builder_create_space_overseer_legacy(struct xrt_session_event_sink *broadcast,
 }
 
 xrt_result_t
-u_builder_roles_helper_open_system(struct xrt_builder *xb,
+t_builder_roles_helper_open_system(struct xrt_builder *xb,
                                    cJSON *config,
                                    struct xrt_prober *xp,
                                    struct xrt_session_event_sink *broadcast,
                                    struct xrt_system_devices **out_xsysd,
                                    struct xrt_space_overseer **out_xso,
-                                   u_builder_open_system_fn fn)
+                                   t_builder_open_system_fn fn)
 {
-	struct u_builder_roles_helper ubrh = XRT_STRUCT_INIT;
+	struct t_builder_roles_helper tbrh = XRT_STRUCT_INIT;
 	xrt_result_t xret;
 
 	// Use the static system devices helper, no dynamic roles.
@@ -109,7 +110,7 @@ u_builder_roles_helper_open_system(struct xrt_builder *xb,
 	    origin, // origin
 	    xsysd,  // xsysd
 	    xfctx,  // xfctx
-	    &ubrh); // ubrh
+	    &tbrh); // tbrh
 	if (xret != XRT_SUCCESS) {
 		xrt_system_devices_destroy(&xsysd);
 		return xret;
@@ -119,21 +120,21 @@ u_builder_roles_helper_open_system(struct xrt_builder *xb,
 	 * Assign to role(s).
 	 */
 
-	xsysd->static_roles.head = ubrh.head;
-	xsysd->static_roles.eyes = ubrh.eyes;
-	xsysd->static_roles.face = ubrh.face;
+	xsysd->static_roles.head = tbrh.head;
+	xsysd->static_roles.eyes = tbrh.eyes;
+	xsysd->static_roles.face = tbrh.face;
 #define U_SET_HT_ROLE(SRC)                                                                                             \
-	xsysd->static_roles.hand_tracking.SRC.left = ubrh.hand_tracking.SRC.left;                                      \
-	xsysd->static_roles.hand_tracking.SRC.right = ubrh.hand_tracking.SRC.right;
+	xsysd->static_roles.hand_tracking.SRC.left = tbrh.hand_tracking.SRC.left;                                      \
+	xsysd->static_roles.hand_tracking.SRC.right = tbrh.hand_tracking.SRC.right;
 	U_SET_HT_ROLE(unobstructed)
 	U_SET_HT_ROLE(conforming)
 #undef U_SET_HT_ROLE
 
 	u_system_devices_static_finalize( //
 	    usysds,                       // usysds
-	    ubrh.left,                    // left
-	    ubrh.right,                   // right
-	    ubrh.gamepad);                // gamepad
+	    tbrh.left,                    // left
+	    tbrh.right,                   // right
+	    tbrh.gamepad);                // gamepad
 
 
 	/*
@@ -141,13 +142,13 @@ u_builder_roles_helper_open_system(struct xrt_builder *xb,
 	 */
 
 	*out_xsysd = xsysd;
-	u_builder_create_space_overseer_legacy( //
+	t_builder_create_space_overseer_legacy( //
 	    broadcast,                          // broadcast
-	    ubrh.head,                          // head
-	    ubrh.eyes,                          // eyes
-	    ubrh.left,                          // left
-	    ubrh.right,                         // right
-	    ubrh.gamepad,                       // gamepad
+	    tbrh.head,                          // head
+	    tbrh.eyes,                          // eyes
+	    tbrh.left,                          // left
+	    tbrh.right,                         // right
+	    tbrh.gamepad,                       // gamepad
 	    xsysd->xdevs,                       // xdevs
 	    xsysd->xdev_count,                  // xdev_count
 	    false,                              // root_is_unbounded
@@ -158,21 +159,21 @@ u_builder_roles_helper_open_system(struct xrt_builder *xb,
 }
 
 xrt_result_t
-u_builder_open_system_static_roles(struct xrt_builder *xb,
+t_builder_open_system_static_roles(struct xrt_builder *xb,
                                    cJSON *config,
                                    struct xrt_prober *xp,
                                    struct xrt_session_event_sink *broadcast,
                                    struct xrt_system_devices **out_xsysd,
                                    struct xrt_space_overseer **out_xso)
 {
-	struct u_builder *ub = (struct u_builder *)xb;
+	struct t_builder *tb = (struct t_builder *)xb;
 
-	return u_builder_roles_helper_open_system( //
+	return t_builder_roles_helper_open_system( //
 	    xb,                                    //
 	    config,                                //
 	    xp,                                    //
 	    broadcast,                             //
 	    out_xsysd,                             //
 	    out_xso,                               //
-	    ub->open_system_static_roles);         //
+	    tb->open_system_static_roles);         //
 }

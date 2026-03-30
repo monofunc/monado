@@ -1,4 +1,5 @@
 // Copyright 2022-2023, Collabora, Ltd.
+// Copyright 2026, NVIDIA CORPORATION.
 // SPDX-License-Identifier: BSL-1.0
 /*!
  * @file
@@ -15,13 +16,13 @@
 #include "xrt/xrt_device.h"
 #include "xrt/xrt_prober.h"
 
-#include "util/u_builders.h"
 #include "util/u_config_json.h"
 #include "util/u_debug.h"
 #include "util/u_device.h"
 #include "util/u_sink.h"
 #include "util/u_system_helpers.h"
 
+#include "target_builder_helpers.h"
 #include "target_builder_interface.h"
 
 #include "vive/vive_common.h"
@@ -108,7 +109,7 @@ enum lighthouse_driver
 
 struct lighthouse_system
 {
-	struct u_builder base;
+	struct t_builder base;
 
 	struct xrt_frame_context *xfctx;
 	enum lighthouse_driver driver; //!< Which lighthouse implementation we are using
@@ -516,7 +517,7 @@ lighthouse_open_system_impl(struct xrt_builder *xb,
                             struct xrt_tracking_origin *origin,
                             struct xrt_system_devices *xsysd,
                             struct xrt_frame_context *xfctx,
-                            struct u_builder_roles_helper *ubrh)
+                            struct t_builder_roles_helper *tbrh)
 {
 	struct lighthouse_system *lhs = (struct lighthouse_system *)xb;
 	xrt_result_t result = XRT_SUCCESS;
@@ -746,15 +747,15 @@ end_valve_index:
 	}
 
 	// Assign to role(s).
-	ubrh->head = head;
-	ubrh->face = face;
-	ubrh->eyes = eyes;
-	ubrh->left = left;
-	ubrh->right = right;
-	ubrh->hand_tracking.unobstructed.left = unobstructed_left_ht;
-	ubrh->hand_tracking.unobstructed.right = unobstructed_right_ht;
-	ubrh->hand_tracking.conforming.left = conforming_left_ht;
-	ubrh->hand_tracking.conforming.right = conforming_right_ht;
+	tbrh->head = head;
+	tbrh->face = face;
+	tbrh->eyes = eyes;
+	tbrh->left = left;
+	tbrh->right = right;
+	tbrh->hand_tracking.unobstructed.left = unobstructed_left_ht;
+	tbrh->hand_tracking.unobstructed.right = unobstructed_right_ht;
+	tbrh->hand_tracking.conforming.left = conforming_left_ht;
+	tbrh->hand_tracking.conforming.right = conforming_right_ht;
 
 	// Clean up after us.
 	lhs->xfctx = NULL;
@@ -790,14 +791,14 @@ t_builder_lighthouse_create(void)
 
 	// xrt_builder fields.
 	lhs->base.base.estimate_system = lighthouse_estimate_system;
-	lhs->base.base.open_system = u_builder_open_system_static_roles;
+	lhs->base.base.open_system = t_builder_open_system_static_roles;
 	lhs->base.base.destroy = lighthouse_destroy;
 	lhs->base.base.identifier = "lighthouse";
 	lhs->base.base.name = "Lighthouse-tracked FLOSS (Vive, Index, Tundra trackers, etc.) devices builder";
 	lhs->base.base.driver_identifiers = driver_list;
 	lhs->base.base.driver_identifier_count = ARRAY_SIZE(driver_list);
 
-	// u_builder fields.
+	// t_builder fields.
 	lhs->base.open_system_static_roles = lighthouse_open_system_impl;
 
 	return &lhs->base.base;

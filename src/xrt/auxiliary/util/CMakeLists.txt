@@ -25,8 +25,6 @@ add_library(
 	u_builder_helpers.h
 	u_builder_search.c
 	u_builder_search.h
-	u_builders.c
-	u_builders.h
 	u_cobs.c
 	u_cobs.h
 	u_debug.c

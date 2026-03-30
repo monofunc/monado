@@ -22,7 +22,6 @@
 #include "xrt/xrt_prober.h"
 #include "xrt/xrt_system.h"
 
-#include "util/u_builders.h"
 #include "util/u_config_json.h"
 #include "util/u_debug.h"
 #include "util/u_device.h"
@@ -31,6 +30,7 @@
 #include "util/u_pretty_print.h"
 #include "util/u_builder_search.h"
 
+#include "target_builder_helpers.h"
 #include "target_builder_interface.h"
 
 #include "north_star/ns_interface.h"
@@ -104,7 +104,7 @@ struct ns_t265
 
 struct ns_builder
 {
-	struct u_builder base;
+	struct t_builder base;
 
 	const char *config_path;
 	cJSON *config_json;
@@ -454,7 +454,7 @@ ns_open_system_impl(struct xrt_builder *xb,
                     struct xrt_tracking_origin *origin,
                     struct xrt_system_devices *xsysd,
                     struct xrt_frame_context *xfctx,
-                    struct u_builder_roles_helper *ubrh)
+                    struct t_builder_roles_helper *tbrh)
 {
 	struct ns_builder *nsb = (struct ns_builder *)xb;
 	xrt_result_t result = XRT_SUCCESS;
@@ -587,11 +587,11 @@ ns_open_system_impl(struct xrt_builder *xb,
 	}
 
 	// Assign to role(s).
-	ubrh->head = head_wrap;
-	ubrh->left = left;
-	ubrh->right = right;
-	ubrh->hand_tracking.unobstructed.left = left_ht;
-	ubrh->hand_tracking.unobstructed.right = right_ht;
+	tbrh->head = head_wrap;
+	tbrh->left = left;
+	tbrh->right = right;
+	tbrh->hand_tracking.unobstructed.left = left_ht;
+	tbrh->hand_tracking.unobstructed.right = right_ht;
 
 end:
 	if (nsb->config_json != NULL) {
@@ -622,14 +622,14 @@ t_builder_north_star_create(void)
 
 	// xrt_builder fields.
 	sb->base.base.estimate_system = ns_estimate_system;
-	sb->base.base.open_system = u_builder_open_system_static_roles;
+	sb->base.base.open_system = t_builder_open_system_static_roles;
 	sb->base.base.destroy = ns_destroy;
 	sb->base.base.identifier = "north_star";
 	sb->base.base.name = "North Star headset";
 	sb->base.base.driver_identifiers = driver_list;
 	sb->base.base.driver_identifier_count = ARRAY_SIZE(driver_list);
 
-	// u_builder fields.
+	// t_builder fields.
 	sb->base.open_system_static_roles = ns_open_system_impl;
 
 	return &sb->base.base;

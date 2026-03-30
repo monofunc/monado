@@ -1,4 +1,5 @@
 # Copyright 2020-2023, Collabora, Ltd.
+# Copyright 2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: BSL-1.0
 
 add_executable(
@@ -29,6 +30,7 @@ target_link_libraries(
 		st_gui
 		drv_includes
 		drv_simulated
+		target_helpers
 	)
 
 if(WIN32)

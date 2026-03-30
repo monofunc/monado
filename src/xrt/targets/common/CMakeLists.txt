@@ -1,4 +1,5 @@
 # Copyright 2019-2023, Collabora, Ltd.
+# Copyright 2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: BSL-1.0
 
 ####
@@ -11,6 +12,7 @@ add_library(
 	)
 target_link_libraries(
 	target_lists
+	PUBLIC target_helpers
 	PRIVATE
 		xrt-interfaces
 		tracking-includes
