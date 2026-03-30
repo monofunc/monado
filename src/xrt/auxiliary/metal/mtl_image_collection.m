@@ -116,6 +116,8 @@ create_texture_for_metal(id<MTLDevice> mtl_device,
 	}
 	// Always allow shader read for flexibility.
 	mtl_usage |= MTLTextureUsageShaderRead;
+	// Allow texture views for array slice access and format reinterpretation.
+	mtl_usage |= MTLTextureUsagePixelFormatView;
 	desc.usage = mtl_usage;
 
 	// Create the Metal texture.
@@ -876,6 +878,8 @@ mtl_image_collection_create_shared_from_vk(struct vk_bundle *vk,
 	}
 	// Always allow shader read for flexibility.
 	mtl_usage |= MTLTextureUsageShaderRead;
+	// Allow texture views for array slice access and format reinterpretation.
+	mtl_usage |= MTLTextureUsagePixelFormatView;
 
 	// Allocate the image collection structure.
 	mic = U_TYPED_CALLOC(struct mtl_image_collection);
