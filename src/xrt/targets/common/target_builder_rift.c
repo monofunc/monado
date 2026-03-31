@@ -271,15 +271,21 @@ rift_open_system_impl(struct xrt_builder *xb,
 			RIFT_WARN(rb, "Rift sensor context start failed with code %d", ret);
 		}
 
-		ssize_t num_sensors = rift_sensor_context_get_sensors(rb->sensor_context, &rb->sensors);
-		if (num_sensors < 0) {
-			RIFT_WARN(rb, "Rift sensor context get sensors failed with code %d", (int)num_sensors);
+		ssize_t signed_num_sensors = rift_sensor_context_get_sensors(rb->sensor_context, &rb->sensors);
+		if (signed_num_sensors >= UINT32_MAX) {
+			RIFT_WARN(rb, "Rift sensor context got too many sensors: %zd", signed_num_sensors);
+			signed_num_sensors = 0;
+		}
+		if (signed_num_sensors < 0) {
+			RIFT_WARN(rb, "Rift sensor context get sensors failed with code: %zd", signed_num_sensors);
+			signed_num_sensors = 0;
 		}
 
+		uint32_t num_sensors = (uint32_t)signed_num_sensors;
 		rb->blobwatches = U_TYPED_ARRAY_CALLOC(struct t_blobwatch *, num_sensors);
 		rb->blobwatch_debug_sinks = U_TYPED_ARRAY_CALLOC(struct u_sink_debug, num_sensors);
 
-		for (ssize_t i = 0; i < num_sensors; i++) {
+		for (uint32_t i = 0; i < num_sensors; i++) {
 			struct rift_sensor *sensor = rb->sensors[i];
 
 			enum rift_variant sensor_variant = rift_sensor_get_variant(sensor);
@@ -307,26 +313,26 @@ rift_open_system_impl(struct xrt_builder *xb,
 			};
 			ret = t_rift_blobwatch_create(&params, xfctx, blob_sink, &frame_sink, blobwatch);
 			if (ret != 0) {
-				RIFT_WARN(rb, "Failed to create Rift blobwatch for sensor %zd with code %d", i, ret);
+				RIFT_WARN(rb, "Failed to create Rift blobwatch for sensor %u with code %d", i, ret);
 				continue;
 			}
 
 			u_sink_create_format_converter(xfctx, XRT_FORMAT_L8, frame_sink, &frame_sink);
 
 			if (!u_sink_simple_queue_create(xfctx, frame_sink, &frame_sink)) {
-				RIFT_WARN(rb, "Failed to create Rift blobwatch queue for sensor %zd", i);
+				RIFT_WARN(rb, "Failed to create Rift blobwatch queue for sensor %u", i);
 				continue;
 			}
 
 			struct xrt_fs *fs = rift_sensor_get_frame_server(sensor);
 
 			if (!xrt_fs_stream_start(fs, frame_sink, XRT_FS_CAPTURE_TYPE_TRACKING, 0)) {
-				RIFT_WARN(rb, "Failed to start Rift sensor frame server stream for sensor %zd", i);
+				RIFT_WARN(rb, "Failed to start Rift sensor frame server stream for sensor %u", i);
 				continue;
 			}
 
 			u_var_add_sink_debug(rb, debug_sink, "Sensor Blobwatch");
-			RIFT_DEBUG(rb, "Rift sensor %zd initialized and streaming at index %zd", i, rb->num_sensors);
+			RIFT_DEBUG(rb, "Rift sensor %u initialized and streaming at index %zd", i, rb->num_sensors);
 
 			rb->num_sensors++;
 
