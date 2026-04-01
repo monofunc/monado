@@ -4,6 +4,53 @@
 Known issues:
 
 * Peek window does not work in inproc mode. SDL event handling requires the main thread, which the application owns.
+* monado-service crashes if an OpenXR application exits without a graceful shutdown.
+
+### Prerequisites
+
+* macOS 15+
+* Xcode with macOS platform support and Metal toolchain
+* Homebrew
+
+Install dependencies:
+
+```bash
+brew install cmake eigen sdl2 vulkan-tools
+```
+
+### Building
+
+Clone this repo, switch to the `feature/macos` branch, and build:
+
+```bash
+cmake --preset service-debug -DCMAKE_C_FLAGS="-I/opt/homebrew/include" -DCMAKE_CXX_FLAGS="-I/opt/homebrew/include"
+cmake --build build
+```
+
+### Setup
+
+Register the IPC broker with launchctl:
+
+```bash
+cp build/src/xrt/targets/broker/org.monado.compositor.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/org.monado.compositor.plist
+```
+
+Set Monado as the default OpenXR runtime:
+
+```bash
+sudo cp build/openxr_monado-dev.json /usr/local/share/openxr/1/active_runtime.json
+```
+
+### Running
+
+Start the service with a simulated headset:
+
+```bash
+SIMULATED_ENABLE=1 SIMULATED_LEFT=simple SIMULATED_RIGHT=simple XRT_WINDOW_PEEK=both build/src/xrt/targets/service/monado-service
+```
+
+Open another terminal and run an OpenXR app (e.g. hello_xr from the OpenXR SDK). You'll see it in the peek window.
 
 ---
 
