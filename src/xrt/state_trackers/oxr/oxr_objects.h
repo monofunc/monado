@@ -966,6 +966,12 @@ oxr_session_populate_egl(struct oxr_logger *log,
                          XrGraphicsBindingEGLMNDX const *next,
                          struct oxr_session *sess);
 
+XrResult
+oxr_egl_get_device(struct oxr_logger *log,
+                   struct oxr_system *sys,
+                   PFN_xrEglGetProcAddressMNDX getProcAddress,
+                   EGLDeviceEXT *out_egl_device);
+
 #endif
 
 /*
