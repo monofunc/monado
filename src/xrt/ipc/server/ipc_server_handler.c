@@ -498,6 +498,16 @@ ipc_handle_system_compositor_get_info(volatile struct ipc_client_state *ics,
 }
 
 xrt_result_t
+ipc_handle_system_compositor_get_view_config(volatile struct ipc_client_state *ics,
+                                             enum xrt_view_type view_type,
+                                             struct xrt_view_config *out_view_config)
+{
+	IPC_TRACE_MARKER();
+
+	return xrt_syscomp_get_view_config(ics->server->xsysc, view_type, out_view_config);
+}
+
+xrt_result_t
 ipc_handle_session_create(volatile struct ipc_client_state *ics,
                           const struct xrt_session_info *xsi,
                           bool create_native_compositor)

@@ -1060,6 +1060,23 @@ ipc_syscomp_create_native_compositor(struct xrt_system_compositor *xsc,
 	return XRT_ERROR_IPC_FAILURE;
 }
 
+xrt_result_t
+ipc_syscomp_get_view_config(struct xrt_system_compositor *xsc,
+                            enum xrt_view_type view_type,
+                            struct xrt_view_config *out_view_config)
+{
+	struct ipc_client_compositor *icc = container_of(xsc, struct ipc_client_compositor, system);
+	xrt_result_t xret;
+
+	xret = ipc_call_system_compositor_get_view_config( //
+	    icc->ipc_c,                                    // ipc_c
+	    view_type,                                     // view_type
+	    out_view_config);                              // out_view_config
+	IPC_CHK_AND_RET(icc->ipc_c, xret, "ipc_call_system_compositor_get_view_config");
+
+	return XRT_SUCCESS;
+}
+
 void
 ipc_syscomp_destroy(struct xrt_system_compositor *xsc)
 {
@@ -1121,6 +1138,7 @@ ipc_client_create_system_compositor(struct ipc_connection *ipc_c,
 	struct ipc_client_compositor *c = U_TYPED_CALLOC(struct ipc_client_compositor);
 
 	c->system.create_native_compositor = ipc_syscomp_create_native_compositor;
+	c->system.get_view_config = ipc_syscomp_get_view_config;
 	c->system.destroy = ipc_syscomp_destroy;
 	c->ipc_c = ipc_c;
 	c->xina = xina;

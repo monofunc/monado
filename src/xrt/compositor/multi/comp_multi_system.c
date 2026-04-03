@@ -708,6 +708,16 @@ system_compositor_create_native_compositor(struct xrt_system_compositor *xsc,
 	return multi_compositor_create(msc, xsi, xses, out_xcn);
 }
 
+static xrt_result_t
+system_compositor_get_view_config(struct xrt_system_compositor *xsc,
+                                  enum xrt_view_type view_type,
+                                  struct xrt_view_config *out_view_config)
+{
+	struct multi_system_compositor *msc = multi_system_compositor(xsc);
+
+	return msc->get_view_config_callback(msc->xcn, view_type, out_view_config);
+}
+
 static void
 system_compositor_destroy(struct xrt_system_compositor *xsc)
 {
@@ -754,12 +764,14 @@ multi_system_compositor_update_session_status(struct multi_system_compositor *ms
 xrt_result_t
 comp_multi_create_system_compositor(struct xrt_compositor_native *xcn,
                                     struct u_pacing_app_factory *upaf,
+                                    comp_multi_view_config_callback_func_t get_view_config_callback,
                                     const struct xrt_system_compositor_info *xsci,
                                     bool do_warm_start,
                                     struct xrt_system_compositor **out_xsysc)
 {
 	struct multi_system_compositor *msc = U_TYPED_CALLOC(struct multi_system_compositor);
 	msc->base.create_native_compositor = system_compositor_create_native_compositor;
+	msc->base.get_view_config = system_compositor_get_view_config;
 	msc->base.destroy = system_compositor_destroy;
 	msc->xmcc.set_state = system_compositor_set_state;
 	msc->xmcc.set_z_order = system_compositor_set_z_order;
@@ -773,6 +785,7 @@ comp_multi_create_system_compositor(struct xrt_compositor_native *xcn,
 	msc->xcn = xcn;
 	msc->sessions.active_count = 0;
 	msc->sessions.state = do_warm_start ? MULTI_SYSTEM_STATE_INIT_WARM_START : MULTI_SYSTEM_STATE_STOPPED;
+	msc->get_view_config_callback = get_view_config_callback;
 
 	os_mutex_init(&msc->list_and_timing_lock);
 

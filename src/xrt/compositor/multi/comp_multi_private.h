@@ -19,6 +19,9 @@
 
 #include "util/u_pacing.h"
 
+#include "comp_multi_interface.h"
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -320,6 +323,8 @@ struct multi_system_compositor
 {
 	//! Base interface.
 	struct xrt_system_compositor base;
+
+	comp_multi_view_config_callback_func_t get_view_config_callback;
 
 	//! Extra functions to handle multi client.
 	struct xrt_multi_compositor_control xmcc;

@@ -2337,8 +2337,8 @@ struct xrt_view_config
  */
 struct xrt_system_compositor_info
 {
-	uint32_t view_config_count;
-	struct xrt_view_config view_configs[XRT_MAX_COMPOSITOR_VIEW_CONFIGS_COUNT];
+	uint32_t view_type_count;
+	enum xrt_view_type view_types[XRT_MAX_COMPOSITOR_VIEW_CONFIGS_COUNT];
 
 	//! Maximum number of composition layers supported, never changes.
 	uint32_t max_layers;
@@ -2473,6 +2473,13 @@ struct xrt_system_compositor
 	                                         const struct xrt_session_info *xsi,
 	                                         struct xrt_session_event_sink *xses,
 	                                         struct xrt_compositor_native **out_xcn);
+
+	/*!
+	 * Gets the view configuration for the specified view type.
+	 */
+	xrt_result_t (*get_view_config)(struct xrt_system_compositor *xsc,
+	                                enum xrt_view_type view_type,
+	                                struct xrt_view_config *out_view_config);
 
 	/*!
 	 * Teardown the system compositor.
@@ -2622,6 +2629,21 @@ xrt_syscomp_create_native_compositor(struct xrt_system_compositor *xsc,
                                      struct xrt_compositor_native **out_xcn)
 {
 	return xsc->create_native_compositor(xsc, xsi, xses, out_xcn);
+}
+
+/*!
+ * @copydoc xrt_system_compositor::get_view_config
+ *
+ * Helper for calling through the function pointer.
+ *
+ * @public @memberof xrt_system_compositor
+ */
+XRT_NONNULL_ALL static inline xrt_result_t
+xrt_syscomp_get_view_config(struct xrt_system_compositor *xsc,
+                            enum xrt_view_type view_type,
+                            struct xrt_view_config *out_view_config)
+{
+	return xsc->get_view_config(xsc, view_type, out_view_config);
 }
 
 /*!

@@ -91,6 +91,11 @@ struct comp_compositor
 {
 	struct comp_base base;
 
+	//! The active view configurations
+	struct xrt_view_config view_configs[XRT_MAX_COMPOSITOR_VIEW_CONFIGS_COUNT];
+	//! The amount of view configs
+	uint32_t view_config_count;
+
 	//! The settings.
 	struct comp_settings settings;
 
