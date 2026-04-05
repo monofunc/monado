@@ -13,6 +13,7 @@
 
 #include "util/u_misc.h"
 #include "util/u_logging.h"
+#include "util/u_native_images.h"
 
 #include "ogl/ogl_api.h"
 #include "ogl/ogl_helpers.h"
@@ -162,6 +163,12 @@ client_gl_memobj_swapchain_create(struct xrt_compositor *xc,
 			                     info->height, info->array_size, sc->memory[i], 0);
 		}
 	}
+
+	/*
+	 * In light of better error handling, unref any native images we failed
+	 * to import.
+	 */
+	u_native_images_unref_all(native_images, image_count);
 
 	*out_cglsc = &sc->base;
 

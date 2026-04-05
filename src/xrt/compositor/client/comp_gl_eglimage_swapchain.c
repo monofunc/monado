@@ -17,7 +17,7 @@
 #include "util/u_misc.h"
 #include "util/u_logging.h"
 #include "util/u_debug.h"
-#include "util/u_handles.h"
+#include "util/u_native_images.h"
 
 #include "ogl/egl_api.h"
 #include "ogl/ogl_api.h"
@@ -88,13 +88,8 @@ static void
 client_gl_eglimage_swapchain_destroy(struct xrt_swapchain *xsc)
 {
 	struct client_gl_eglimage_swapchain *sc = client_gl_eglimage_swapchain(xsc);
-	uint32_t image_count = sc->base.base.base.image_count;
 
 	client_gl_eglimage_swapchain_teardown_storage(sc);
-	for (uint32_t i = 0; i < image_count; i++) {
-		u_graphics_buffer_unref(&sc->base.xscn->images[i].handle);
-	}
-	sc->base.base.base.image_count = 0;
 
 	// Drop our reference, does NULL checking.
 	xrt_swapchain_native_reference(&sc->base.xscn, NULL);
@@ -312,6 +307,12 @@ client_gl_eglimage_swapchain_create(struct xrt_compositor *xc,
 			glEGLImageTargetTexture2DOES(tex_target, sc->egl_images[i]);
 		}
 	}
+
+	/*
+	 * eglCreateImageKHR does not take ownership of the native images, so we
+	 * need to unref them here. This is true for both FDs and AHBs.
+	 */
+	u_native_images_unref_all(native_images, image_count);
 
 	*out_sc = &sc->base;
 
