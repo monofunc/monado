@@ -416,9 +416,6 @@ compositor_destroy(struct xrt_compositor *xc)
 	// Destroy the scratch images fully, we initialized all of them.
 	chl_scratch_fini(&c->scratch);
 
-	// Make sure we are not holding onto any swapchains.
-	u_swapchain_debug_destroy(&c->debug.sc);
-
 	// Make sure we don't have anything to destroy.
 	comp_swapchain_shared_garbage_collect(&c->base.cscs);
 
@@ -1108,9 +1105,6 @@ comp_main_create_system_compositor(struct xrt_device *xdev,
 
 	// Init the settings to default.
 	comp_settings_init(&c->settings, xdev);
-
-	// Init this before the renderer.
-	u_swapchain_debug_init(&c->debug.sc);
 
 	// Init these before the renderer, not all might be used.
 	chl_scratch_init(&c->scratch);
