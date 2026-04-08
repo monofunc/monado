@@ -15,7 +15,7 @@ Known issues:
 Install dependencies:
 
 ```bash
-brew install cmake eigen sdl2 vulkan-tools
+brew install cmake eigen ninja sdl2 vulkan-tools
 ```
 
 ### Building
