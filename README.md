@@ -39,6 +39,7 @@ launchctl load ~/Library/LaunchAgents/org.monado.compositor.plist
 Set Monado as the default OpenXR runtime:
 
 ```bash
+sudo mkdir -p /usr/local/share/openxr/1
 sudo cp build/openxr_monado-dev.json /usr/local/share/openxr/1/active_runtime.json
 ```
 
