@@ -113,6 +113,7 @@ add_library(
 	u_visibility_mask.h
 	u_win32_com_guard.cpp
 	u_win32_com_guard.hpp
+	u_weak_ptr.hpp
 	u_worker.c
 	u_worker.cpp
 	u_worker.h
