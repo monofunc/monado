@@ -17,6 +17,8 @@
 #include "math/m_api.h"
 
 
+#pragma pack(push, 1)
+
 const uint8_t INPUT_REPORT_ID = 0x31;
 const uint8_t OUTPUT_REPORT_ID = 0x31;
 const uint8_t OUTPUT_REPORT_TAG = 0x10;
@@ -60,26 +62,6 @@ const uint8_t CHARGE_STATE_ABNORMAL_VOLTAGE = 0x0A;
 const uint8_t CHARGE_STATE_ABNORMAL_TEMP = 0x0B;
 const uint8_t CHARGE_STATE_CHARGING_ERROR = 0x0F;
 
-/**
- * 16-bit little-endian int
- */
-struct pssense_i16_le
-{
-	uint8_t low;
-	uint8_t high;
-};
-
-/**
- * 32-bit little-endian int
- */
-struct pssense_i32_le
-{
-	uint8_t lowest;
-	uint8_t lower;
-	uint8_t higher;
-	uint8_t highest;
-};
-
 #define INPUT_REPORT_LENGTH 78
 /*!
  * HID input report data packet.
@@ -96,22 +78,22 @@ struct pssense_input_report
 	uint8_t unknown1[2]; // Always 0x0001
 	uint8_t buttons[3];
 	uint8_t unknown2; // Always 0x00
-	struct pssense_i32_le seq_no;
-	struct pssense_i16_le gyro[3];
-	struct pssense_i16_le accel[3];
-	struct pssense_i32_le imu_ticks;
+	__le32 seq_no;
+	__le16 gyro[3];
+	__le16 accel[3];
+	__le32 imu_ticks;
 	uint8_t temperature;
 	uint8_t unknown3[9];
 	uint8_t battery_state; // High bits charge level 0x00-0x0a, low bits battery state
 	uint8_t plug_state;    // Flags for USB data and/or power connected
-	struct pssense_i32_le host_timestamp;
-	struct pssense_i32_le device_timestamp;
+	__le32 host_timestamp;
+	__le32 device_timestamp;
 	uint8_t unknown4[4];
 	uint8_t aes_cmac[8];
 	uint8_t unknown5;
 	uint8_t crc_failure_count;
 	uint8_t padding[7];
-	struct pssense_i32_le crc;
+	__le32 crc;
 };
 static_assert(sizeof(struct pssense_input_report) == INPUT_REPORT_LENGTH, "Incorrect input report struct length");
 
@@ -130,11 +112,11 @@ struct pssense_output_report
 	uint8_t unknown2;
 	uint8_t trigger_feedback_mode; // Constant or sticky trigger resistance
 	uint8_t ffb[10];
-	struct pssense_i32_le host_timestamp;
+	__le32 host_timestamp;
 	uint8_t unknown3[19];
 	uint8_t counter;
 	uint8_t haptics[32];
-	struct pssense_i32_le crc;
+	__le32 crc;
 };
 static_assert(sizeof(struct pssense_output_report) == OUTPUT_REPORT_LENGTH, "Incorrect output report struct length");
 
@@ -149,32 +131,8 @@ struct pssense_feature_report
 	uint8_t report_id;
 	uint8_t part_id;
 	uint8_t data[CALIBRATION_DATA_LENGTH / 2];
-	struct pssense_i32_le crc;
+	__le32 crc;
 };
 static_assert(sizeof(struct pssense_feature_report) == FEATURE_REPORT_LENGTH, "Incorrect feature report struct length");
 
-static uint32_t
-pssense_i32_le_to_u32(const struct pssense_i32_le *from)
-{
-	return (uint32_t)(from->lowest | from->lower << 8 | from->higher << 16 | from->highest << 24);
-}
-
-static struct pssense_i32_le
-pssense_u32_to_i32_le(uint32_t from)
-{
-	struct pssense_i32_le ret = {
-	    .lowest = (from >> 0) & 0x0ff,
-	    .lower = (from >> 8) & 0x0ff,
-	    .higher = (from >> 16) & 0x0ff,
-	    .highest = (from >> 24) & 0x0ff,
-	};
-
-	return ret;
-}
-
-static int16_t
-pssense_i16_le_to_i16(const struct pssense_i16_le *from)
-{
-	// The cast is important, sign extend properly.
-	return (int16_t)(from->low | from->high << 8);
-}
+#pragma pack(pop)

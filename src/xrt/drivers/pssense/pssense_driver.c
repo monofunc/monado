@@ -129,12 +129,13 @@ struct pssense_input_state
 
 	uint32_t imu_ticks_last;
 	uint64_t imu_ticks_total;
+
 	struct xrt_vec3_i32 gyro_raw;
 	struct xrt_vec3_i32 accel_raw;
 
 	bool battery_state_valid;
 	bool battery_charging;
-	//! 0..1
+	//! Charge level from 0..1
 	float battery_charge_percent;
 };
 
@@ -185,6 +186,7 @@ struct pssense_device
 };
 
 const uint32_t CRC_POLYNOMIAL = 0xedb88320;
+
 static uint32_t
 crc32_le(uint32_t crc, uint8_t const *p, size_t len)
 {
@@ -245,7 +247,7 @@ pssense_parse_packet(struct pssense_device *pssense,
 		return false;
 	}
 
-	uint32_t expected_crc = pssense_i32_le_to_u32(&data->crc);
+	uint32_t expected_crc = __le32_to_cpu(data->crc);
 	uint32_t crc = crc32_le(0, &INPUT_REPORT_CRC32_SEED, 1);
 	crc = crc32_le(crc, (uint8_t *)data, sizeof(struct pssense_input_report) - 4);
 	if (crc != expected_crc) {
@@ -255,7 +257,7 @@ pssense_parse_packet(struct pssense_device *pssense,
 
 	input->timestamp_ns = os_monotonic_get_ns();
 
-	uint32_t seq_no = pssense_i32_le_to_u32(&data->seq_no);
+	uint32_t seq_no = __le32_to_cpu(data->seq_no);
 	if (input->seq_no != 0 && seq_no != input->seq_no + 1) {
 		PSSENSE_WARN(pssense, "Missed seq no %u. Previous was %u", seq_no, input->seq_no);
 	}
@@ -291,19 +293,19 @@ pssense_parse_packet(struct pssense_device *pssense,
 		input->thumbstick_click = (data->buttons[1] & 8) != 0;
 	}
 
-	uint32_t imu_ticks = pssense_i32_le_to_u32(&data->imu_ticks);
+	uint32_t imu_ticks = __le32_to_cpu(data->imu_ticks);
 	int64_t imu_ticks_delta = imu_ticks - input->imu_ticks_last;
 	if (imu_ticks_delta >= 0) {
 		input->imu_ticks_total += imu_ticks_delta;
 		input->imu_ticks_last = imu_ticks;
 
-		input->gyro_raw.x = pssense_i16_le_to_i16(&data->gyro[0]);
-		input->gyro_raw.y = pssense_i16_le_to_i16(&data->gyro[1]);
-		input->gyro_raw.z = pssense_i16_le_to_i16(&data->gyro[2]);
+		input->gyro_raw.x = (int16_t)__le16_to_cpu(data->gyro[0]);
+		input->gyro_raw.y = (int16_t)__le16_to_cpu(data->gyro[1]);
+		input->gyro_raw.z = (int16_t)__le16_to_cpu(data->gyro[2]);
 
-		input->accel_raw.x = pssense_i16_le_to_i16(&data->accel[0]);
-		input->accel_raw.y = pssense_i16_le_to_i16(&data->accel[1]);
-		input->accel_raw.z = pssense_i16_le_to_i16(&data->accel[2]);
+		input->accel_raw.x = (int16_t)__le16_to_cpu(data->accel[0]);
+		input->accel_raw.y = (int16_t)__le16_to_cpu(data->accel[1]);
+		input->accel_raw.z = (int16_t)__le16_to_cpu(data->accel[2]);
 	} else {
 		PSSENSE_WARN(pssense, "Time went backwards. Check your play area for black holes.");
 	}
@@ -399,7 +401,7 @@ pssense_send_output_report_locked(struct pssense_device *pssense)
 
 	uint32_t crc = crc32_le(0, &OUTPUT_REPORT_CRC32_SEED, 1);
 	crc = crc32_le(crc, (uint8_t *)&report, sizeof(struct pssense_output_report) - 4);
-	report.crc = pssense_u32_to_i32_le(crc);
+	report.crc = __cpu_to_le32(crc);
 
 	PSSENSE_DEBUG(pssense, "Setting vibration amplitude: %u, mode: %02X, trigger feedback mode: %02X",
 	              pssense->output.vibration_amplitude, pssense->output.vibration_mode,
@@ -643,6 +645,7 @@ pssense_get_battery_status(struct xrt_device *xdev, bool *out_present, bool *out
 	*out_present = true;
 	*out_charging = pssense->state.battery_charging;
 	*out_charge = pssense->state.battery_charge_percent;
+
 	return XRT_SUCCESS;
 }
 
@@ -682,7 +685,7 @@ pssense_get_calibration_data(struct pssense_device *pssense)
 
 			uint32_t crc = crc32_le(0, &FEATURE_REPORT_CRC32_SEED, 1);
 			crc = crc32_le(crc, (uint8_t *)&buffer, sizeof(buffer) - 4);
-			uint32_t expected_crc = pssense_i32_le_to_u32(&report->crc);
+			uint32_t expected_crc = __le32_to_cpu(report->crc);
 			if (crc != expected_crc) {
 				PSSENSE_WARN(pssense, "Invalid feature report CRC. Expected 0x%08X, actual 0x%08X",
 				             expected_crc, crc);
@@ -733,6 +736,7 @@ pssense_create(struct xrt_prober *xp, struct xrt_prober_device *xpdev)
 	pssense->base.get_tracked_pose = pssense_get_tracked_pose;
 	pssense->base.get_battery_status = pssense_get_battery_status;
 	pssense->base.destroy = pssense_device_destroy;
+
 	pssense->base.supported.orientation_tracking = true;
 	pssense->base.supported.battery_status = true;
 
@@ -844,6 +848,7 @@ pssense_create(struct xrt_prober *xp, struct xrt_prober_device *xpdev)
 	u_var_add_ro_vec3_i32(pssense, &pssense->state.gyro_raw, "Raw Gyro");
 	u_var_add_ro_vec3_i32(pssense, &pssense->state.accel_raw, "Raw Accel");
 	u_var_add_pose(pssense, &pssense->pose, "Pose");
+	m_imu_3dof_add_vars(&pssense->fusion, pssense, "3dof Fusion");
 
 	return &pssense->base;
 }
