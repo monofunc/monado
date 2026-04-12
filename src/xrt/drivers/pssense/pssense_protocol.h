@@ -19,6 +19,10 @@
 
 #pragma pack(push, 1)
 
+#define NS_PER_IMU_TICK 333
+#define PCM_SAMPLE_RATE 3000
+#define PCM_HAPTIC_BUF_SIZE 32
+
 const uint8_t INPUT_REPORT_ID = 0x31;
 const uint8_t OUTPUT_REPORT_ID = 0x31;
 const uint8_t OUTPUT_REPORT_TAG = 0x10;
@@ -155,7 +159,9 @@ struct pssense_led_settings
 	uint8_t phase;
 	uint8_t sequence_number;
 	uint8_t period_id;
+	//! The position, in IMU ticks, @ref NS_PER_IMU_TICK
 	__le32 cycle_position;
+	//! The length, in thirds of a nanosecond.
 	__le32 cycle_length;
 	uint8_t led_blink[4];
 };
@@ -197,7 +203,7 @@ struct pssense_ps5_output_report
 	uint8_t tag;         // Needs to be 0x10 for this report
 	struct pssense_output_settings settings;
 	uint8_t counter;
-	uint8_t haptics[32];
+	uint8_t haptics[PCM_HAPTIC_BUF_SIZE];
 	__le32 crc;
 };
 static_assert(sizeof(struct pssense_ps5_output_report) == PS5_OUTPUT_REPORT_LENGTH,
