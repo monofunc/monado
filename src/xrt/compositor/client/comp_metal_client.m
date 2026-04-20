@@ -597,7 +597,6 @@ static const int64_t metal_formats[] = {
     MTLPixelFormatRGBA8Unorm,            // 70 - RGBA
     MTLPixelFormatRGBA8Unorm_sRGB,       // 71 - sRGB version
     MTLPixelFormatRGBA16Float,           // 115 - HDR
-    MTLPixelFormatRGB10A2Unorm,          // 90 - 10-bit color
     MTLPixelFormatDepth32Float,          // 252 - Depth
     MTLPixelFormatDepth32Float_Stencil8, // 260 - Depth + Stencil
 };
