@@ -29,6 +29,13 @@
 
 #include <stdio.h>
 
+#if defined(XRT_OS_OSX)
+#include <stdatomic.h>
+
+//! Sentinel msgh_id the mainloop uses to nudge a per-client thread out of mach_msg
+#define IPC_MACH_SENTINEL_SHUTDOWN 0x5A5A5A01
+#endif
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -186,6 +193,11 @@ struct ipc_client_state
 	//! Array of xrt_devices with plane_detection_size entries.
 	struct xrt_device **plane_detection_xdev;
 
+#if defined(XRT_OS_OSX)
+	//! Set by the mainloop when MACH_NOTIFY_DEAD_NAME fires for this client's send right
+	_Atomic bool peer_dead;
+#endif
+
 	int server_thread_index;
 
 	xrt_shmem_handle_t ism_handle;
@@ -327,7 +339,14 @@ struct ipc_server_mainloop
 #if defined(XRT_OS_OSX)
 #include <mach/mach_types.h>
 #endif
+	//! Bootstrapped receive right that clients send CONNECT to
 	mach_port_t service_port;
+
+	//! Receive right that the kernel posts MACH_NOTIFY_DEAD_NAME messages to
+	mach_port_t notify_port;
+
+	//! Port set containing @ref service_port and @ref notify_port, polled as one
+	mach_port_t port_set;
 #define XRT_IPC_GOT_IMPL
 #endif
 
