@@ -204,15 +204,28 @@ client_loop(volatile struct ipc_client_state *ics)
 		msg.header.msgh_size = sizeof(msg);
 		msg.header.msgh_local_port = imc->recv_port;
 
+		// The 500ms timeout is a safety net. Fast-path shutdown arrives as a
+		// sentinel message from the mainloop (see wake_per_client_thread)
 		kern_return_t kr = mach_msg(&msg.header, MACH_RCV_MSG | MACH_RCV_TIMEOUT, 0, sizeof(msg),
 		                            imc->recv_port, 500, MACH_PORT_NULL);
 
 		if (kr == MACH_RCV_TIMED_OUT) {
+			if (ics->peer_dead) {
+				IPC_INFO(ics->server,
+				         "Client disconnect detected via DEAD_NAME, shutting down per-client thread");
+				break;
+			}
 			continue;
 		}
 
 		if (kr != KERN_SUCCESS) {
 			IPC_ERROR(ics->server, "mach_msg recv failed: %s", mach_error_string(kr));
+			break;
+		}
+
+		if (msg.header.msgh_id == IPC_MACH_SENTINEL_SHUTDOWN) {
+			IPC_INFO(ics->server,
+			         "Client disconnect detected via DEAD_NAME, shutting down per-client thread");
 			break;
 		}
 

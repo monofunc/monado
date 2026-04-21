@@ -23,6 +23,7 @@
 
 #ifdef XRT_OS_OSX
 #include <mach/mach.h>
+#include <mach/notify.h>
 #include <pthread.h>
 #include <CoreFoundation/CoreFoundation.h>
 #endif
@@ -1023,6 +1024,23 @@ ipc_server_handle_client_connected_mach(struct ipc_server *vs,
 		os_mutex_unlock(&vs->global_state.lock);
 		U_LOG_E("Failed to allocate shared memory!");
 		return;
+	}
+
+	// Arm MACH_NOTIFY_DEAD_NAME so the kernel tells us when the client task
+	// tears down its receive right (graceful exit or crash). sync=1 makes the
+	// kernel synthesize an immediate notification if client_send_port is
+	// already a dead name, closing the race between CONNECT_ACK arriving and
+	// arming here. This must run under global_state.lock to pair with the
+	// handler's lookup against ics->imc.send_port. On failure, peer death
+	// falls back to the 500ms RCV timeout path
+	mach_port_t prev = MACH_PORT_NULL;
+	kern_return_t kr = mach_port_request_notification(mach_task_self(), client_send_port, MACH_NOTIFY_DEAD_NAME, 1,
+	                                                  vs->ml.notify_port, MACH_MSG_TYPE_MAKE_SEND_ONCE, &prev);
+	if (kr != KERN_SUCCESS) {
+		U_LOG_W("mach_port_request_notification(DEAD_NAME) failed: %s", mach_error_string(kr));
+	}
+	if (prev != MACH_PORT_NULL) {
+		mach_port_deallocate(mach_task_self(), prev);
 	}
 
 	os_thread_start(&it->thread, ipc_server_client_thread, (void *)ics);
