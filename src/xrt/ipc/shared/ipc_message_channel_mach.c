@@ -293,10 +293,6 @@ ipc_send_handles_graphics_buffer(struct ipc_message_channel *imc,
                                  const xrt_graphics_buffer_handle_t *handles,
                                  uint32_t handle_count)
 {
-	if (handle_count == 0) {
-		return ipc_send(imc, data, size);
-	}
-
 	if (handle_count > IPC_MACH_MAX_PORTS) {
 		U_LOG_E("Too many graphics buffer handles: %u > %d", handle_count, IPC_MACH_MAX_PORTS);
 		return XRT_ERROR_IPC_FAILURE;
@@ -348,10 +344,6 @@ ipc_receive_handles_graphics_buffer(struct ipc_message_channel *imc,
                                     xrt_graphics_buffer_handle_t *out_handles,
                                     uint32_t handle_count)
 {
-	if (handle_count == 0) {
-		return ipc_receive(imc, out_data, size);
-	}
-
 	struct ipc_mach_msg_complex msg = {0};
 	msg.header.msgh_size = sizeof(msg);
 	msg.header.msgh_local_port = imc->recv_port;
